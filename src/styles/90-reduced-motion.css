@@ -1,0 +1,19 @@
+/* Reduced motion: every Snailkit animation and transition becomes instant. Modules get this for
+   free as long as their elements carry a class starting with "sk-" (matched at the start of a
+   class name only, so Obsidian's own "task-..." classes are left alone). */
+@media (prefers-reduced-motion: reduce) {
+	[class^="sk-"],
+	[class*=" sk-"],
+	[class^="sk-"]::before,
+	[class*=" sk-"]::before,
+	[class^="sk-"]::after,
+	[class*=" sk-"]::after,
+	.sk-settings *,
+	.sk-settings *::before,
+	.sk-settings *::after {
+		animation-duration: 0.001ms !important;
+		animation-delay: 0ms !important;
+		transition-duration: 0.001ms !important;
+		transition-delay: 0ms !important;
+	}
+}

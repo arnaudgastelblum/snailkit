@@ -1,0 +1,256 @@
+/* A tool's settings page: back link, header, status banner, sections of settings, reset. */
+.sk-page.is-forward {
+	animation: sk-from-right 360ms var(--sk-ease) both;
+}
+.sk-page.is-back {
+	animation: sk-from-left 360ms var(--sk-ease) both;
+}
+
+.sk-page button.sk-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	height: 28px;
+	padding: 0 10px 0 4px;
+	margin: 0 0 14px -4px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: none;
+	box-shadow: none;
+	font-size: 13px;
+	color: var(--text-muted);
+	cursor: var(--cursor);
+	transition:
+		color var(--sk-fast) ease,
+		background-color var(--sk-fast) ease;
+}
+.sk-page button.sk-back:hover {
+	color: var(--text-normal);
+	background: var(--sk-hover);
+}
+.sk-back-icon {
+	display: flex;
+	--icon-size: 16px;
+	transition: transform 260ms var(--sk-spring);
+}
+.sk-back:hover .sk-back-icon {
+	transform: translateX(-2px);
+}
+
+.sk-page-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	padding-bottom: 18px;
+}
+.sk-tile.is-large {
+	width: 46px;
+	height: 46px;
+	border-radius: 13px;
+	--icon-size: 22px;
+}
+.sk-page-text {
+	flex: 1;
+	min-width: 0;
+}
+.sk-page-title {
+	font-size: 20px;
+	font-weight: 700;
+	letter-spacing: -0.015em;
+	line-height: 1.25;
+	color: var(--text-normal);
+}
+.sk-page-desc {
+	margin-top: 3px;
+	font-size: 13.5px;
+	line-height: 1.5;
+	color: var(--text-muted);
+}
+.sk-page-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 9px;
+}
+.sk-page-meta:empty {
+	display: none;
+}
+.sk-doc-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 12.5px;
+	font-weight: 500;
+	color: var(--sk-accent-text);
+	text-decoration: none;
+}
+.sk-doc-link:hover {
+	text-decoration: underline;
+}
+.sk-doc-icon {
+	display: flex;
+	--icon-size: 14px;
+}
+.sk-page-switch {
+	padding-top: 6px;
+}
+
+/* Status banner (off, unavailable, error). */
+.sk-banner {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	margin-bottom: 18px;
+	padding: 10px 13px;
+	border-radius: var(--sk-radius);
+	background: var(--sk-surface-sunken);
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--text-muted);
+	animation: sk-rise 300ms var(--sk-ease) both;
+}
+.sk-banner.is-hidden {
+	display: none;
+}
+.sk-banner.is-error {
+	background: var(--sk-danger-wash);
+	color: var(--text-normal);
+}
+.sk-banner-icon {
+	display: flex;
+	padding-top: 2px;
+	color: var(--text-faint);
+	--icon-size: 14px;
+}
+.sk-banner.is-error .sk-banner-icon {
+	color: var(--sk-danger);
+}
+
+/* Sections: a title, an optional line of context, then a card of rows. */
+.sk-section + .sk-section {
+	margin-top: 22px;
+}
+.sk-section-head {
+	margin: 0 2px 8px;
+}
+.sk-section-title {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+.sk-section-desc {
+	margin-top: 4px;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--text-muted);
+}
+.sk-section-body {
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-l);
+	background: var(--sk-surface);
+	overflow: hidden;
+}
+/* Obsidian 1.13 draws each setting row as its own rounded card: inside a Snailkit section the
+   section is the card, so rows are flat and separated by a hairline. */
+.sk-section-body > .setting-item {
+	margin: 0;
+	padding: 13px 16px;
+	border: 0;
+	border-top: 1px solid var(--sk-line);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	transition: background-color var(--sk-fast) ease;
+}
+.sk-section-body > .setting-item:first-child {
+	border-top: 0;
+}
+.sk-section-body > .setting-item:hover {
+	background: var(--sk-accent-soft);
+}
+.sk-section-body .setting-item-name {
+	font-size: 13.5px;
+	font-weight: 500;
+}
+.sk-section-body .setting-item-description {
+	font-size: 12.5px;
+	line-height: 1.45;
+	padding-top: 3px;
+}
+.sk-section-body .setting-item-description code,
+.sk-section-desc code,
+.sk-note code {
+	font-family: var(--font-monospace);
+	font-size: 0.88em;
+	font-weight: 400;
+	padding: 1px 5px;
+	border-radius: 5px;
+	background: var(--sk-surface-sunken);
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+.sk-section-body .setting-item-control {
+	gap: 6px;
+}
+.sk-note {
+	padding: 11px 16px;
+	border-top: 1px solid var(--sk-line);
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--text-muted);
+}
+.sk-note:first-child {
+	border-top: 0;
+}
+
+/* The per-setting reset arrow: only there while the value is not the default. */
+.sk-section-body .sk-reset-one {
+	opacity: 0;
+	pointer-events: none;
+	width: 0;
+	padding: 0;
+	margin: 0;
+	overflow: hidden;
+	transform: rotate(40deg) scale(0.8);
+	transition:
+		opacity var(--sk-fast) ease,
+		transform 320ms var(--sk-spring),
+		width 220ms var(--sk-ease);
+}
+.sk-section-body .sk-reset-one.is-visible {
+	opacity: 0.55;
+	pointer-events: auto;
+	width: 26px;
+	padding: 4px;
+	transform: none;
+}
+.sk-section-body .sk-reset-one.is-visible:hover {
+	opacity: 1;
+}
+
+.sk-page-foot {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 22px;
+}
+.sk-reset {
+	font-size: 12.5px;
+	color: var(--text-muted);
+	transition:
+		color var(--sk-fast) ease,
+		background-color var(--sk-fast) ease;
+}
+.sk-reset.is-armed {
+	color: var(--sk-danger);
+	background: var(--sk-danger-wash);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sk-danger) 40%, transparent);
+}
+
+@container (max-width: 480px) {
+	.sk-section-body > .setting-item {
+		padding: 12px;
+	}
+}

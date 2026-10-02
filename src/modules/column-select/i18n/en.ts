@@ -1,0 +1,18 @@
+export const en = {
+	"module.name": "Column select",
+	"module.description": "Select a column of text and edit several rows at once.",
+	"command.up": "Extend column selection up",
+	"command.down": "Extend column selection down",
+	"command.left": "Extend column selection left",
+	"command.right": "Extend column selection right",
+	"settings.selecting": "Selecting",
+	"settings.keyboard": "Alt+Shift+arrows",
+	"settings.keyboard-desc": "Select a column with the keyboard. Turn off to give these keys back to Obsidian; the commands still work.",
+	"settings.mouse": "Alt+drag",
+	"settings.mouse-desc": "Select a column with Alt+drag, extend it with Alt+Shift+click, or add and remove cursors with Alt+click. Turn off to use Obsidian's mouse behavior. Some Linux systems use Alt+drag to move windows.",
+	"settings.pasting": "Pasting",
+	"settings.paste": "Spread the clipboard over the rows",
+	"settings.paste-desc": "With several cursors, paste one clipboard line per row. A single line repeats on every row. Turn off to use Obsidian's normal paste.",
+	"paste.dropped.one": "{count} extra clipboard line was not pasted.",
+	"paste.dropped.other": "{count} extra clipboard lines were not pasted.",
+};

@@ -1,0 +1,63 @@
+/* Shared toast: a pill at the bottom center, above the status bar, with an optional action. */
+.sk-toast {
+	position: fixed;
+	left: 50%;
+	bottom: calc(var(--status-bar-height, 22px) + 22px);
+	z-index: var(--layer-notice, 60);
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	max-width: min(520px, calc(100vw - 32px));
+	padding: 9px 10px 9px 16px;
+	border-radius: 999px;
+	background: var(--background-modifier-message, rgba(30, 30, 30, 0.92));
+	color: var(--text-on-accent, #fff);
+	box-shadow: var(--sk-shadow-pop);
+	font-family: var(--font-interface);
+	font-size: 13px;
+	transform: translateX(-50%);
+	animation: sk-toast-in 360ms var(--sk-spring) both;
+}
+.sk-toast.is-leaving {
+	animation: sk-toast-out 200ms ease both;
+}
+.sk-toast-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-toast:not(:has(.sk-toast-action)) {
+	padding-right: 16px;
+}
+.sk-toast .sk-toast-action {
+	flex: none;
+	height: 26px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.16);
+	box-shadow: none;
+	color: inherit;
+	font-size: 12.5px;
+	font-weight: 600;
+	cursor: var(--cursor);
+}
+.sk-toast .sk-toast-action:hover {
+	background: rgba(255, 255, 255, 0.26);
+}
+@keyframes sk-toast-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, 14px) scale(0.96);
+	}
+}
+@keyframes sk-toast-out {
+	to {
+		opacity: 0;
+		transform: translate(-50%, 8px) scale(0.98);
+	}
+}
+.is-mobile .sk-toast {
+	bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
+}

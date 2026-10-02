@@ -1,0 +1,8 @@
+node_modules/
+data.json
+main.js
+styles.css
+release/
+*.map
+test/.out/
+.forbidden-words
