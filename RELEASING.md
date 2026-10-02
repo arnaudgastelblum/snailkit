@@ -17,28 +17,21 @@
 Obsidian reads `manifest.json` from the default branch and downloads the three files from the
 release whose tag equals that version.
 
-## First submission to the community plugins list
+## First submission to the Obsidian Community directory
 
 Done once. Requirements: the repository is **public**, has a `README.md`, a `LICENSE`, and a
-published release (see above) whose tag matches `manifest.json`.
+published (not draft) release whose tag matches `manifest.json`.
 
-1. Fork `https://github.com/obsidianmd/obsidian-releases`.
-2. Add this entry at the end of `community-plugins.json`:
-   ```json
-   {
-   	"id": "snailkit",
-   	"name": "Snailkit",
-   	"author": "Arnaud Gastelblum",
-   	"description": "A kit of small, calm tools for your notes. Turn on only the ones you want.",
-   	"repo": "arnaudgastelblum/snailkit"
-   }
-   ```
-   `id`, `name`, `author` and `description` must match `manifest.json` exactly.
-3. Open a pull request titled `Add plugin: Snailkit` and fill in the checklist of the pull
-   request template.
-4. An automated check runs first, then a human review. Answer review comments by pushing fixes
-   and a new release; the pull request is merged when the review passes, and the plugin appears
-   in **Settings → Community plugins → Browse**.
+1. Sign in at `https://community.obsidian.md` with an Obsidian account.
+2. Link the GitHub account that owns the repository, so the directory can verify ownership.
+3. Add the plugin from the developer dashboard. The directory reads `manifest.json` at the head
+   of the default branch, so make sure it is committed and pushed first.
+4. The automated review usually answers within minutes. If it reports problems, fix them,
+   publish a new release with a higher version, and check again. Once accepted, the plugin
+   appears in **Settings → Community plugins → Browse** within 24 hours.
+
+Every later release is reviewed automatically too before users get it.
+See `https://docs.obsidian.md/plugins/releasing/submit-plugin`.
 
 Review points worth checking before submitting (from Obsidian's plugin guidelines): no default
 hotkeys, no `innerHTML` with user content, no global CSS that changes Obsidian's own UI, no
