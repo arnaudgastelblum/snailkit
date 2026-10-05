@@ -3,6 +3,7 @@ import { moment } from "obsidian";
 import { dueLabel } from "./group";
 import { plainTitle } from "./parse";
 import type { DayWords } from "./quick-add";
+import type { ViewAction } from "./api";
 import { TaskIndex } from "./task-index";
 import { VIEW_TYPE, type Context, type Priority, type Task } from "./types";
 import { TaskWriter, type Undo } from "./writer";
@@ -12,6 +13,7 @@ export interface HubView {
 	refresh(): void;
 	build(): void;
 	startAdd(tag: string | null): void;
+	showTag(tag: string): void;
 }
 
 interface TagColors {
@@ -25,6 +27,8 @@ export class TasksHub {
 	private refreshTimer = 0;
 	private lastUndo: { run: Undo; until: number } | null = null;
 	private disposed = false;
+	/** Buttons other plugins put in the header of the lists (see ViewAction in api.ts). */
+	readonly viewActions = new Set<() => ViewAction | null>();
 
 	constructor(readonly ctx: Context) {
 		this.index = new TaskIndex(ctx);
@@ -68,6 +72,13 @@ export class TasksHub {
 		await workspace.revealLeaf(leaf);
 		const view = leaf.view as unknown as Partial<HubView>;
 		return typeof view.startAdd === "function" ? (view as HubView) : null;
+	}
+
+	/** Shows the list as a page, on the tasks of one tag (and its sub-tags). */
+	async showTag(tag: string): Promise<boolean> {
+		const view = await this.activate("page");
+		view?.showTag(tag);
+		return !!view;
 	}
 
 	/** Opens the quick add row: in an open list, else in the side panel. */

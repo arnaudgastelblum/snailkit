@@ -1,6 +1,8 @@
 import { MarkdownRenderChild, Menu, type Modal } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import type { ModuleContext } from "../../core/context";
+import { TagCard } from "./card";
+import { TagSuggest } from "./suggest";
 import { assignSlots, buildCss, capsule, slotHue, tagKey } from "./colors";
 import { classes, ColorModal, ReassignModal } from "./dialogs";
 import { editorExtension, refreshColors } from "./editor";
@@ -19,7 +21,10 @@ export class TagRuntime implements ColorHost {
 	private paneTimer: ReturnType<typeof setTimeout> | undefined;
 	private saveTimer: ReturnType<typeof setTimeout> | undefined;
 	private stopped = false;
-	constructor(readonly ctx: ModuleContext<TagColorsSettings>) {}
+	private card: TagCard;
+	constructor(readonly ctx: ModuleContext<TagColorsSettings>) {
+		this.card = new TagCard(ctx, (tag) => this.classes(tag));
+	}
 	get app() { return this.ctx.app; }
 	get settings() { return this.ctx.settings; }
 	t: ColorHost["t"] = (key, vars) => this.ctx.t(key, vars);
@@ -32,6 +37,7 @@ export class TagRuntime implements ColorHost {
 		this.syncRegistry();
 		this.refresh();
 		ctx.registerEditorExtension(editorExtension(this));
+		this.registerSuggest();
 		ctx.registerMarkdownPostProcessor((el, context) => {
 			const render = () => {
 				if (this.stopped || !el.closest(".markdown-preview-view") || el.closest(".popover, .canvas-node, .search-result")) return;
@@ -102,6 +108,14 @@ export class TagRuntime implements ColorHost {
 		});
 		this.documents.set(doc, { style, observer });
 		this.updateCss(doc, style);
+		this.ctx.registerDomEvent(doc, "click", event => {
+			if (!this.settings.tagCard || event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+			const el = (event.target as Element | null)?.closest?.(".markdown-preview-view a.tag");
+			if (!el || el.closest(".popover, .canvas-node, .search-result")) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.openTag(this.reading.get(el)?.tag ?? (el.textContent ?? "").replace(/^#/, ""), el as HTMLElement, event);
+		}, { capture: true });
 		this.ctx.registerDomEvent(doc, "contextmenu", event => {
 			const target = event.target as Element | null;
 			const el = target?.closest?.(".markdown-preview-view a.tag");
@@ -178,6 +192,32 @@ export class TagRuntime implements ColorHost {
 		}
 	}
 
+	/**
+	 * The tag menu goes first in Obsidian's list of editor suggestions: the first one that triggers
+	 * wins, so Obsidian's own tag menu stays quiet while ours is on (it triggers only when the
+	 * setting is on). Off, or if Obsidian changes this list, Obsidian's menu is back.
+	 */
+	private registerSuggest(): void {
+		const manager = (this.app.workspace as unknown as { editorSuggest?: { suggests?: unknown[] } }).editorSuggest;
+		if (!Array.isArray(manager?.suggests)) return;
+		const suggest = new TagSuggest(this.app, this.ctx, (tag) => this.classes(tag));
+		manager!.suggests!.unshift(suggest);
+		this.ctx.register(() => {
+			suggest.close();
+			const list = manager!.suggests!;
+			const at = list.indexOf(suggest);
+			if (at >= 0) list.splice(at, 1);
+		});
+	}
+
+	/** A click on a tag: the tag card when it is on (Ctrl or Cmd click keeps the search), else the search. */
+	openTag(tag: string, anchor: HTMLElement, event?: MouseEvent | KeyboardEvent): void {
+		if (this.stopped) return;
+		const mod = !!event && (event.ctrlKey || event.metaKey);
+		if (this.settings.tagCard && !mod) this.card.open(tag, anchor);
+		else this.openSearch(tag);
+	}
+
 	openSearch(tag: string): void {
 		const app = this.app as typeof this.app & { internalPlugins?: { getPluginById?(id: string): { instance?: { openGlobalSearch?(query: string): void } } } };
 		const search = app.internalPlugins?.getPluginById?.("global-search")?.instance;
@@ -211,6 +251,7 @@ export class TagRuntime implements ColorHost {
 		clearTimeout(this.paneTimer);
 		if (this.saveTimer !== undefined) { clearTimeout(this.saveTimer); void this.save(); }
 		this.menu?.hide();
+		this.card.close();
 		for (const cancel of this.frames) cancel();
 		for (const modal of this.dialogs) modal.close();
 		for (const [doc, { style, observer }] of this.documents) {

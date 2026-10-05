@@ -19,7 +19,7 @@ export const noteRail = defineModule<NoteRailSettings>({
 	category: "organize",
 	strings: { en, fr, nl, es },
 	defaults: DEFAULT_SETTINGS,
-	keepOnReset: ["vaultPins"],
+	keepOnReset: ["vaultPins", "bookmarksTips"],
 	activate(ctx) {
 		new NoteRailController(ctx).start();
 	},
@@ -50,6 +50,8 @@ export const noteRail = defineModule<NoteRailSettings>({
 /** Buttons (shown or not, in order), position, opacity, make room. */
 function railSection(page: SettingsPage<NoteRailSettings>): void {
 	const rail = page.section(page.t("settings.rail"), page.t("settings.rail-desc"));
+	rail.toggle("showPlace", page.t("settings.show-place"), { desc: page.t("settings.show-place-desc") });
+	rail.toggle("showToday", page.t("rail.today"), { desc: page.t("settings.show-today-desc") });
 	const order = railOrder(page.settings.buttonOrder);
 	order.forEach((id, index) => {
 		const row = rail.toggle(SHOW_KEY[id], page.t(`panel.${id}`), { desc: page.t(`settings.button-${id}`) });
@@ -69,6 +71,10 @@ function railSection(page: SettingsPage<NoteRailSettings>): void {
 		left: page.t("settings.position-left"),
 		right: page.t("settings.position-right"),
 	}, { desc: page.t("settings.position-desc") });
+	rail.dropdown("mobilePosition", page.t("settings.mobile-position"), {
+		left: page.t("settings.position-left"),
+		right: page.t("settings.position-right"),
+	}, { desc: page.t("settings.mobile-position-desc") });
 	rail.number("restOpacity", page.t("settings.opacity"), { desc: page.t("settings.opacity-desc"), min: 0.2, max: 1, step: 0.05 });
 	rail.toggle("makeRoom", page.t("settings.room"), { desc: page.t("settings.room-desc") });
 }

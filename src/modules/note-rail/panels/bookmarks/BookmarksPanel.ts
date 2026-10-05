@@ -3,6 +3,7 @@ import { Keymap, Notice, Platform, setIcon, TFile } from "obsidian";
 import type { HoverParent, HoverPopover } from "obsidian";
 import { addNotePin, getNotePins, getVaultPins, pinsReorder, pinWritesSettled, removeNotePin, reorderNotePins } from "../../pins";
 import { asElement, asNode, dur, reducedMotion, SPRING } from "../../rail/motion";
+import { hueOf, placeFinder } from "../../parents";
 import { cleanVaultPins, pinsKey } from "../../settings";
 import type { PanelContext, PanelDefinition, PanelInstance } from "../../types";
 import { pinCandidates, rankCandidates, renderHighlighted } from "./candidates";
@@ -18,6 +19,10 @@ const TOUCH_SLOP = 8;
 /** After a frontmatter write, how long the panel trusts its own order over a stale metadata cache. */
 const PENDING_GRACE_MS = 1500;
 const SUGGEST_LIMIT = 8;
+/** The tip card shows on the first openings of the panel, until "Got it". */
+const TIP_OPENINGS = 3;
+/** Panel bodies whose opening was already counted for the tip card. */
+const tipCounted = new WeakSet<HTMLElement>();
 
 interface PinList {
 	kind: ListKind;
@@ -45,7 +50,7 @@ interface DragState {
 const sig = (files: TFile[]): string => files.map((f) => f.path).join("\n");
 const ROW = ".sk-note-rail-bm-row:not(.is-leaving)";
 /** Everything that may move when a row appears or disappears above it. */
-const FOLLOWERS = ".sk-note-rail-bm-row, .sk-note-rail-section, .sk-note-rail-add, .sk-note-rail-hint, .sk-note-rail-empty, .sk-note-rail-suggest";
+const FOLLOWERS = ".sk-note-rail-bm-row, .sk-note-rail-section, .sk-note-rail-add, .sk-note-rail-empty, .sk-note-rail-suggest";
 
 /**
  * Bookmarks: notes pinned to this note (frontmatter, written through src/pins) and vault-wide pins
@@ -60,7 +65,6 @@ class BookmarksPanel implements PanelInstance {
 	private noteAddEl: HTMLElement;
 	private vaultAddEl: HTMLElement;
 	private vaultAddLabel: HTMLElement;
-	private hintCodeEl: HTMLElement;
 	private suggestSlot: HTMLElement;
 	private suggestEl: HTMLElement | null = null;
 	private suggestInput: HTMLInputElement | null = null;
@@ -91,18 +95,12 @@ class BookmarksPanel implements PanelInstance {
 		this.win = body.win ?? window;
 		this.rootEl = body.createDiv("sk-note-rail-bm");
 
+		this.renderTip();
+
 		this.note = this.createList("note", ctx.t("bookmarks.this-note"));
 		this.suggestSlot = this.rootEl.createDiv("sk-note-rail-bm-suggest-slot");
 		this.noteAddEl = this.createAdd("plus", ctx.t("bookmarks.add-here"));
 		this.noteAddEl.addEventListener("click", () => this.openSuggest());
-		const hint = this.rootEl.createDiv("sk-note-rail-hint");
-		setIcon(hint.createSpan("sk-note-rail-hint-icon"), "info");
-		// "Saved in this note's `pins` property", with the property name as code wherever the language puts it.
-		const hintText = hint.createSpan();
-		const [before, after] = ctx.t("bookmarks.hint").split("{key}");
-		hintText.appendText(before ?? "");
-		this.hintCodeEl = hintText.createEl("code");
-		hintText.appendText(after ?? "");
 
 		this.vault = this.createList("vault", ctx.t("bookmarks.vault"));
 		this.vaultAddEl = this.createAdd("pin", ctx.t("bookmarks.pin-current"));
@@ -128,11 +126,40 @@ class BookmarksPanel implements PanelInstance {
 			this.cleanups.push(() => vault.offref(ref));
 		}
 
-		this.ctx.setFooter(Platform.isMobile ? ctx.t("bookmarks.foot-touch") : ctx.t("bookmarks.foot", { mod: Platform.isMacOS ? "Cmd" : "Ctrl" }));
 		this.refresh();
 	}
 
 	// ---- building ------------------------------------------------------------
+
+	/** What used to be written all over the panel, said once: on the first openings, until "Got it". */
+	private renderTip(): void {
+		const seen = this.ctx.settings.bookmarksTips ?? 0;
+		if (seen >= TIP_OPENINGS) return;
+		// A pinned panel builds a new instance in the same body for each note: that is not an opening.
+		if (!tipCounted.has(this.body)) {
+			tipCounted.add(this.body);
+			void this.ctx.updateSettings((s) => {
+				s.bookmarksTips = Math.min(TIP_OPENINGS, (s.bookmarksTips ?? 0) + 1);
+			});
+		}
+		const t = this.ctx.t;
+		const tip = this.rootEl.createDiv("sk-note-rail-tip");
+		const text = tip.createDiv("sk-note-rail-tip-text");
+		// The property name as code wherever the language puts it.
+		const [before, after] = t("bookmarks.tip-lists").split("{key}");
+		const lists = text.createDiv();
+		lists.appendText(before ?? "");
+		lists.createEl("code", { text: pinsKey(this.ctx.settings) });
+		lists.appendText(after ?? "");
+		text.createDiv({ text: Platform.isMobile ? t("bookmarks.tip-move-touch") : t("bookmarks.tip-move", { mod: Platform.isMacOS ? "Cmd" : "Ctrl" }) });
+		const ok = tip.createEl("button", { cls: "sk-note-rail-tip-ok", text: t("bookmarks.tip-ok"), attr: { type: "button" } });
+		ok.addEventListener("click", () => {
+			void this.ctx.updateSettings((s) => {
+				s.bookmarksTips = TIP_OPENINGS;
+			});
+			tip.remove();
+		});
+	}
 
 	private createList(kind: ListKind, title: string): PinList {
 		const head = this.rootEl.createDiv("sk-note-rail-section");
@@ -171,10 +198,15 @@ class BookmarksPanel implements PanelInstance {
 		this.rowFiles.set(row, file);
 		row.dataset.path = file.path;
 		row.querySelector(".sk-note-rail-row-title")?.setText(file.basename);
+		// Under the name: the area the note belongs to (in its color), else its folder.
 		const meta = row.querySelector<HTMLElement>(".sk-note-rail-row-meta");
-		const folder = file.parent && !file.parent.isRoot() ? file.parent.path : "";
-		meta?.setText(folder);
-		meta?.toggle(!!folder);
+		const area = placeFinder(this.ctx.app).placeOf(file).area;
+		const label = area && area !== file ? area.basename : file.parent && !file.parent.isRoot() ? file.parent.path : "";
+		meta?.setText(label);
+		meta?.toggle(!!label);
+		row.toggleClass("has-area", !!area);
+		if (area) row.style.setProperty("--sk-bm-hue", String(hueOf(area.path)));
+		else row.style.removeProperty("--sk-bm-hue");
 	}
 
 	// ---- refresh -------------------------------------------------------------
@@ -196,7 +228,6 @@ class BookmarksPanel implements PanelInstance {
 		const { app, settings } = this.ctx;
 		const file = this.ctx.view.file;
 		this.ctx.setSubtitle(file?.basename ?? "");
-		this.hintCodeEl.setText(pinsKey(settings));
 
 		const notePins = file ? getNotePins(app, file, settings) : [];
 		if (this.pendingNote !== null && sig(notePins) === this.pendingNote) this.clearPending();
@@ -218,7 +249,13 @@ class BookmarksPanel implements PanelInstance {
 			&& shown.every((row, i) => row.dataset.path === files[i].path && this.rowFiles.get(row) === files[i])
 			&& (files.length > 0 || !!list.itemsEl.querySelector(".sk-note-rail-empty"));
 		for (const row of shown) row.toggleClass("is-self", row.dataset.path === current?.path);
-		if (upToDate) return;
+		if (upToDate) {
+			for (const row of shown) {
+				const f = this.rowFiles.get(row);
+				if (f) this.fillRow(row, f);
+			}
+			return;
+		}
 
 		const doc = list.itemsEl.doc;
 		const hadFocus = list.itemsEl.contains(doc.activeElement) ? (doc.activeElement as HTMLElement) : null;
@@ -246,11 +283,9 @@ class BookmarksPanel implements PanelInstance {
 		if (hadFocus?.isConnected && doc.activeElement !== hadFocus) hadFocus.focus({ preventScroll: true });
 	}
 
+	/** An empty list says nothing: the add button below it is enough. */
 	private showEmpty(list: PinList): HTMLElement {
-		return list.itemsEl.createDiv({
-			cls: "sk-note-rail-empty",
-			text: this.ctx.t(list.kind === "note" ? "bookmarks.empty-note" : "bookmarks.empty-vault"),
-		});
+		return list.itemsEl.createDiv({ cls: "sk-note-rail-empty is-silent" });
 	}
 
 	private updateMeta(): void {

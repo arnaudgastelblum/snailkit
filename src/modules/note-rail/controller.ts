@@ -1,6 +1,7 @@
 // Keeps one rail on every Markdown view (every tab, split and popout window) in sync with the
 // layout, the open file, its metadata and the settings, and owns the module's commands.
 import { MarkdownView, moment, Notice, TFile, type TAbstractFile } from "obsidian";
+import { hueOf, placeFinder, type PlacesService } from "./parents";
 import type { ModuleContext } from "../../core/context";
 import type { Vars } from "../../i18n";
 import { PinNoteModal } from "./panels/bookmarks/candidates";
@@ -59,6 +60,9 @@ export class NoteRailController {
 		const ws = ctx.app.workspace;
 		ctx.register(() => this.stop());
 		ctx.registerEditorExtension(tocEditorExtension);
+		// Where a note belongs (its area and parents), for other modules: the tag card colors notes with it.
+		const finder = placeFinder(ctx.app);
+		ctx.provide<PlacesService>("places", { version: 1, placeOf: (file) => finder.placeOf(file), hueOf });
 		ctx.onSettingsChange(() => {
 			for (const rail of this.rails.values()) rail.sync(true);
 		});

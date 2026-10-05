@@ -1,7 +1,9 @@
 // One rail per Markdown view, mounted in the view's content element (below the view header, so it
 // stays put while the note scrolls and survives switches between Live Preview, Source and Reading).
 // The rail owns the panel card; panels only fill the body and the footer.
-import { MarkdownView, Platform, setIcon, type TFile } from "obsidian";
+import { Keymap, MarkdownView, Menu, moment, Notice, Platform, setIcon, type TFile } from "obsidian";
+import { hueOf, placeFinder } from "../parents";
+import { getDailyConfig, getOrCreateDailyNote } from "../panels/calendar/daily";
 import { PANELS } from "../panels/registry";
 import { clamp, railOrder, SHOW_KEY } from "../settings";
 import type { HideReason, PanelContext, PanelDefinition, PanelId, PanelInstance, RailEnv } from "../types";
@@ -28,6 +30,10 @@ export class Rail {
 	private puckEl: HTMLElement;
 	private tooltipEl: HTMLElement;
 	private buttons = new Map<PanelId, RailButton>();
+	/** Above the panel buttons: the area of the note (a colored initial) and today's daily note. */
+	private placeEl: HTMLElement;
+	private todayEl: HTMLElement;
+	private placeTip = "";
 	private openId: PanelId | null = null;
 	private shell: PanelShell | null = null;
 	private instance: PanelInstance | null = null;
@@ -42,6 +48,8 @@ export class Rail {
 	private destroyed = false;
 	private closing = new Set<PanelShell>();
 	private returnFocus: HTMLElement | null = null;
+	/** Height of what floats over the top of the note (phones), as a CSS length, or "". */
+	private railTop = "";
 
 	constructor(
 		private env: RailEnv,
@@ -52,6 +60,18 @@ export class Rail {
 		this.hostEl.addClass("sk-note-rail-host");
 		this.railEl = this.hostEl.createDiv({ cls: "sk-note-rail", attr: { role: "toolbar" } });
 		this.puckEl = this.railEl.createSpan("sk-note-rail-puck");
+		this.placeEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-place", attr: { "data-btn": "place" } });
+		this.placeEl.createSpan("sk-note-rail-place-initial");
+		this.placeEl.createSpan("sk-note-rail-sr-only");
+		this.todayEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-today", attr: { "data-btn": "today" } });
+		setIcon(this.todayEl.createSpan("sk-note-rail-btn-icon"), "sun");
+		this.todayEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("rail.today") });
+		this.wireAction(this.placeEl, () => this.placeTip, (e) => this.onPlace(e));
+		this.wireAction(this.todayEl, () => env.t("rail.today"), (e) => void this.openToday(e));
+		this.placeEl.addEventListener("contextmenu", (e) => {
+			e.preventDefault();
+			this.placeMenu(e);
+		});
 		this.tooltipEl = this.hostEl.createDiv({ cls: "sk-note-rail-tooltip", attr: { role: "tooltip" } });
 		this.room = new RoomController(view);
 
@@ -62,15 +82,40 @@ export class Rail {
 
 		const RO = doc.defaultView?.ResizeObserver;
 		if (RO) {
-			this.resizeObserver = new RO(() => this.updateRoom());
+			this.resizeObserver = new RO(() => {
+				this.placeBelowHeader();
+				this.updateRoom();
+			});
 			this.resizeObserver.observe(this.hostEl);
 		}
 
 		this.applySettings();
+		this.placeBelowHeader();
+	}
+
+	/**
+	 * On phones and tablets the note header (and the status bar) float over the top of the note:
+	 * the rail and its panels start below them. Set on the rail and its panel only, never on the
+	 * note (a custom property there would restyle the whole editor at each resize).
+	 */
+	private placeBelowHeader(): void {
+		if (!Platform.isMobile) return;
+		const host = this.hostEl.getBoundingClientRect();
+		let covered = 0;
+		const header = this.view.containerEl.querySelector<HTMLElement>(":scope > .view-header");
+		if (header && header.offsetHeight) covered = header.getBoundingClientRect().bottom - host.top;
+		const win = this.hostEl.ownerDocument.defaultView;
+		const safeTop = win ? parseFloat(win.getComputedStyle(this.hostEl.ownerDocument.body).getPropertyValue("--safe-area-inset-top")) || 0 : 0;
+		covered = Math.max(covered, safeTop - host.top);
+		this.railTop = covered > 0 ? `${Math.round(covered)}px` : "";
+		for (const el of [this.railEl, this.shell?.el]) {
+			if (el && el.style.getPropertyValue("--sk-note-rail-top") !== this.railTop) el.style.setProperty("--sk-note-rail-top", this.railTop);
+		}
 	}
 
 	private get position(): "left" | "right" {
-		return this.env.settings.position === "right" ? "right" : "left";
+		const value = Platform.isMobile ? this.env.settings.mobilePosition ?? "right" : this.env.settings.position;
+		return value === "right" ? "right" : "left";
 	}
 
 	/** Re-check everything: mount point, file, settings-driven look, button availability. */
@@ -84,6 +129,7 @@ export class Rail {
 		const fileChanged = this.view.file !== this.file;
 		this.file = this.view.file;
 		this.applySettings();
+		this.placeBelowHeader();
 
 		if (!this.openId) return;
 		const def = PANELS[this.openId];
@@ -189,7 +235,97 @@ export class Rail {
 	private applySettings(): void {
 		this.hostEl.toggleClass("sk-note-rail-right", this.position === "right");
 		this.railEl.style.setProperty("--sk-note-rail-rest", String(clamp(this.env.settings.restOpacity, 0.2, 1, 0.5)));
+		this.renderActions();
 		this.renderButtons();
+	}
+
+	// ---- area and today ------------------------------------------------------
+
+	/** The area pill (hidden when the note has none) and the Today button (lit on today's note). */
+	private renderActions(): void {
+		const file = this.view.file;
+		const place = file && this.env.settings.showPlace !== false ? placeFinder(this.env.app).placeOf(file) : null;
+		const area = place?.area ?? null;
+		this.placeEl.hidden = !area;
+		if (area && file && place) {
+			const initial = (/[\p{L}\p{N}]/u.exec(area.basename)?.[0] ?? "?").toUpperCase();
+			this.placeEl.querySelector(".sk-note-rail-place-initial")?.setText(initial);
+			this.placeEl.style.setProperty("--sk-place-hue", String(hueOf(area.path)));
+			this.placeTip = this.placeSteps(file).map((f) => f.basename).join(" › ");
+			this.placeEl.querySelector(".sk-note-rail-sr-only")?.setText(this.placeTip);
+		}
+		this.todayEl.hidden = this.env.settings.showToday === false;
+		this.todayEl.toggleClass("is-active", !!file && file.path === this.todayPath());
+	}
+
+	/** From the area down to the direct parent of the note (the area alone when the note is the area). */
+	private placeSteps(file: TFile): TFile[] {
+		const place = placeFinder(this.env.app).placeOf(file);
+		if (!place.area) return [];
+		if (place.area === file) return [file];
+		const from = place.chain.indexOf(place.area);
+		const steps: TFile[] = [];
+		for (let i = from; i >= 0; i--) steps.push(place.chain[i]);
+		return steps;
+	}
+
+	/** Tooltip on hover, the action on click (closing an open panel first). */
+	private wireAction(el: HTMLElement, label: () => string, run: (e: MouseEvent) => void): void {
+		el.addEventListener("click", (e) => {
+			e.stopPropagation();
+			this.clearHoverTimers();
+			if (this.openId) this.hide("commit");
+			run(e);
+		});
+		el.addEventListener("pointerenter", (e) => {
+			if (e.pointerType !== "touch") this.showTooltipSoon(el, label());
+		});
+		el.addEventListener("pointerleave", () => this.hideTooltip());
+	}
+
+	/** Click: the area note. On a phone (no hover to read the path) or on the area itself: the path as a menu. */
+	private onPlace(e: MouseEvent): void {
+		const file = this.view.file;
+		if (!file) return;
+		const steps = this.placeSteps(file);
+		const area = steps[0];
+		if (!area) return;
+		if (Platform.isMobile || area === file) this.placeMenu(e);
+		else void this.openFile(area, e);
+	}
+
+	private placeMenu(e: MouseEvent): void {
+		const file = this.view.file;
+		if (!file) return;
+		const menu = new Menu();
+		for (const step of this.placeSteps(file)) {
+			menu.addItem((item) => item.setTitle(step.basename).setIcon(step === file ? "dot" : "corner-left-up").setDisabled(step === file).onClick(() => void this.openFile(step, e)));
+		}
+		menu.showAtMouseEvent(e);
+	}
+
+	private todayPath(): string {
+		const cfg = getDailyConfig(this.env.app, this.env.settings);
+		const name = moment().format(cfg.format);
+		return (cfg.folder ? cfg.folder + "/" : "") + name + ".md";
+	}
+
+	private async openToday(e: MouseEvent): Promise<void> {
+		try {
+			const cfg = getDailyConfig(this.env.app, this.env.settings);
+			const file = await getOrCreateDailyNote(this.env.app, moment().format("YYYY-MM-DD"), cfg);
+			await this.openFile(file, e);
+		} catch (err) {
+			console.error("[Snailkit] note-rail: today's note", err);
+			new Notice(this.env.t("rail.today-error"));
+		}
+	}
+
+	/** In this pane (a new tab with Ctrl or Cmd). */
+	private async openFile(file: TFile, e: MouseEvent): Promise<void> {
+		if (!Keymap.isModEvent(e) && this.view.file?.path === file.path) return;
+		const leaf = Keymap.isModEvent(e) ? this.env.app.workspace.getLeaf("tab") : this.view.leaf;
+		await leaf.openFile(file);
 	}
 
 	private isShown(id: PanelId): boolean {
@@ -256,7 +392,7 @@ export class Rail {
 		});
 		el.addEventListener("pointerenter", (e) => {
 			if (e.pointerType === "touch") return;
-			this.showTooltipSoon(el, def);
+			this.showTooltipSoon(el, this.env.t(`panel.${def.id}`));
 			window.clearTimeout(this.hoverSwitchTimer);
 			if (this.openId && this.openId !== def.id) {
 				this.hoverSwitchTimer = window.setTimeout(() => this.open(def.id), HOVER_SWITCH_MS);
@@ -289,12 +425,12 @@ export class Rail {
 
 	// ---- tooltips ------------------------------------------------------------
 
-	private showTooltipSoon(btn: HTMLElement, def: PanelDefinition): void {
+	private showTooltipSoon(btn: HTMLElement, text: string): void {
 		window.clearTimeout(this.tooltipTimer);
 		if (this.openId || Platform.isMobile) return;
 		this.tooltipTimer = window.setTimeout(() => {
 			if (this.openId || !btn.isConnected) return;
-			this.tooltipEl.setText(this.env.t(`panel.${def.id}`));
+			this.tooltipEl.setText(text);
 			const host = this.hostEl.getBoundingClientRect();
 			const r = btn.getBoundingClientRect();
 			const rail = this.railEl.getBoundingClientRect();
@@ -414,7 +550,9 @@ export class Rail {
 
 	private updateRoom(): void {
 		if (this.destroyed) return;
-		this.room.update(this.shell?.el ?? null, this.position, this.env.settings.makeRoom !== false);
+		// On a phone there is no room to make: the text would slide off the screen.
+		if (this.shell && this.railTop) this.shell.el.style.setProperty("--sk-note-rail-top", this.railTop);
+		this.room.update(this.shell?.el ?? null, this.position, this.env.settings.makeRoom !== false && !Platform.isPhone);
 	}
 
 	// ---- document-level interactions -----------------------------------------

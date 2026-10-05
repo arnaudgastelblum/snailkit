@@ -5,6 +5,7 @@
 // "snailkit:services-changed" to know when it comes and goes. Documented in docs/tasks.md.
 import { isIsoDate } from "./group";
 import { plainTitle } from "./parse";
+import type { TasksHub } from "./hub";
 import type { TaskIndex } from "./task-index";
 import type { Task, TaskRef } from "./types";
 import type { TaskWriter, Written } from "./writer";
@@ -51,6 +52,19 @@ export interface NewTask {
 	markers?: Record<string, string>;
 }
 
+/** A button another plugin puts in the header of the task list. Read again at each redraw. */
+export interface ViewAction {
+	/** Lucide icon name. */
+	icon: string;
+	/** Tooltip, and what screen readers say. */
+	label: string;
+	/** Short text next to the icon, shown when the list is a page. */
+	text?: string;
+	/** "busy" turns the icon, "error" colors it. */
+	state?: "busy" | "error" | null;
+	onClick(): void;
+}
+
 export interface TasksApi {
 	readonly version: 1;
 	/** False until the first read of the vault is done (a "change" event follows). */
@@ -81,6 +95,13 @@ export interface TasksApi {
 	setMarker(location: TaskLocation, name: string, value: string | null): Promise<TaskInfo | null>;
 	/** Writes a new open task where quick add writes (see the "New tasks go to" setting). */
 	addTask(task: NewTask): Promise<TaskInfo | null>;
+
+	/** Adds a button to the header of the open lists; `get` returns it as it is now, or null to hide it. Returns a remove function. */
+	addViewAction(get: () => ViewAction | null): () => void;
+	/** Redraws the open lists soon (after a ViewAction changed). */
+	refreshViews(): void;
+	/** Opens the task list as a page on one tag and its sub-tags. False when no list could open. */
+	openTag(tag: string): Promise<boolean>;
 }
 
 const MARKER_NAME_RE = /^[a-z][a-z0-9-]*$/;
@@ -113,7 +134,7 @@ function location(value: TaskLocation): TaskRef | null {
 }
 
 /** Builds the API over the module's index and writer. `alive` turns false when the module stops. */
-export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () => boolean): TasksApi {
+export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () => boolean, hub?: Pick<TasksHub, "viewActions" | "refreshViews" | "showTag">): TasksApi {
 	const after = (written: Written | null) => (written && alive() ? index.at(written.path, written.line) : null);
 	const run = async (value: TaskLocation, op: (task: Task) => Promise<Written | null>): Promise<TaskInfo | null> => {
 		const ref = location(value);
@@ -183,6 +204,22 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 				console.error("[Snailkit] tasks: addTask failed", error);
 				return null;
 			}
+		},
+		addViewAction: (get) => {
+			if (!hub || typeof get !== "function" || !alive()) return () => undefined;
+			hub.viewActions.add(get);
+			hub.refreshViews();
+			return () => {
+				if (hub.viewActions.delete(get)) hub.refreshViews();
+			};
+		},
+		refreshViews: () => {
+			if (hub && alive()) hub.refreshViews();
+		},
+		openTag: async (tag) => {
+			const clean = cleanTag(tag);
+			if (!hub || !alive() || !TAG_RE.test(clean)) return false;
+			return hub.showTag(clean);
 		},
 	};
 }

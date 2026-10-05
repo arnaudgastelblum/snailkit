@@ -363,3 +363,34 @@ test("identical tasks get their own keys, and the index keeps live edits made du
 	await build;
 	assert.deepEqual(index.list.map((t) => t.primary), ["home", "home", "reading"]);
 });
+
+test("view actions: added, refreshed, removed, and refused once the module is off", () => {
+	const hub = { viewActions: new Set<() => null>(), refreshes: 0, refreshViews() { this.refreshes++; }, showTag: async () => true };
+	let alive = true;
+	const api = createTasksApi({} as TaskIndex, {} as TaskWriter, () => alive, hub);
+	const get = () => null;
+	const remove = api.addViewAction(get);
+	assert.equal(hub.viewActions.size, 1);
+	api.refreshViews();
+	assert.equal(hub.refreshes, 2);
+	remove();
+	remove();
+	assert.equal(hub.viewActions.size, 0);
+	assert.equal(hub.refreshes, 3);
+	alive = false;
+	api.addViewAction(get);
+	assert.equal(hub.viewActions.size, 0);
+});
+
+test("openTag: opens the list on a clean tag, refuses bad ones and a stopped module", async () => {
+	const shown: string[] = [];
+	let alive = true;
+	const hub = { viewActions: new Set<() => null>(), refreshViews() {}, showTag: async (tag: string) => { shown.push(tag); return true; } };
+	const api = createTasksApi({ flags: () => new Set() } as unknown as TaskIndex, {} as TaskWriter, () => alive, hub);
+	assert.equal(await api.openTag("#Project/Website"), true);
+	assert.deepEqual(shown, ["project/website"]);
+	assert.equal(await api.openTag("not a tag"), false);
+	alive = false;
+	assert.equal(await api.openTag("project"), false);
+	assert.equal(shown.length, 1);
+});

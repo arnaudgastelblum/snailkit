@@ -73,7 +73,7 @@ export const tasks = defineModule<TasksSettings>({
 		// Today moves at midnight: due labels and the Today view follow.
 		ctx.registerInterval(window.setInterval(() => hub.refreshViews(), 60_000));
 
-		ctx.provide("tasks", createTasksApi(hub.index, hub.writer, () => hub.alive));
+		ctx.provide("tasks", createTasksApi(hub.index, hub.writer, () => hub.alive, hub));
 	},
 	settings(page) {
 		page.section(page.t("settings.which"), page.t("settings.which-desc"))

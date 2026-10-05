@@ -167,6 +167,9 @@ Listen to the workspace event `snailkit:services-changed` to know when the API a
 | `moveToTag(location, tag)` | same | Replaces the group tag (not a flag). |
 | `setMarker(location, name, value \| null)` | same | Sets or removes a hidden `%%name:value%%` comment in the line. |
 | `addTask({ title, tag, priority?, due?, markers? })` | same | Writes a new open task where quick add writes. |
+| `addViewAction(get)` | remove function | Puts a button in the header of the task list. `get()` returns `{ icon, label, text?, state?, onClick }` as it is now (or null to hide it); it is read again at each redraw. `state`: `"busy"` turns the icon, `"error"` colors it. `text` shows next to the icon when the list is a page. |
+| `refreshViews()` | nothing | Redraws the open lists soon, after a button changed. |
+| `openTag(tag)` | `Promise<boolean>` | Opens the list as a page on one tag and its sub-tags. |
 
 A `TaskInfo` is a copy of what the line says: `path`, `line` (0-based), `raw` (the whole line), `key` (group tag and words, stable when priority or dates change and when the task moves to another note), `text`, `title`, `plainTitle`, `tag`, `tags`, `priority`, `due`, `done`, `doneDate`, `markers`.
 

@@ -146,3 +146,14 @@ export function getIconIds(): string[] {
 export function requestUrl(): Promise<never> {
 	return Promise.reject(new Error("network is not available in tests"));
 }
+
+/** Editor suggestions: enough to construct one (tests use its pure helpers). */
+export class EditorSuggest<T> {
+	declare _t: T;
+	limit = 100;
+	context: unknown = null;
+	scope = new Scope();
+	constructor(public app: unknown) {}
+	setInstructions(): void {}
+	close(): void {}
+}

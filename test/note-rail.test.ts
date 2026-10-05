@@ -5,6 +5,7 @@ import { TFile, type App, type HeadingCache } from "obsidian";
 import { applyDailyTemplate, dailyPath, getDailyConfig, monthGrid, parseDailyPath, weekStartOf } from "../src/modules/note-rail/panels/calendar/daily";
 import { checkTaskLine, locateTask, parseOpenTasks } from "../src/modules/note-rail/panels/tasks/parse";
 import { buildToc, currentIndex, plainHeading } from "../src/modules/note-rail/panels/toc/headings";
+import { hueOf, linkpathOf, parentLinkpath } from "../src/modules/note-rail/parents";
 import { addNotePin, getNotePins, pinLinkpath, pinLinkpaths, pinsAdd, pinsRemove, pinsReorder, removeNotePin, reorderNotePins, type PinResolver } from "../src/modules/note-rail/pins";
 import { cleanVaultPins, DEFAULT_SETTINGS, moveInOrder, pinsKey, railOrder, remapVaultPins } from "../src/modules/note-rail/settings";
 import type { NoteRailSettings } from "../src/modules/note-rail/types";
@@ -249,4 +250,25 @@ test("settings: vault pins follow renames and deletes of notes and folders", () 
 	assert.deepEqual(cleanVaultPins("a.md"), []);
 	assert.equal(pinsKey(settings({ pinsKey: "  " })), "pins");
 	assert.equal(pinsKey(settings({ pinsKey: " related " })), "related");
+});
+
+// ----- where a note belongs -----
+
+test("parent: a parent property wins, else the first link at the top of the note", () => {
+	const link = (text: string, line: number, offset: number) => ({ link: text, original: `[[${text}]]`, position: { start: { line, col: 0, offset }, end: { line, col: 0, offset: offset + 4 } } });
+	assert.equal(linkpathOf("[[Work|my work]]"), "Work");
+	assert.equal(linkpathOf(["[[Areas/Work#Goals]]", "[[Other]]"]), "Areas/Work");
+	assert.equal(linkpathOf("Work"), "Work");
+	assert.equal(linkpathOf(42), null);
+	// Property first, whatever its case.
+	assert.equal(parentLinkpath({ frontmatter: { Up: "[[Home]]" }, links: [link("Work", 1, 1)] } as never), "Home");
+	// Else the first link, by position, when it sits in the first lines.
+	assert.equal(parentLinkpath({ links: [link("Later", 2, 30), link("Work", 1, 1)] } as never), "Work");
+	assert.equal(parentLinkpath({ links: [link("Work#Goals", 0, 0)] } as never), "Work");
+	// A link far down the note is not a parent; lines are counted after the properties.
+	assert.equal(parentLinkpath({ links: [link("Deep", 5, 80)] } as never), null);
+	assert.equal(parentLinkpath({ frontmatterPosition: { end: { line: 4 } }, frontmatter: {}, links: [link("Work", 6, 60)] } as never), "Work");
+	assert.equal(parentLinkpath(null), null);
+	assert.equal(hueOf("Work.md"), hueOf("Work.md"));
+	assert.ok(hueOf("Work.md") >= 0 && hueOf("Work.md") < 360);
 });

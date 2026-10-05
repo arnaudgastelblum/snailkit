@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { inTag, lineOutsideTasks, subTags } from "../src/modules/tag-colors/card";
 import { assignSlots, buildCss, contrastRatio, fnv1a, hexToHue, hueClasses, oklchToSrgb, roleColors, slotHue, splitTag, tagHues, tagKey } from "../src/modules/tag-colors/colors";
 import { entries, migrate, registry, type ColorHost, type TagColorsSettings } from "../src/modules/tag-colors/types";
 import { classes, setOverride } from "../src/modules/tag-colors/dialogs";
+import { asTask, nextPart, rankTags, tagQuery, withoutTyped } from "../src/modules/tag-colors/suggest";
 import { mergeSettings } from "../src/core/settings";
 
 test("tag parsing preserves display case and Unicode while keys ignore case", () => {
@@ -48,7 +50,7 @@ test("implicit ancestors, siblings and cousins receive distinct colors until exh
 });
 
 test("overrides distinguish family and body and reset restores the registry", async () => {
-	const settings: TagColorsSettings = { uppercase: true, colorPanes: true, slots: Object.entries(assignSlots({}, { "project/website/design": 4 })), overrides: [] };
+	const settings: TagColorsSettings = { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, slots: Object.entries(assignSlots({}, { "project/website/design": 4 })), overrides: [] };
 	let saves = 0;
 	const host = { settings, save: async () => { saves++; } } as ColorHost;
 	const before = tagHues("project/website/design", registry(settings, "slots"), {});
@@ -89,7 +91,7 @@ test("palette and custom hues meet 4.5:1 contrast in both themes", () => {
 });
 
 test("registry migration validates entries and survives core merging and JSON reload", () => {
-	const defaults: TagColorsSettings = { uppercase: true, colorPanes: true, slots: [], overrides: [] };
+	const defaults: TagColorsSettings = { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, slots: [], overrides: [] };
 	const old = { slots: { "#Reading": 3, invalid: 14, fractional: 1.2 }, overrides: { "#Project": 0, invalid: 360 } };
 	const saved = mergeSettings(defaults, migrate(old));
 	assert.deepEqual(saved.slots, [["reading", 3]]);
@@ -99,4 +101,74 @@ test("registry migration validates entries and survives core merging and JSON re
 	const special = assignSlots({}, JSON.parse('{"__proto__": 2, "constructor": 1}'));
 	assert.equal(typeof special.__proto__, "number");
 	assert.equal(typeof special.constructor, "number");
+});
+
+// ----- tag card -----
+
+test("tag card: sub-tags counted under their direct parent, tags found outside tasks", () => {
+	assert.ok(inTag("#Project/Website", "project"));
+	assert.ok(!inTag("#projects", "project"));
+	assert.deepEqual(subTags({ "#project": 2, "#project/web": 3, "#project/web/seo": 1, "#Project/Design": 4, "#home": 9 }, "project"), [["project/design", 4], ["project/web", 4]]);
+	const pos = (line: number) => ({ start: { line, col: 0, offset: line * 10 }, end: { line, col: 5, offset: line * 10 + 5 } });
+	const cache = {
+		tags: [{ tag: "#project", position: pos(2) }, { tag: "#project/web", position: pos(5) }],
+		listItems: [{ task: " ", position: pos(2), parent: -1 }],
+	};
+	// Line 2 is a task: the first place outside a task is line 5.
+	assert.equal(lineOutsideTasks(cache as never, "project"), 5);
+	assert.equal(lineOutsideTasks({ tags: [{ tag: "#project", position: pos(2) }], listItems: cache.listItems } as never, "project"), null);
+	assert.equal(lineOutsideTasks({ frontmatter: { tags: ["project/web"] } } as never, "project"), -1);
+});
+
+// ----- tag suggestions -----
+
+test("tag suggestions: trigger, ranking by note, area then vault, Tab parts and lines as tasks", () => {
+	assert.equal(tagQuery("Call the plumber #ho"), "ho");
+	assert.equal(tagQuery("Call #"), "");
+	assert.equal(tagQuery("(see #pro/we"), "pro/we");
+	assert.equal(tagQuery("#"), "", "a lone # at the line start opens the menu (a heading needs a space)");
+	assert.equal(tagQuery("# Title"), null);
+	assert.equal(tagQuery("issue#12"), null, "a # inside a word is not a tag");
+
+	const all = new Map([
+		["home", { tag: "home", count: 9 }],
+		["project", { tag: "project", count: 2 }],
+		["project/website", { tag: "Project/Website", count: 5 }],
+		["project/website/seo", { tag: "project/website/seo", count: 1 }],
+		["reading", { tag: "reading", count: 20 }],
+	]);
+	const stats = { all, note: new Map([["home", 1]]), area: new Map([["project/website", 3]]) };
+	// Nothing typed: this note, then the area, then the vault by use.
+	assert.deepEqual(rankTags("", stats).map((i) => i.tag), ["home", "Project/Website", "reading", "project", "project/website/seo"]);
+	assert.deepEqual(rankTags("", stats).map((i) => i.origin), ["note", "area", "vault", "vault", "vault"]);
+	// Typed: starts-with first, then a part starting with it, then containing it; a new tag offered last.
+	const web = rankTags("web", stats);
+	assert.deepEqual(web.map((i) => i.tag), ["Project/Website", "project/website/seo", "web"]);
+	assert.equal(web[2].origin, "new");
+	assert.ok(rankTags("pro", stats).find((i) => i.tag === "project")!.parent);
+	assert.ok(!rankTags("home", stats).some((i) => i.origin === "new"), "no new tag when it exists");
+	// The tag being typed is already in the note's cache: one use less.
+	const typing = { all: new Map([...all, ["pro", { tag: "pro", count: 1 }]]), note: new Map([["pro", 1]]), area: new Map() };
+	assert.ok(!rankTags("pro", withoutTyped(typing, "pro")).some((i) => i.tag === "pro" && i.origin !== "new"));
+
+	const item = (tag: string) => ({ tag, count: 1, origin: "vault" as const, parent: false });
+	assert.equal(nextPart("pro", item("project/website/seo")), "project/");
+	assert.equal(nextPart("project/we", item("project/website/seo")), "project/website/");
+	assert.equal(nextPart("project/website/s", item("project/website/seo")), "project/website/seo");
+
+	assert.deepEqual(asTask("Call the plumber #home "), { text: "- [ ] Call the plumber #home ", shift: 6 });
+	assert.deepEqual(asTask("\t- Call #home"), { text: "\t- [ ] Call #home", shift: 4 });
+	assert.deepEqual(asTask("1. Call #home"), { text: "1. [ ] Call #home", shift: 4 });
+	assert.deepEqual(asTask("- [ ] Call #home"), { text: "- [ ] Call #home", shift: 0 });
+});
+
+test("tag suggestions: never in code or links, Tab goes into a parent's sub-tags", () => {
+	assert.equal(tagQuery("Run `npm #pro"), null, "inline code");
+	assert.equal(tagQuery("Run `npm` then #pro"), "pro", "after inline code");
+	assert.equal(tagQuery("See [[Note#hea"), null, "heading link");
+	assert.equal(tagQuery("See [label](#anc"), null, "Markdown link target");
+	assert.equal(tagQuery("See [label](https://x.org) #pro"), "pro");
+	const parent = { tag: "project", count: 2, origin: "vault" as const, parent: true };
+	assert.equal(nextPart("pro", parent), "project/", "a parent tag opens its sub-tags");
+	assert.equal(nextPart("pro", { ...parent, parent: false }), "project");
 });

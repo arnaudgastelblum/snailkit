@@ -14,8 +14,10 @@ export interface NoteRailSettings {
 	showCalendar: boolean;
 	/** Order of the rail buttons (panel ids). Unknown ids are ignored, missing ones are appended. */
 	buttonOrder: string[];
-	/** Which top corner of the note pane the rail sits in: "left" or "right". */
+	/** Which top corner of the note pane the rail sits in on a computer: "left" or "right". */
 	position: string;
+	/** Same, on phones and tablets: "right" by default (the left corner holds the sidebar button). */
+	mobilePosition: string;
 	/** Rail opacity while the pointer is outside the note pane, 0.2 to 1. */
 	restOpacity: number;
 	/** Slide the text column aside when an open panel would cover it. */
@@ -32,6 +34,12 @@ export interface NoteRailSettings {
 	pinsKey: string;
 	/** Bookmarks: vault-wide pins, vault paths in display order. Kept in sync on rename and delete. */
 	vaultPins: string[];
+	/** Rail: the area of the note as a colored initial, above the panel buttons. */
+	showPlace: boolean;
+	/** Rail: a button opening today's daily note. */
+	showToday: boolean;
+	/** Bookmarks: how many times the tip card was shown (3 = never again). */
+	bookmarksTips: number;
 
 	/** Tasks: also list the open tasks of the notes pinned to this note. */
 	tasksIncludePinned: boolean;

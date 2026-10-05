@@ -5,6 +5,10 @@ import { tagKey, type Registry } from "./colors";
 export interface TagColorsSettings {
 	uppercase: boolean;
 	colorPanes: boolean;
+	/** A click on a tag opens the tag card instead of the search pane (Ctrl or Cmd click: the search). */
+	tagCard: boolean;
+	/** The tag menu on "#" (in place of Obsidian's): this note, its area, then the vault; Tab, Enter, Shift+Enter. */
+	tagSuggest: boolean;
 	slots: Array<[string, number]>;
 	overrides: Array<[string, number]>;
 }

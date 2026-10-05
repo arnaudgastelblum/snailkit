@@ -7,6 +7,7 @@ import {
 	addDays, buildTree, countTasks, dueState, findNode, inScope, matchesQuery, nextWeek, passesPriority,
 	sortTasks, todayGroups, upcomingGroups, type TagNode,
 } from "./group";
+import type { ViewAction } from "./api";
 import type { TasksHub } from "./hub";
 import { PRIORITIES } from "./parse";
 import { parseQuickAdd } from "./quick-add";
@@ -61,6 +62,8 @@ export class TasksView extends ItemView {
 	private subEl: HTMLElement | null = null;
 	private sortLabel: HTMLElement | null = null;
 	private filterBtn: HTMLElement | null = null;
+	/** Buttons of other plugins (ViewAction), drawn again at each refresh. */
+	private extEl: HTMLElement | null = null;
 	/** What the details showed last time, so their entrance animation plays only on a change. */
 	private shownDetail: string | null = null;
 	private shownProp: string | null = null;
@@ -239,7 +242,7 @@ export class TasksView extends ItemView {
 	private renderHead(): void {
 		const head = this.headEl!;
 		head.empty();
-		this.filterBtn = this.countEl = this.scopeEl = this.hubTitleEl = this.subEl = this.sortLabel = null;
+		this.filterBtn = this.countEl = this.scopeEl = this.hubTitleEl = this.subEl = this.sortLabel = this.extEl = null;
 		if (this.layout === "side") {
 			const top = head.createDiv({ cls: "sk-tasks-side-top" });
 			const title = top.createDiv({ cls: "sk-tasks-title" });
@@ -248,6 +251,7 @@ export class TasksView extends ItemView {
 			this.iconButton(top, "arrow-up-down", this.t("sort.label"), (e) => this.sortMenu(e));
 			this.filterBtn = this.iconButton(top, "list-filter", this.t("filter.label"), (e) => this.filterMenu(e));
 			this.filterBtn.addClass("sk-tasks-filter-btn");
+			this.extEl = top.createDiv({ cls: "sk-tasks-ext" });
 			this.iconButton(top, "maximize-2", this.t("action.page"), () => void this.hub.activate("page"));
 			this.iconButton(top, "plus", this.t("action.new-key"), () => this.startAdd(null));
 			this.searchBox(head);
@@ -266,6 +270,7 @@ export class TasksView extends ItemView {
 				chip.createSpan({ text: this.t("prio." + p) });
 				chip.addEventListener("click", () => void this.togglePriorityFilter(p));
 			}
+			this.extEl = tools.createDiv({ cls: "sk-tasks-ext" });
 			const sort = tools.createEl("button", { cls: "sk-tasks-btn-ghost" });
 			icon(sort, "arrow-up-down");
 			this.sortLabel = sort.createSpan();
@@ -304,7 +309,38 @@ export class TasksView extends ItemView {
 		this.searchInput = input;
 	}
 
+	private renderActions(): void {
+		const box = this.extEl;
+		if (!box) return;
+		box.empty();
+		for (const get of this.hub.viewActions) {
+			let action: ViewAction | null = null;
+			try {
+				action = get();
+			} catch (error) {
+				console.error("[Snailkit] tasks: a view action failed", error);
+			}
+			if (!action) continue;
+			const run = action.onClick;
+			const state = action.state ? " is-" + action.state : "";
+			const button =
+				this.layout === "page"
+					? box.createEl("button", { cls: "sk-tasks-btn-ghost sk-tasks-ext-btn" + state, attr: { "aria-label": action.label } })
+					: box.createEl("button", { cls: "sk-tasks-icon-btn clickable-icon sk-tasks-ext-btn" + state, attr: { "aria-label": action.label } });
+			icon(button, action.icon);
+			if (this.layout === "page" && action.text) button.createSpan({ text: action.text });
+			button.addEventListener("click", () => {
+				try {
+					run();
+				} catch (error) {
+					console.error("[Snailkit] tasks: a view action failed", error);
+				}
+			});
+		}
+	}
+
 	private updateHead(): void {
+		this.renderActions();
 		const open = this.hub.index.open();
 		const c = countTasks(open, this.today());
 		const filter = this.settings.priorityFilter;
@@ -371,6 +407,11 @@ export class TasksView extends ItemView {
 			hint(["M"], this.t("keys.tag"));
 			hint(["N"], this.t("keys.new"));
 		}
+	}
+
+	/** Shows the tasks of one tag (and its sub-tags), as a click on that tag would. */
+	showTag(tag: string): void {
+		this.setScope("tag:" + tag.replace(/^#/, "").toLowerCase());
 	}
 
 	private setScope(scope: string): void {

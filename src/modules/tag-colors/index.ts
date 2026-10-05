@@ -13,7 +13,7 @@ export const tagColors = defineModule<TagColorsSettings>({
 	icon: "tags",
 	category: "organize",
 	strings: { en, fr, nl, es },
-	defaults: { uppercase: true, colorPanes: true, slots: [], overrides: [] },
+	defaults: { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, slots: [], overrides: [] },
 	migrate,
 	activate(ctx) { new TagRuntime(ctx).start(); },
 	settings(page) {
@@ -30,6 +30,8 @@ export const tagColors = defineModule<TagColorsSettings>({
 		const display = page.section(page.t("settings.display"));
 		display.toggle("uppercase", page.t("settings.uppercase"), { desc: page.t("settings.uppercase-desc"), onChange: () => page.refresh() });
 		display.toggle("colorPanes", page.t("settings.panes"), { desc: page.t("settings.panes-desc") });
+		display.toggle("tagCard", page.t("settings.card"), { desc: page.t("settings.card-desc") });
+		display.toggle("tagSuggest", page.t("settings.suggest"), { desc: page.t("settings.suggest-desc") });
 		const most = page.section(page.t("settings.most"), page.t("settings.most-desc"));
 		most.el.addClass("sk-tag-colors-settings");
 		most.el.toggleClass("sk-tag-colors-upper", page.settings.uppercase);

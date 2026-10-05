@@ -19,20 +19,22 @@ export class TagWidget extends WidgetType {
 	eq(other: TagWidget) { return this.tag === other.tag && this.classes === other.classes; }
 	toDOM(view: EditorView) {
 		const el = capsule(view.dom.ownerDocument, this.tag, this.classes);
-		el.setAttribute("aria-label", this.plugin.ctx.t("search", { tag: this.tag }));
+		el.setAttribute("aria-label", this.plugin.ctx.t(this.plugin.settings.tagCard ? "card.show" : "search", { tag: this.tag }));
 		el.setAttribute("role", "link");
 		el.tabIndex = 0;
+		// Ctrl or Cmd click opens the search when the tag card is on (the card otherwise).
+		const ours = (event: MouseEvent) => event.button === 0 && !event.altKey && !event.shiftKey && (!event.ctrlKey && !event.metaKey || this.plugin.settings.tagCard);
 		el.addEventListener("mousedown", event => {
-			if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) event.preventDefault();
+			if (ours(event)) event.preventDefault();
 		});
 		el.addEventListener("click", event => {
-			if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+			if (!ours(event)) return;
 			event.preventDefault();
 			event.stopPropagation();
-			this.plugin.openSearch(this.tag);
+			this.plugin.openTag(this.tag, el, event);
 		});
 		el.addEventListener("keydown", event => {
-			if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.plugin.openSearch(this.tag); }
+			if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.plugin.openTag(this.tag, el, event); }
 		});
 		el.addEventListener("contextmenu", event => this.plugin.showMenu(event, this.tag));
 		return el;
