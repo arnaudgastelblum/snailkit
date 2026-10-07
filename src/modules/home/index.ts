@@ -6,7 +6,7 @@ import { Notice } from "obsidian";
 import { defineModule } from "../../core/module";
 import type { PlacesService } from "../../core/places/types";
 import { HomeRuntime } from "./runtime";
-import { cleanNotePath, OPEN_MODES, splitFolders } from "./settings-logic";
+import { cleanNotePath, migrateSettings, OPEN_MODES, splitFolders } from "./settings-logic";
 import { DEFAULTS, KEEP_ON_RESET, type HomeSettings } from "./types";
 import { en } from "./i18n/en";
 import { fr } from "./i18n/fr";
@@ -20,6 +20,7 @@ export const home = defineModule<HomeSettings>({
 	strings: { en, fr, nl, es },
 	defaults: DEFAULTS,
 	keepOnReset: KEEP_ON_RESET,
+	migrate: migrateSettings,
 	activate(ctx) {
 		new HomeRuntime(ctx).start();
 	},
@@ -84,6 +85,7 @@ export const home = defineModule<HomeSettings>({
 				s.domainGroups = [];
 				s.hidden = [];
 				s.pulledOut = [];
+				s.noteOrder = [];
 				await page.save();
 				new Notice(page.t("settings.reset-done"));
 				page.refresh();

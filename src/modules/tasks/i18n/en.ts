@@ -1,5 +1,10 @@
 // English reference for the Tasks module.
 export const en = {
+	"preview.note": "Note",
+	"preview.open": "Open note",
+	"preview.whole": "Show whole note",
+	"preview.excerpt": "Show task context",
+	"preview.unavailable": "This note could not be loaded.",
 	"module.name": "Tasks",
 	"module.description": "Every task with a #tag, from all your notes, in the Workbench: check, prioritize, schedule and move them in a list grouped by tag.",
 	"view.title": "Workbench",

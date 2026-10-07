@@ -10,6 +10,7 @@ import { activity } from "./logic/blocks";
 import { arrange, dropPath, liveBlocks, mentions, readingOrder, renamePath, sameArrangement, type Arrangement, type Layout } from "./logic/arrange";
 import { isPage, nearestPage } from "./logic/blocks";
 import { HomeMapSource, mapStateAt, VAULT_ROOT, type RootEntry } from "./logic/map";
+import { cleanOrder, dropFromOrder, orderMentions, orderOf, renameInOrder, type NoteOrder } from "./logic/order";
 import { cleanRecents, dropRecent, pushRecent, renameRecent, seedRecents, type Recent } from "./logic/recents";
 import type { World } from "./logic/world";
 import { arrangementOf, cleanSettings, splitFolders, writeArrangement } from "./settings-logic";
@@ -39,7 +40,7 @@ export class HomeRuntime {
 
 	constructor(readonly ctx: HomeContext) {
 		this.world = obsidianWorld(this);
-		this.mapSource = new HomeMapSource(this.world, () => this.mapRoots(), ctx.app.vault.getName());
+		this.mapSource = new HomeMapSource(this.world, () => this.mapRoots(), ctx.app.vault.getName(), (parent) => orderOf(this.noteOrder(), parent));
 	}
 
 	get app() {
@@ -230,6 +231,17 @@ export class HomeRuntime {
 		return layout;
 	}
 
+	/** The order of the notes the user dragged on the Map, per parent. */
+	noteOrder(): NoteOrder {
+		return cleanOrder(this.settings.noteOrder);
+	}
+
+	async setNoteOrder(order: NoteOrder): Promise<void> {
+		this.settings.noteOrder = order.map(([parent, kids]) => [parent, [...kids]]);
+		this.mapSource.invalidate();
+		await this.ctx.saveSettings();
+	}
+
 	activity(path: string): number {
 		return activity(this.world, path, this.activityMemo);
 	}
@@ -319,6 +331,8 @@ export class HomeRuntime {
 		}
 		const arr = this.arrangement();
 		if (mentions(arr, old)) void this.setArrangement(renamePath(arr, old, file.path));
+		const order = this.noteOrder();
+		if (orderMentions(order, old)) void this.setNoteOrder(renameInOrder(order, old, file.path));
 		if (this.settings.homePage && [old, old.replace(/\.md$/, "")].includes(this.settings.homePage)) {
 			this.settings.homePage = file.path;
 			void this.ctx.saveSettings();
@@ -335,6 +349,8 @@ export class HomeRuntime {
 		}
 		const arr = this.arrangement();
 		if (mentions(arr, file.path)) void this.setArrangement(dropPath(arr, file.path));
+		const order = this.noteOrder();
+		if (orderMentions(order, file.path)) void this.setNoteOrder(dropFromOrder(order, file.path));
 		this.changed();
 	}
 
@@ -384,10 +400,11 @@ export class HomeRuntime {
 		await this.show({ page: null, lens: "map", map });
 	}
 
-	/** Keeps the last view chosen (domains, map, tags). */
-	async setLens(lens: HomeLens): Promise<void> {
-		if (this.settings.lens === lens) return;
+	/** Keeps the last view (map, domains, tags); `chosen`: picked by the user, so the Home opens on it. */
+	async setLens(lens: HomeLens, chosen = false): Promise<void> {
+		if (this.settings.lens === lens && (!chosen || this.settings.lensChosen)) return;
 		this.settings.lens = lens;
+		if (chosen) this.settings.lensChosen = true;
 		await this.ctx.saveSettings();
 	}
 

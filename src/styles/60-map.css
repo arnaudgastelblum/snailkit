@@ -19,6 +19,8 @@
 .sk-map-crumb-separator svg { width: 12px; height: 12px; }
 .sk-map-viewport { overflow-x: auto; overflow-y: hidden; }
 .sk-map-stage { position: relative; height: 340px; isolation: isolate; }
+.sk-map-stage:not(.is-tree) { transition: height var(--sk-slow) var(--sk-ease); }
+.sk-map-stage:not(.is-tree) .sk-map-group { transition: height var(--sk-slow) var(--sk-ease); }
 .sk-map-branches { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 0; }
 .sk-map-branches path {
 	fill: none;
@@ -109,3 +111,29 @@
 }
 /* Names for screen readers (an aria-label would show as Obsidian's tooltip on hover). */
 .sk-map-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; pointer-events: none; }
+/* Drag and drop: a copy of the node follows the pointer, the node stays as a faint placeholder;
+   a line shows where it lands among its siblings, a node that would become its parent lights up. */
+.sk-map .sk-map-node.is-dragged { opacity: 0.35; }
+.sk-map .sk-map-node.sk-map-ghost { z-index: 20; pointer-events: none; background: var(--sk-surface); box-shadow: var(--sk-shadow-pop); opacity: 0.95; transition: none; cursor: grabbing; }
+.sk-map .sk-map-ghost .sk-map-action { display: none; }
+.sk-map-stage.is-dragging, .sk-map-stage.is-dragging .sk-map-node { cursor: grabbing; user-select: none; }
+.sk-map-drop { position: absolute; z-index: 4; height: 2px; border-radius: 2px; background: var(--sk-accent); pointer-events: none; }
+.sk-map .sk-map-node.is-drop-target { background: hsl(var(--sk-hue, 220) var(--sk-pill-s) var(--sk-pill-l)); box-shadow: inset 0 0 0 1.5px hsl(var(--sk-hue, 220) var(--sk-dot-s) var(--sk-dot-l)); }
+.sk-map .sk-map-node.is-drop-target.is-gray { background: var(--sk-hover); box-shadow: inset 0 0 0 1.5px var(--sk-accent-line); }
+/* The fourth level: the root folds into a pill (its name goes to the breadcrumbs). */
+.sk-map-stage:not(.is-tree) .sk-map-node.is-root { transition: color var(--sk-mid) var(--sk-ease), transform var(--sk-fast) var(--sk-ease), width var(--sk-slow) var(--sk-ease), max-width var(--sk-slow) var(--sk-ease), padding var(--sk-slow) var(--sk-ease); }
+.sk-map .sk-map-node.is-root .sk-map-label { transition: opacity var(--sk-mid) var(--sk-ease); }
+.sk-map .sk-map-node.is-folded { padding: 0 4px; overflow: hidden; }
+.sk-map .sk-map-node.is-folded .sk-map-label { opacity: 0; }
+.sk-map .sk-map-node.is-folded :is(.sk-map-chevron, .sk-map-action) { display: none; }
+.sk-map-crumbs [data-map-unfold] { font-weight: 600; }
+/* The inline name field of a new note. */
+.sk-map .sk-map-node.is-editing { z-index: 6; max-width: none !important; cursor: text; }
+.sk-map .sk-map-node.is-editing :is(.sk-map-label, .sk-map-chevron, .sk-map-action) { display: none; }
+.sk-map-edit { width: 132px; height: 24px; padding: 0 6px; border: 1px solid var(--sk-accent-line); border-radius: 6px; background: var(--sk-surface); color: var(--text-normal); font: inherit; font-size: 13px; box-shadow: none; }
+.sk-map-edit:focus { outline: none; border-color: var(--sk-accent); box-shadow: 0 0 0 2px var(--sk-accent-soft, transparent); }
+.sk-map-stage.is-tree .sk-map-edit { flex: 1; width: auto; min-width: 0; height: 32px; }
+@media (prefers-reduced-motion: reduce) {
+	.sk-map-stage:not(.is-tree) .sk-map-node.is-root { transition: opacity 120ms; }
+	.sk-map-stage:not(.is-tree), .sk-map-stage:not(.is-tree) .sk-map-group { transition: none; }
+}

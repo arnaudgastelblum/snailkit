@@ -3,7 +3,6 @@ import { test } from "node:test";
 import {
 	bodyStart,
 	candidateRange,
-	chipList,
 	cleanTitle,
 	closingLine,
 	closingMatcher,
@@ -12,9 +11,7 @@ import {
 	defaultCount,
 	fish,
 	groupTag,
-	highlight,
 	isPriority,
-	isTagName,
 	hiddenLines,
 	isQuestion,
 	keywords,
@@ -28,7 +25,6 @@ import {
 	safeName,
 	sentenceAt,
 	sentences,
-	shownName,
 	stepAfterTag,
 	stripFillers,
 	suggestion,
@@ -208,57 +204,6 @@ test("tag suggestion learns from placed tasks, without built-in words", () => {
 	assert.deepEqual(remember(["a", "b", "c"], "B", 3), ["B", "a", "c"]);
 });
 
-test("tag picker: chosen, suggested, near tags, then the families of the vault; filter, sub-tags, create", () => {
-	const base = { filter: "", level: null, tag: null, suggested: "home/car", near: ["work/team", "home/car"], all: ["home", "home/car", "home/garden", "work", "work/team", "reading"] };
-	assert.deepEqual(chipList(base).map((c) => c.tag), ["home/car", "work/team", "home", "work", "reading"]);
-	assert.ok(chipList(base)[0].suggested);
-	assert.ok(chipList(base).find((c) => c.tag === "home")?.parent);
-	assert.deepEqual(chipList({ ...base, level: "home" }).map((c) => c.tag), ["home", "home/car", "home/garden"]);
-	assert.deepEqual(chipList({ ...base, filter: "gar" }).map((c) => c.tag), ["home/garden", "gar"]);
-	assert.ok(chipList({ ...base, filter: "gar" })[1].create);
-	assert.deepEqual(chipList({ ...base, filter: "home" }).map((c) => c.tag).slice(0, 3), ["home", "home/car", "home/garden"]);
-	assert.ok(!chipList({ ...base, filter: "home" }).some((c) => c.create));
-	assert.deepEqual(chipList({ ...base, level: "home", filter: "shed" }).map((c) => [c.tag, !!c.create]), [["home/shed", true]]);
-	assert.ok(!chipList({ ...base, filter: "bad name!" }).some((c) => c.create));
-});
-
-test("tag column: why each tag ranks where it does, its sub-tags in grey, the groups, the recent ones after the near ones", () => {
-	const q = {
-		filter: "",
-		level: null,
-		tag: null,
-		suggested: "home/car",
-		suggestedWord: "insurer",
-		near: ["work/team"],
-		recent: ["reading", "work/team"],
-		all: ["home", "home/car", "home/garden", "home/garden/shed", "work", "work/team", "reading", "music"],
-	};
-	const rows = chipList(q);
-	assert.deepEqual(rows.map((c) => c.tag), ["home/car", "work/team", "reading", "home", "work", "music"]);
-	assert.deepEqual(rows.map((c) => c.group), ["top", "near", "recent", "all", "all", "all"]);
-	assert.deepEqual(rows[0].why, { kind: "learned", word: "insurer" });
-	assert.deepEqual(rows[1].why, { kind: "near" });
-	assert.deepEqual(rows[2].why, { kind: "recent" });
-	assert.equal(rows[3].why, undefined);
-	// Direct sub-tags only, by their last part.
-	assert.deepEqual(rows[3].kids, ["car", "garden"]);
-	assert.deepEqual(rows[4].kids, ["team"]);
-	assert.deepEqual(rows[5].kids, []);
-	// The chosen tag comes first and says so; a chosen sub-tag does not hide its family.
-	const chosen = chipList({ ...q, tag: "music" });
-	assert.deepEqual(chosen.slice(0, 2).map((c) => [c.tag, c.why?.kind]), [["music", "chosen"], ["home/car", "learned"]]);
-	// Inside a parent: the parent itself first ("the tag alone"), then its sub-tags, with their reasons.
-	const level = chipList({ ...q, level: "home" });
-	assert.deepEqual(level.map((c) => [c.tag, c.why?.kind ?? null, c.group]), [["home", "parent", "level"], ["home/car", "learned", "level"], ["home/garden", null, "level"], ["home/garden/shed", null, "level"]]);
-	// Filtering keeps the reasons and offers the new name last, in its own group.
-	const hits = chipList({ ...q, filter: "car" });
-	assert.deepEqual(hits.map((c) => [c.tag, c.group]), [["home/car", "hits"], ["car", "new"]]);
-	assert.equal(hits[0].why?.kind, "learned");
-	assert.deepEqual(hits[1].kids, []);
-	// Without the recent list the picker still works.
-	assert.deepEqual(chipList({ ...q, recent: undefined }).map((c) => c.tag), ["home/car", "work/team", "home", "work", "reading", "music"]);
-});
-
 test("the suggestion names the word that earned it", () => {
 	let learned = learn([], "Call the insurer about the car", "home/car");
 	learned = learn(learned, "Check the car tires", "home/car");
@@ -266,45 +211,6 @@ test("the suggestion names the word that earned it", () => {
 	assert.deepEqual(suggestion("Water the garden", [], ["Home/Garden"]), { tag: "Home/Garden", word: "garden" });
 	assert.equal(suggestion("Something unrelated", learned, []), null);
 	assert.equal(suggestTag("Ask the insurer about the car", learned, []), "home/car");
-});
-
-test("the filter is marked in a tag name, accents and case ignored, in place", () => {
-	assert.deepEqual(highlight("réunion", "reu"), [{ text: "réu", hit: true }, { text: "nion", hit: false }]);
-	assert.deepEqual(highlight("Maison", "SON"), [{ text: "Mai", hit: false }, { text: "son", hit: true }]);
-	assert.deepEqual(highlight("home", "#ho"), [{ text: "ho", hit: true }, { text: "me", hit: false }]);
-	assert.deepEqual(highlight("home", ""), [{ text: "home", hit: false }]);
-	assert.deepEqual(highlight("home", "xyz"), [{ text: "home", hit: false }]);
-});
-
-test("a new tag needs a letter, like Obsidian wants; the filter ignores accents and case but keeps the spelling", () => {
-	assert.ok(isTagName("2026/plan") && isTagName("a1") && isTagName("x-2") && isTagName("_"));
-	assert.ok(!isTagName("2026") && !isTagName("12/34") && !isTagName("bad name") && !isTagName(""));
-	const q = { filter: "2026", level: null, tag: null, suggested: null, near: [], all: ["home"] };
-	assert.ok(!chipList(q).some((c) => c.create));
-	assert.deepEqual(chipList({ ...q, filter: "y2026" }).map((c) => [c.tag, !!c.create]), [["y2026", true]]);
-	// "reu" finds "Réunion" and keeps its spelling; "RÉU" too; a new name is still offered (lowercased as typed).
-	const accents = { filter: "reu", level: null, tag: null, suggested: null, near: [], all: ["travail/Réunion", "travail", "lecture"] };
-	assert.deepEqual(chipList(accents).map((c) => [c.tag, !!c.create]), [["travail/Réunion", false], ["reu", true]]);
-	assert.deepEqual(chipList({ ...accents, filter: "RÉU" }).map((c) => [c.tag, !!c.create]), [["travail/Réunion", false], ["réu", true]]);
-	// Inside travail, "reunion" is the existing sub-tag: no second one is offered.
-	assert.deepEqual(chipList({ ...accents, level: "travail", filter: "reunion" }).map((c) => [c.tag, !!c.create]), [["travail/Réunion", false]]);
-	// Exact matches rank first whatever the accents, and an existing tag is never offered again.
-	assert.deepEqual(chipList({ filter: "ete", level: null, tag: null, suggested: null, near: [], all: ["etendue", "été"] }).map((c) => [c.tag, !!c.create]), [["été", false], ["etendue", false]]);
-	// The new name keeps what was typed, lowercased.
-	assert.deepEqual(chipList({ ...accents, filter: "Été" }).map((c) => [c.tag, !!c.create]), [["été", true]]);
-});
-
-test("inside a parent, only its own sub-tags lose the prefix; other hits keep their path", () => {
-	assert.equal(shownName("home/car", "home"), "car");
-	assert.equal(shownName("home/garden/shed", "home"), "garden/shed");
-	assert.equal(shownName("Home/car", "home"), "car");
-	assert.equal(shownName("work/car", "home"), "work/car");
-	assert.equal(shownName("home", "home"), "home");
-	assert.equal(shownName("home/car", null), "home/car");
-	// Filtering "car" inside home lists home/car first, then work/car from the rest of the vault.
-	const hits = chipList({ filter: "car", level: "home", tag: null, suggested: null, near: [], all: ["home", "home/car", "work", "work/car"] });
-	assert.deepEqual(hits.map((c) => c.tag), ["home/car", "work/car"]);
-	assert.deepEqual(hits.map((c) => shownName(c.tag, "home")), ["car", "work/car"]);
 });
 
 test("after the tag: the description only when lines follow the task", () => {
@@ -650,4 +556,133 @@ test("desk: a line to decide is found again before it is caught, never another o
 	assert.equal(locateRaw(["new", "a", "- [?] Keep it"], 1, "- [?] Keep it"), 2);
 	assert.equal(locateRaw(["a", "- [ ] Keep it"], 1, "- [?] Keep it"), null);
 	assert.equal(locateRaw(["- [?] Twice", "x", "- [?] Twice"], 1, "- [?] Twice"), null);
+});
+
+// ----- the path: Write, Sort, Finish, Archive -----
+import { applyEdit, bodyLineCount, countsOf, decide as decideLine, flowOf, holdsFence, leadOf, linesOf, mapLine, nextAction, revertOf, sortItems, sortWord, stepStates, weekRecap } from "../src/modules/sessions/flow";
+import { summarize as summarizeNote } from "../src/modules/sessions/logic";
+
+const noClose = (_: string) => false;
+const base = { closed: false, archived: false, ideas: 5, tasks: 2, untagged: 0, undecided: 0, lines: 9 };
+
+test("where a brainstorm stands: sort first when something waits, then finish, finished, archived", () => {
+	assert.equal(flowOf({ ...base, ideas: 0, tasks: 0, lines: 0 }).kind, "new");
+	assert.equal(flowOf({ ...base, tasks: 0 }).kind, "write");
+	assert.equal(flowOf({ ...base, untagged: 2, undecided: 1 }).kind, "sort");
+	assert.equal(flowOf({ ...base, untagged: 2, undecided: 1 }).toSort, 3);
+	assert.equal(flowOf(base).kind, "ready");
+	assert.equal(flowOf({ ...base, closed: true, untagged: 3 }).kind, "closed");
+	assert.equal(flowOf({ ...base, closed: true, archived: true }).kind, "archived");
+	assert.deepEqual(stepStates(flowOf({ ...base, untagged: 1 })), ["done", "current", "todo", "todo"]);
+	assert.deepEqual(stepStates(flowOf(base)), ["done", "done", "current", "todo"]);
+	assert.deepEqual(stepStates(flowOf({ ...base, archived: true })), ["done", "done", "done", "done"]);
+	assert.equal(nextAction(flowOf({ ...base, untagged: 1 })), "sort");
+	assert.equal(nextAction(flowOf({ ...base, tasks: 0 })), "finish");
+	assert.equal(nextAction(flowOf({ ...base, closed: true })), "archive");
+	assert.equal(nextAction(flowOf({ ...base, ideas: 0, tasks: 0 })), null);
+	assert.equal(sortWord({ untagged: 2, undecided: 0 }), "tasks");
+	assert.equal(sortWord({ untagged: 0, undecided: 2 }), "lines");
+	assert.equal(sortWord({ untagged: 1, undecided: 1 }), "lines");
+	// A week without change, still open: invited to finish; never once finished.
+	const week = 7 * 86_400_000;
+	assert.ok(flowOf({ ...base, modified: 0, now: week }).stale);
+	assert.ok(!flowOf({ ...base, modified: 1, now: week }).stale);
+	assert.ok(!flowOf({ ...base, closed: true, modified: 0, now: week }).stale);
+});
+
+const NOTE = ["", "[[Inbox]]", "October 5, 2026 · 07:48", "", "Three zones.", "- [ ] Take the bikes out #home", "\tMeasure the wall.", "- [ ] Sort the boxes", "\tThe big ones.", "- [?] Keep the mower?", "- [x] Done already", "A lamp.", ""];
+
+test("the tally counts what was dropped and launched; the lines to sort, in order", () => {
+	const s = summarizeNote(NOTE, noClose);
+	assert.deepEqual(countsOf(s, bodyLineCount(NOTE, noClose)), { ideas: 6, tasks: 3, untagged: 1, undecided: 1, lines: 8 });
+	assert.deepEqual(sortItems(s, NOTE, noClose).map((x) => [x.line, x.kind, x.text, x.description]), [
+		[7, "task", "Sort the boxes", ["The big ones."]],
+		[9, "decide", "Keep the mower?", []],
+	]);
+	assert.equal(bodyLineCount(["", "[[Inbox]]", "Oct 5, 2026", "", "", "*Brainstorm closed at 08:00*"], (l) => l.startsWith("*Brainstorm")), 0);
+});
+
+test("each decision rewrites the line found again, and is taken back exactly", () => {
+	const items = sortItems(summarizeNote(NOTE, noClose), NOTE, noClose);
+	const task = items[0];
+	const ask = items[1];
+	const tagged = decideLine(NOTE, task, "task", "home/car", "\t", noClose)!;
+	assert.deepEqual(tagged.inserted, ["- [ ] Sort the boxes #home/car"]);
+	const decided = decideLine(NOTE, task, "decide", null, "\t", noClose)!;
+	assert.deepEqual(decided.inserted, ["- [?] Sort the boxes"]);
+	const idea = decideLine(NOTE, ask, "idea", null, "\t", noClose)!;
+	assert.deepEqual(idea.inserted, ["- Keep the mower?"]);
+	const asTask = decideLine(NOTE, ask, "task", "home", "\t", noClose)!;
+	assert.match(asTask.inserted[0], /^- \[ \] Keep the mower\?? #home$/);
+	// Delete: the task and its description go together.
+	const gone = decideLine(NOTE, task, "delete", null, "\t", noClose)!;
+	assert.deepEqual(gone.removed, ["- [ ] Sort the boxes", "\tThe big ones."]);
+	const after = applyEdit(NOTE, gone);
+	assert.ok(!after.includes("\tThe big ones."));
+	assert.deepEqual(applyEdit(after, revertOf(after, gone)!), NOTE);
+	// Only at the very place it was made: a line added above meanwhile, nothing is undone.
+	assert.equal(revertOf(["New first line", ...after], gone), null);
+	const t2 = applyEdit(NOTE, tagged);
+	assert.deepEqual(applyEdit(t2, revertOf(t2, tagged)!), NOTE);
+	// The line changed: no decision, no undo.
+	assert.equal(decideLine(NOTE, { line: 7, raw: "- [ ] Something else", block: [] }, "idea", null, "\t", noClose), null);
+	assert.equal(revertOf(NOTE, tagged), null);
+	// A task needs its tag.
+	assert.equal(decideLine(NOTE, task, "task", null, "\t", noClose), null);
+});
+
+test("the tab's lead sentence and the recap of the week", () => {
+	const flows = [flowOf({ ...base, untagged: 2 }), flowOf(base), flowOf({ ...base, closed: true, untagged: 5 }), flowOf({ ...base, undecided: 1 })];
+	assert.deepEqual(leadOf(flows), { live: 3, untagged: 2, undecided: 1, ready: 1 });
+	const day = 86_400_000;
+	assert.deepEqual(weekRecap([{ created: 10 * day, tasks: 3 }, { created: 2 * day, tasks: 9 }, { created: 9.5 * day, tasks: 1 }], 10 * day), { brainstorms: 2, tasks: 4 });
+});
+
+const call = ["", "[[Inbox]]", "October 5, 2026", "", "- [ ] Remove the old shelf", "	Carefully.", "- [ ] Call", "- [ ] Call", "A note."];
+
+test("sorting identical lines: each decision moves the lines below, the right one is written and taken back", () => {
+	const items = sortItems(summarizeNote(call, noClose), call, noClose);
+	assert.deepEqual(items.map((x) => x.line), [4, 6, 7]);
+	let lines = [...call];
+	const gone = decideLine(lines, items[0], "delete", null, "	", noClose)!;
+	lines = applyEdit(lines, gone);
+	// The lines still to sort follow the edit.
+	const second = { ...items[1], line: mapLine(items[1].line, gone)! };
+	const third = { ...items[2], line: mapLine(items[2].line, gone)! };
+	assert.deepEqual([second.line, third.line], [4, 5]);
+	const tagged = decideLine(lines, second, "task", "work", "	", noClose)!;
+	assert.equal(tagged.at, 4);
+	lines = applyEdit(lines, tagged);
+	assert.deepEqual(lines.slice(4, 6), ["- [ ] Call #work", "- [ ] Call"]);
+	// The tagged task edited by hand, an identical one elsewhere: undo refuses, the other keeps its tag.
+	const edited = [...lines];
+	edited[4] = "- [ ] Call back";
+	edited.push("- [ ] Call #work");
+	assert.equal(revertOf(edited, tagged), null);
+	// Untouched: taken back exactly, then the deletion too.
+	lines = applyEdit(lines, revertOf(lines, tagged)!);
+	lines = applyEdit(lines, revertOf(lines, gone)!);
+	assert.deepEqual(lines, call);
+	assert.equal(mapLine(5, gone), null);
+});
+
+test("sorting never writes in code, never deletes a block that changed or holds a fence, and an emptied note fills again", () => {
+	const fenced = ["", "Ideas", "", "```", "- [ ] Example", "```"];
+	assert.equal(decideLine(fenced, { line: 4, raw: "- [ ] Example", block: ["- [ ] Example"] }, "idea", null, "	", noClose), null);
+	// A tagged or checked task is no longer to sort.
+	assert.equal(decideLine(["- [ ] Call #work"], { line: 0, raw: "- [ ] Call #work", block: [] }, "idea", null, "	", noClose), null);
+	// The description changed since it was shown: Delete refuses.
+	const shown = { line: 0, raw: "- [ ] Paint", block: ["- [ ] Paint", "	Blue."] };
+	assert.equal(decideLine(["- [ ] Paint", "	Blue.", "	And green."], shown, "delete", null, "	", noClose), null);
+	assert.ok(decideLine(["- [ ] Paint", "	Blue.", "Next."], shown, "delete", null, "	", noClose));
+	// A fence inside the description: never deleted in one go.
+	const code = ["- [ ] Script", "	```", "	- [ ] sample", "	```"];
+	assert.ok(holdsFence(code));
+	assert.equal(decideLine(code, { line: 0, raw: "- [ ] Script", block: code }, "delete", null, "	", noClose), null);
+	// A note made of one task, no final line break: deleted, then taken back.
+	const single = linesOf("- [ ] Only");
+	const gone = decideLine(single, { line: 0, raw: "- [ ] Only", block: ["- [ ] Only"] }, "delete", null, "	", noClose)!;
+	const empty = linesOf(applyEdit(single, gone).join("\n"));
+	assert.deepEqual(empty, []);
+	assert.equal(applyEdit(empty, revertOf(empty, gone)!).join("\n"), "- [ ] Only");
 });

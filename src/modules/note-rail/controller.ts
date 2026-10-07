@@ -12,7 +12,8 @@ import { cancelAllScrolls } from "./panels/toc/scroll";
 import { clearAllFlashes } from "./panels/toc/surface";
 import { countDue } from "./panels/tasks/summary";
 import { Rail } from "./rail/Rail";
-import { cleanVaultPins, remapVaultPins } from "./settings";
+import { cleanVaultPins } from "./settings";
+import { editPinGroups, flattenPinGroups, readPinGroups, remapPinGroups, type PinEdit } from "./vault-pins";
 import type { NoteRailSettings, PanelId, RailEnv, TasksService, VaultTaskCounts, WorkbenchOptions } from "./types";
 
 type Context = ModuleContext<NoteRailSettings>;
@@ -67,7 +68,9 @@ export class NoteRailController {
 			tn: (key: string, count: number, vars?: Vars) => ctx.tn(key, count, vars),
 			updateSettings: async (mutate) => {
 				mutate(ctx.settings);
-				ctx.settings.vaultPins = cleanVaultPins(ctx.settings.vaultPins);
+				const groups = readPinGroups(ctx.settings.vaultPins, ctx.settings.vaultPinFolders);
+				ctx.settings.vaultPins = flattenPinGroups(groups);
+				ctx.settings.vaultPinFolders = groups.folders;
 				await ctx.saveSettings();
 			},
 		};
@@ -80,7 +83,7 @@ export class NoteRailController {
 		ctx.registerEditorExtension(tocEditorExtension);
 		// Where a note belongs ("places") is published by the core now. This module shares its vault
 		// pins and its daily notes settings (Home, Search).
-		this.pinsSeen = JSON.stringify(cleanVaultPins(ctx.settings.vaultPins));
+		this.pinsSeen = JSON.stringify(readPinGroups(ctx.settings.vaultPins, ctx.settings.vaultPinFolders));
 		ctx.provide<NoteRailService>("note-rail", this.service());
 		ctx.onSettingsChange(() => {
 			for (const rail of this.rails.values()) rail.sync(true);
@@ -179,12 +182,33 @@ export class NoteRailController {
 	/** The "note-rail" service (src/core/services.ts): the vault pins of the Bookmarks panel, and where daily notes are. */
 	private service(): NoteRailService {
 		const { ctx } = this;
+		const edit = async (change: PinEdit): Promise<void> => {
+			if (this.disposed) return;
+			await this.env.updateSettings((s) => {
+				const next = editPinGroups(readPinGroups(s.vaultPins, s.vaultPinFolders), change);
+				s.vaultPins = flattenPinGroups(next);
+				s.vaultPinFolders = next.folders;
+			});
+		};
 		return {
 			version: 1,
+			listPins: () => this.disposed ? { loose: [], folders: [] } : readPinGroups(ctx.settings.vaultPins, ctx.settings.vaultPinFolders),
+			removePin: (path) => edit({ kind: "remove", path }),
+			movePin: (path, index, folderId) => edit({ kind: "move", path, index, folderId }),
+			createPinFolder: async (name) => {
+				if (this.disposed || !name.trim()) return null;
+				const id = crypto.randomUUID();
+				await edit({ kind: "create-folder", id, name });
+				return id;
+			},
+			renamePinFolder: (id, name) => edit({ kind: "rename-folder", id, name }),
+			deletePinFolder: (id) => edit({ kind: "delete-folder", id }),
+			movePinFolder: (id, index) => edit({ kind: "move-folder", id, index }),
 			vaultPins: () => (this.disposed ? [] : getVaultPins(ctx.app, ctx.settings).map((file) => file.path)),
 			isPinned: (path) => !this.disposed && cleanVaultPins(ctx.settings.vaultPins).includes(path),
 			setPinned: async (path, pinned) => {
 				if (this.disposed || typeof path !== "string" || !path) return;
+				if (pinned && !(ctx.app.vault.getAbstractFileByPath(path) instanceof TFile)) return;
 				const pins = cleanVaultPins(ctx.settings.vaultPins);
 				if (pins.includes(path) === !!pinned) return;
 				await this.env.updateSettings((s) => {
@@ -205,7 +229,7 @@ export class NoteRailController {
 
 	/** Tells the service's listeners when the vault pins changed (here, from another device, or by a rename). */
 	private pinsChanged(): void {
-		const now = JSON.stringify(cleanVaultPins(this.ctx.settings.vaultPins));
+		const now = JSON.stringify(readPinGroups(this.ctx.settings.vaultPins, this.ctx.settings.vaultPinFolders));
 		if (now === this.pinsSeen) return;
 		this.pinsSeen = now;
 		for (const callback of [...this.pinListeners]) {
@@ -346,11 +370,12 @@ export class NoteRailController {
 
 	/** Vault pins are paths: follow renames (files and folders) and drop deleted notes. */
 	private followVaultPins(file: TAbstractFile, oldPath: string | null): void {
-		const pins = cleanVaultPins(this.ctx.settings.vaultPins);
-		const next = remapVaultPins(pins, oldPath ?? file.path, oldPath === null ? null : file.path, file instanceof TFile);
-		if (!next) return;
+		const pins = readPinGroups(this.ctx.settings.vaultPins, this.ctx.settings.vaultPinFolders);
+		const next = remapPinGroups(pins, oldPath ?? file.path, oldPath === null ? null : file.path, file instanceof TFile);
+		if (JSON.stringify(next) === JSON.stringify(pins)) return;
 		void this.env.updateSettings((s) => {
-			s.vaultPins = next;
+			s.vaultPins = flattenPinGroups(next);
+			s.vaultPinFolders = next.folders;
 		});
 	}
 

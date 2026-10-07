@@ -38,6 +38,7 @@ export interface NoteRailSettings {
 	pinsKey: string;
 	/** Bookmarks: vault-wide pins, vault paths in display order. Kept in sync on rename and delete. */
 	vaultPins: string[];
+	vaultPinFolders: import("../../core/services").VaultPinFolder[];
 	/** Rail: the area of the note as a colored initial, above the panel buttons. */
 	showPlace: boolean;
 	/** Rail: a button opening today's daily note. */

@@ -1572,3 +1572,53 @@ body.sk-tasks-dnd .sk-tasks-grip {
 		transform: rotate(360deg);
 	}
 }
+/* Source note preview, shared by page details and unfolded side details. */
+.sk-tasks-note {
+	margin-top: 20px;
+	border-top: 1px solid var(--sk-line);
+	padding-top: 12px;
+	min-width: 0;
+}
+.sk-tasks-note > summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.sk-tasks-note-header {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 12px 0 6px;
+}
+.sk-tasks-note-name {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.sk-tasks-note-name > div {
+	font-size: 0.85em;
+	opacity: 0.7;
+}
+.sk-tasks-note-content {
+	position: relative;
+	max-height: 420px;
+	overflow: auto;
+	overscroll-behavior: contain;
+	overflow-wrap: anywhere;
+	padding: 8px 12px;
+	margin-top: 8px;
+	background: var(--sk-surface);
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-s);
+}
+.sk-tasks-note-content .sk-tasks-note-highlight {
+	background: var(--sk-accent-wash);
+	border-radius: var(--sk-radius-s);
+	outline: 1px solid var(--sk-accent-line);
+}
+.sk-tasks-note-content input[type="checkbox"] {
+	pointer-events: none;
+}
+.is-side .sk-tasks-note-content {
+	max-height: 280px;
+}

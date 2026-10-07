@@ -1,0 +1,42 @@
+/* Shared by the rail and the Home tokens. */
+.sk-pins { position: relative; }
+.sk-pins.is-tokens, .sk-pins.is-tokens > .sk-pins-loose {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.sk-pins-pin { display: flex; align-items: center; min-width: 0; border-radius: var(--sk-radius-s); }
+.sk-pins-pin > button:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; justify-content: flex-start; }
+.sk-pins.is-list .sk-pins-pin > button:first-child, .sk-pins-popup .sk-pins-pin > button:first-child { flex: 1; }
+.sk-pins.is-tokens > .sk-pins-loose > .sk-pins-pin, .sk-pins.is-tokens > .sk-pins-folder > button {
+	background: var(--sk-surface-sunken);
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+}
+.sk-pins .sk-pins-remove { opacity: 0; }
+.sk-pins-pin:hover .sk-pins-remove, .sk-pins-pin:focus-within .sk-pins-remove { opacity: 1; }
+.sk-pins-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; margin-inline-end: 5px; }
+.sk-pins-folder-list { margin-inline-start: 12px; padding-inline-start: 5px; border-inline-start: 1px solid var(--sk-line); min-height: 24px; }
+.sk-pins-popup {
+	position: fixed;
+	margin: 0;
+	inset: auto;
+	z-index: 1000;
+	width: min(256px, calc(100vw - 16px));
+	padding: 6px;
+	overflow: auto;
+	background: var(--sk-surface);
+	color: inherit;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+	box-shadow: var(--sk-shadow-pop);
+}
+.sk-pins-popup > button { display: flex; width: 100%; justify-content: flex-start; }
+.sk-pins-popup input { width: 100%; margin-bottom: 6px; }
+.sk-pins .is-drop-target { outline: 2px solid var(--sk-accent); outline-offset: -2px; }
+.sk-pins .is-drag-source { opacity: .45; }
+.sk-pins.is-dragging { user-select: none; }
+.sk-pins.is-dragging .sk-pins-loose:empty::before { content: attr(data-empty-label); padding: 8px; display: block; border: 1px dashed var(--sk-line); }
+.sk-pins.is-list .sk-pins-loose { min-height: 8px; }
+@media (hover: none) { .sk-pins .sk-pins-remove { opacity: 1; } }

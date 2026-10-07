@@ -1,10 +1,9 @@
 // Composing a task from a caught sentence. The sentence is already a real "- [ ] Title" line in
 // the text (its title is edited in place, step 1); a small numbered window slides in under it:
-// step 2 the tag (a calm column: one tag in color at a time, the one under the cursor, the reason
-// of its rank next to it), step 3 the description (only when lines follow: a bracket in the
-// margin, with a grip, says which lines below become the description). Placing writes
-// "- [ ] Title #tag" and indents the description under it; Escape gives the original text back,
-// character for character.
+// step 2 the tag (the shared tag picker, src/ui/tag-picker), step 3 the description (only when
+// lines follow: a bracket in the margin, with a grip, says which lines below become the
+// description). Placing writes "- [ ] Title #tag" and indents the description under it; Escape
+// gives the original text back, character for character.
 import { indentUnit } from "@codemirror/language";
 import { isolateHistory, undo, undoDepth } from "./history";
 import { Decoration, EditorView, type ViewUpdate, type WidgetType } from "@codemirror/view";
@@ -13,7 +12,8 @@ import { Platform, setIcon } from "obsidian";
 import { capsule } from "./capsule";
 import { keyNames, SessionView } from "./editor";
 import { guardField, ours, setGuard, setSpacer } from "./guard";
-import { candidateRange, chipList, defaultCount, fish, highlight, lineInfo, poseLines, shownName, stepAfterTag, suggestion, withoutTag, type Chip, type LineInfo } from "./logic";
+import { candidateRange, defaultCount, fish, lineInfo, poseLines, stepAfterTag, suggestion, withoutTag, type LineInfo } from "./logic";
+import { TagPicker } from "../../ui/tag-picker";
 
 type Step = "title" | "tag" | "desc";
 
@@ -37,10 +37,6 @@ export class Composer {
 	candCount = 0;
 	/** How many of them were its description already (editing a task). */
 	private wasDescription = 0;
-	private level: string | null = null;
-	private filter = "";
-	private hi = 0;
-	private chips: Chip[] = [];
 	readonly edit: boolean;
 	/** The line numbers, in the text as composed. */
 	taskLine: number;
@@ -66,8 +62,6 @@ export class Composer {
 	private readonly phone = Platform.isMobile;
 	private cleanups: Array<() => void> = [];
 	private helpTimer = 0;
-	/** Where the pointer last was over the column (see the mouse move of the rows). */
-	private mouse = { x: -1, y: -1 };
 
 	// The window.
 	private panel!: HTMLElement;
@@ -75,11 +69,8 @@ export class Composer {
 	private rowDesc: HTMLElement | null = null;
 	private summaryBtn!: HTMLElement;
 	private openEl!: HTMLElement;
-	private fieldEl!: HTMLElement;
-	private crumb!: HTMLElement;
-	private input!: HTMLInputElement;
-	private listEl!: HTMLElement;
-	private cursorEl!: HTMLElement;
+	/** The tag column (the shared tag picker), inside `openEl`. */
+	private picker!: TagPicker;
 	private countEl!: HTMLElement;
 	private previewEl!: HTMLElement;
 	private lessBtn!: HTMLButtonElement;
@@ -300,7 +291,7 @@ export class Composer {
 		let name = this.tag;
 		let preview = false;
 		if (this.step === "tag") {
-			const it = this.chips[this.hi];
+			const it = this.picker.current();
 			if (it) {
 				name = it.tag;
 				preview = name !== this.tag;
@@ -335,11 +326,7 @@ export class Composer {
 	goStep(step: Step, focus = true): void {
 		if (this.ended) return;
 		if (step === "desc" && !this.candCount) step = "tag";
-		if (this.step === "tag" && step !== "tag") {
-			this.filter = "";
-			this.level = null;
-			this.input.value = "";
-		}
+		if (this.step === "tag" && step !== "tag") this.picker.reset(false);
 		this.step = step;
 		this.panel.dataset.step = step;
 		this.closeHelp();
@@ -347,13 +334,8 @@ export class Composer {
 		this.rowDesc?.toggleClass("is-on", step === "desc");
 		this.openEl.toggleClass("is-hidden", step !== "tag");
 		this.summaryBtn.toggleClass("is-hidden", step === "tag");
-		if (step === "tag") {
-			const want = this.tag ?? this.suggested;
-			this.chips = this.chipList();
-			const i = want ? this.chips.findIndex((c) => c.tag.toLowerCase() === want.toLowerCase()) : -1;
-			this.hi = i >= 0 ? i : 0;
-			this.renderList(true);
-		} else {
+		if (step === "tag") this.picker.open(this.tag ?? this.suggested);
+		else {
 			this.renderSummary();
 			this.renderHint();
 		}
@@ -364,7 +346,7 @@ export class Composer {
 				const line = this.view.state.doc.line(this.taskLine);
 				const head = this.view.state.selection.main.head;
 				if (head < line.from || head > line.to) this.view.dispatch({ selection: { anchor: line.to }, annotations: ours.of(true) });
-			} else if (step === "tag") this.input.focus({ preventScroll: true });
+			} else if (step === "tag") this.picker.focus();
 			else this.knob.focus({ preventScroll: true });
 		}
 		this.sv.redraw();
@@ -391,211 +373,66 @@ export class Composer {
 		return true;
 	}
 
-	/** Keys in the window (tag field) and on the grip. */
+	/** Keys in the window and on the grip (the tag field sends its own through the picker, see windowKey). */
 	private onPanelKey(e: KeyboardEvent): void {
-		const k = e.key;
-		const mod = e.ctrlKey || e.metaKey;
-		let handled = true;
-		if (k === "Escape") {
-			if (this.helpEl) this.closeHelp();
-			else if (this.step === "tag" && (this.filter || this.level)) {
-				this.filter = "";
-				this.level = null;
-				this.input.value = "";
-				this.hi = 0;
-				this.renderList(true);
-			} else this.cancel();
-		} else if (mod && (k === "/" || e.code === "Slash")) this.toggleHelp();
-		else if (mod && k === "Enter") this.pose(true);
-		else if (e.altKey && (k === "ArrowDown" || k === "ArrowUp")) this.setCount(this.count + (k === "ArrowDown" ? 1 : -1));
-		else if (this.step === "tag") {
-			const caretEnd = this.input.selectionStart === this.input.value.length;
-			const caretStart = this.input.selectionStart === 0;
-			if (k === "Enter") {
-				const it = this.chips[this.hi];
-				if (it) this.choose(it);
-				else this.afterTag();
-			} else if (k === "Tab") {
-				if (e.shiftKey) {
-					if (!this.ascend()) this.goStep("title");
-				} else if (!this.descend()) {
-					const it = this.chips[this.hi];
-					if (it) this.choose(it);
-					else this.afterTag();
-				}
-			} else if (k === "ArrowDown") this.moveHi(1);
-			else if (k === "ArrowUp") this.moveHi(-1);
-			else if (k === "ArrowRight" && !this.input.value) this.descend();
-			else if (k === "ArrowLeft" && !this.input.value) this.ascend();
-			else if (k === "ArrowRight" && caretEnd) this.moveHi(1);
-			else if (k === "ArrowLeft" && caretStart) this.moveHi(-1);
-			else if (k === "Backspace" && !this.input.value && this.level) this.ascend();
-			else if (k === "Home" && !this.input.value) this.setHi(0);
-			else if (k === "End" && !this.input.value) this.setHi(this.chips.length - 1);
-			else handled = false;
-		} else if (this.step === "desc") {
-			if (k === "ArrowDown" || k === "+" || k === "=") this.setCount(this.count + 1);
-			else if (k === "ArrowUp" || k === "-") this.setCount(this.count - 1);
-			else if (k === "Home") this.setCount(0);
-			else if (k === "End") this.setCount(this.candCount);
-			else if (k === "Enter" || k === " ") this.pose(false);
-			else if (k === "Tab") {
-				if (e.shiftKey) this.goStep("tag");
-			} else handled = false;
-		} else handled = false;
+		let handled = this.windowKey(e);
+		if (!handled) {
+			if (this.step === "tag") handled = this.picker.handleKey(e);
+			else if (this.step === "desc") handled = this.descKey(e);
+		}
 		if (handled) {
 			e.preventDefault();
 			e.stopPropagation();
 		}
 	}
 
-	// ----- the tag column -----
-
-	private chipList(): Chip[] {
-		const file = this.sv.file;
-		return chipList({
-			filter: this.filter,
-			level: this.level,
-			tag: this.tag,
-			suggested: this.suggested,
-			suggestedWord: this.suggestedWord,
-			near: this.sv.rt.nearTags(file),
-			recent: this.sv.rt.recentTags(),
-			all: this.sv.rt.allTags(),
-			limit: ROWS,
-		});
+	/** Keys of the whole window, at every step: they come before those of the tag column. */
+	private windowKey(e: KeyboardEvent): boolean {
+		const k = e.key;
+		const mod = e.ctrlKey || e.metaKey;
+		if (k === "Escape") {
+			if (this.helpEl) this.closeHelp();
+			// The column clears what is typed (or the parent) first, then cancels (its onCancel).
+			else if (this.step === "tag") return false;
+			else this.cancel();
+		} else if (mod && (k === "/" || e.code === "Slash")) this.toggleHelp();
+		else if (mod && k === "Enter") this.pose(true);
+		else if (e.altKey && (k === "ArrowDown" || k === "ArrowUp")) this.setCount(this.count + (k === "ArrowDown" ? 1 : -1));
+		else return false;
+		return true;
 	}
 
-	/** "learned · word", "recent", "subject of the note"... as shown next to a tag. */
-	private whyText(why: Chip["why"]): string {
-		if (!why) return "";
-		if (why.kind === "learned") return why.word ? this.t("why.learned", { word: why.word }) : this.t("why.suggested");
-		return this.t(`why.${why.kind}`);
+	/** Keys of the description step. */
+	private descKey(e: KeyboardEvent): boolean {
+		const k = e.key;
+		if (k === "ArrowDown" || k === "+" || k === "=") this.setCount(this.count + 1);
+		else if (k === "ArrowUp" || k === "-") this.setCount(this.count - 1);
+		else if (k === "Home") this.setCount(0);
+		else if (k === "End") this.setCount(this.candCount);
+		else if (k === "Enter" || k === " ") this.pose(false);
+		else if (k === "Tab") {
+			if (e.shiftKey) this.goStep("tag");
+		} else return false;
+		return true;
 	}
 
-	private renderList(snap = false): void {
-		if (this.ended) return;
-		const list = this.chipList();
-		this.chips = list;
-		if (this.hi >= list.length) this.hi = Math.max(0, list.length - 1);
-		const deep = !!this.level;
-		this.fieldEl.toggleClass("is-deep", deep);
-		this.crumb.empty();
-		if (deep) this.crumb.append(capsule(this.panel.ownerDocument, this.level!, this.sv.rt.tagClasses(this.level!)));
-		this.input.placeholder = deep ? this.t("panel.sub-placeholder", { tag: this.level! }) : this.t("panel.tag-placeholder");
-		for (const el of Array.from(this.listEl.children)) if (el !== this.cursorEl) el.remove();
-		if (!list.length) this.listEl.createDiv({ cls: "sk-sessions-empty", text: this.t("panel.no-tag") });
-		const showKids = !deep && !this.filter;
-		let lastGroup: string | null = null;
-		list.forEach((item, i) => {
-			const gap = lastGroup !== null && item.group !== lastGroup;
-			lastGroup = item.group;
-			const classes = item.create ? "" : this.sv.rt.tagClasses(item.tag);
-			const row = this.listEl.createDiv({ cls: `sk-sessions-it ${classes}`.trim(), attr: { role: "option", "data-i": String(i), "aria-selected": String(i === this.hi) } });
-			row.toggleClass("is-hi", i === this.hi);
-			row.toggleClass("is-gap", gap);
-			row.toggleClass("is-new", !!item.create);
-			row.toggleClass("is-gray", !classes);
-			row.createEl("i", { cls: "sk-sessions-it-dot" });
-			const name = row.createSpan({ cls: "sk-sessions-it-name" });
-			if (item.create) {
-				name.appendText(this.t("panel.create-row") + " ");
-				name.createEl("b", { text: item.tag });
-				row.setAttr("aria-label", this.t("panel.create", { tag: item.tag }));
-			} else this.renderName(name, item.tag);
-			if (showKids && item.kids.length) {
-				const shown = item.kids.slice(0, 4);
-				row.createSpan({ cls: "sk-sessions-it-kids", text: shown.join(" · ") + (item.kids.length > shown.length ? ` · +${item.kids.length - shown.length}` : "") });
-			}
-			const why = this.whyText(item.why);
-			if (why) row.createSpan({ cls: "sk-sessions-it-why", text: why });
-			if (showKids && item.parent) {
-				const more = row.createEl("button", { cls: "sk-sessions-it-more", attr: { type: "button", tabindex: "-1", "aria-label": this.t("panel.subtags", { key: this.t("key.tab") }), "data-more": String(i) } });
-				setIcon(more, "chevron-right");
-				more.addEventListener("mousedown", (e) => e.preventDefault());
-				more.addEventListener("click", (e) => {
-					e.stopPropagation();
-					if (this.ended) return;
-					this.hi = i;
-					this.descend();
-				});
-			}
-			row.createEl("kbd", { cls: "sk-sessions-it-enter", text: "↵" });
-			row.addEventListener("mousedown", (e) => e.preventDefault());
-			row.addEventListener("click", () => {
-				if (this.ended) return;
-				this.hi = i;
-				this.choose(item);
-			});
-			if (!this.phone) {
-				// Only a pointer that really moves takes the highlight: the browser also sends a mouse
-				// move when the rows change under a still pointer.
-				row.addEventListener("mousemove", (e) => {
-					if (this.ended || this.step !== "tag") return;
-					if (e.clientX === this.mouse.x && e.clientY === this.mouse.y) return;
-					this.mouse = { x: e.clientX, y: e.clientY };
-					if (this.hi !== i) this.setHi(i);
-				});
-			}
-		});
-		this.placeCursor(snap);
-		this.renderSummary();
-		this.renderHint();
-		this.sv.redraw();
+	// ----- the tag column (the shared tag picker) -----
+
+	/** The proposal, with the reason shown next to it in the column. */
+	private suggestionInfo(): { tag: string; reason: string } | null {
+		if (!this.suggested) return null;
+		return { tag: this.suggested, reason: this.suggestedWord ? this.t("why.learned", { word: this.suggestedWord }) : this.t("why.suggested") };
 	}
 
-	/** "parent / leaf", the parent dimmed; inside a parent, its own sub-tags without the prefix; what matches the filter marked. */
-	private renderName(el: HTMLElement, tag: string): void {
-		const parts = shownName(tag, this.level).split("/");
-		parts.forEach((part, k) => {
-			const span = el.createSpan({ cls: k < parts.length - 1 ? "sk-sessions-it-root" : "sk-sessions-it-leaf" });
-			for (const piece of highlight(part, this.filter)) {
-				if (piece.hit) span.createEl("mark", { text: piece.text });
-				else span.appendText(piece.text);
-			}
-			if (k < parts.length - 1) el.createSpan({ cls: "sk-sessions-it-sep", text: "/" });
-		});
-	}
-
-	/** The tinted bar slides under the row at `hi`; `snap` moves it at once (the column was rebuilt). */
-	private placeCursor(snap: boolean): void {
-		const row = this.listEl.querySelector(".sk-sessions-it.is-hi") as HTMLElement | null;
-		if (!row) {
-			this.cursorEl.removeClass("is-shown");
+	/** A tag was chosen in the column: the description follows when lines can be taken, otherwise the task is placed. */
+	private chosen(tag: string, from: DOMRect | null): void {
+		this.tag = tag;
+		if (stepAfterTag(this.candCount) === "place") {
+			this.pose(false);
 			return;
 		}
-		const item = this.chips[this.hi];
-		this.cursorEl.className = `sk-sessions-cursor ${item && !item.create ? this.sv.rt.tagClasses(item.tag) : ""}`.trim();
-		if (snap) this.listEl.addClass("is-snap");
-		this.cursorEl.style.transform = `translateY(${row.offsetTop}px)`;
-		this.cursorEl.style.height = `${row.offsetHeight}px`;
-		this.cursorEl.addClass("is-shown");
-		if (snap) {
-			void this.listEl.offsetWidth;
-			this.listEl.removeClass("is-snap");
-		}
-		const lr = this.listEl.getBoundingClientRect();
-		const rr = row.getBoundingClientRect();
-		if (rr.top < lr.top + 2) this.listEl.scrollTop -= lr.top + 2 - rr.top;
-		else if (rr.bottom > lr.bottom - 2) this.listEl.scrollTop += rr.bottom - lr.bottom + 2;
-	}
-
-	/** The highlighted row changes without rebuilding the column. */
-	private setHi(i: number, hint = true): void {
-		if (!this.chips.length) return;
-		this.hi = Math.max(0, Math.min(this.chips.length - 1, i));
-		for (const el of Array.from(this.listEl.querySelectorAll(".sk-sessions-it")) as HTMLElement[]) {
-			const on = Number(el.dataset.i) === this.hi;
-			el.toggleClass("is-hi", on);
-			el.setAttr("aria-selected", String(on));
-		}
-		this.placeCursor(false);
-		if (hint) this.renderHint();
-		this.sv.redraw();
-	}
-
-	private moveHi(d: number): void {
-		this.setHi(this.hi + d);
+		this.goStep("desc");
+		if (from) this.fly(from, tag);
 	}
 
 	/** The tag row, folded: the tag (or the proposed one), why, and how to change it. */
@@ -607,8 +444,8 @@ export class Composer {
 		const kbd = (parent: HTMLElement, text: string) => parent.createEl("kbd", { text });
 		if (this.tag) {
 			el.append(capsule(doc, this.tag, this.sv.rt.tagClasses(this.tag)));
-			const why = this.whyText(this.chipList().find((c) => c.tag.toLowerCase() === this.tag!.toLowerCase())?.why);
-			if (why && why !== this.t("why.chosen")) el.createSpan({ cls: "sk-sessions-why", text: why });
+			const why = this.picker.reasonOf(this.tag);
+			if (why && why.kind !== "chosen" && why.text) el.createSpan({ cls: "sk-sessions-why", text: why.text });
 			const chg = el.createSpan({ cls: "sk-sessions-chg" });
 			chg.appendText(this.t("panel.change") + " ");
 			kbd(chg, this.t("key.tab"));
@@ -631,21 +468,6 @@ export class Composer {
 		}
 		this.rowTag.toggleClass("is-done", !!this.tag && this.step !== "tag");
 		this.rowDesc?.toggleClass("is-done", this.step !== "desc" && this.count > 0);
-	}
-
-	private choose(item: Chip): void {
-		const from = this.listEl.querySelector(".sk-sessions-it.is-hi .sk-sessions-it-name") as HTMLElement | null;
-		const start = from?.getBoundingClientRect() ?? null;
-		this.tag = item.tag;
-		this.level = null;
-		this.filter = "";
-		this.input.value = "";
-		if (stepAfterTag(this.candCount) === "place") {
-			this.pose(false);
-			return;
-		}
-		this.goStep("desc");
-		if (start) this.fly(start, item.tag);
 	}
 
 	/** The chosen tag flies from its row to the end of the task line, where its capsule now sits. */
@@ -677,47 +499,6 @@ export class Composer {
 			anim.oncancel = done;
 			window.setTimeout(done, 700);
 		}, 40);
-	}
-
-	private descend(): boolean {
-		const item = this.chips[this.hi];
-		if (!item || item.create || this.level || this.filter || !item.parent) return false;
-		this.level = item.tag;
-		this.filter = "";
-		this.input.value = "";
-		this.hi = 1;
-		this.renderList(true);
-		return true;
-	}
-
-	private ascend(): boolean {
-		if (!this.level) return false;
-		const was = this.level;
-		this.level = null;
-		this.filter = "";
-		this.input.value = "";
-		this.chips = this.chipList();
-		const i = this.chips.findIndex((c) => c.tag.toLowerCase() === was.toLowerCase());
-		this.hi = i >= 0 ? i : 0;
-		this.renderList(true);
-		return true;
-	}
-
-	private onInput(): void {
-		const v = this.input.value.replace(/^#/, "").replace(/\s+/g, "-");
-		if (v !== this.input.value) this.input.value = v;
-		const parent = /^(.+)\/$/.exec(v);
-		if (parent && !this.level && this.sv.rt.allTags().some((t) => t.toLowerCase().startsWith(parent[1].toLowerCase() + "/"))) {
-			this.level = parent[1];
-			this.filter = "";
-			this.input.value = "";
-			this.hi = 1;
-			this.renderList(true);
-			return;
-		}
-		this.filter = v;
-		this.hi = 0;
-		this.renderList(true);
 	}
 
 	// ----- description -----
@@ -808,12 +589,39 @@ export class Composer {
 		this.summaryBtn = tagBody.createEl("button", { cls: "sk-sessions-tag-summary", attr: { type: "button", tabindex: "-1" } });
 		this.summaryBtn.addEventListener("click", () => this.goStep("tag"));
 		this.openEl = tagBody.createDiv({ cls: "sk-sessions-tag-open" });
-		this.fieldEl = this.openEl.createDiv({ cls: "sk-sessions-field" });
-		setIcon(this.fieldEl.createSpan({ cls: "sk-sessions-field-icon" }), "tag");
-		this.crumb = this.fieldEl.createSpan({ cls: "sk-sessions-crumb" });
-		this.input = this.fieldEl.createEl("input", { cls: "sk-sessions-input", attr: { type: "text", autocomplete: "off", spellcheck: "false", "aria-label": this.t("panel.tag-search") } });
-		this.listEl = this.openEl.createDiv({ cls: "sk-sessions-list", attr: { role: "listbox", "aria-label": this.t("panel.step-tag") } });
-		this.cursorEl = this.listEl.createDiv({ cls: "sk-sessions-cursor" });
+		const rt = this.sv.rt;
+		this.picker = new TagPicker(this.openEl, {
+			t: (key, vars) => this.t(key, vars),
+			label: this.t("panel.step-tag"),
+			touch: this.phone,
+			limit: ROWS,
+			sources: {
+				all: () => rt.allTags(),
+				near: () => rt.nearTags(this.sv.file),
+				recent: () => rt.recentTags(),
+				chosen: () => this.tag,
+				suggestion: () => this.suggestionInfo(),
+			},
+			colors: (tag) => rt.tagClasses(tag),
+			onKey: (e) => {
+				if (this.ended || !this.windowKey(e)) return false;
+				e.preventDefault();
+				e.stopPropagation();
+				return true;
+			},
+			onChoose: (tag, info) => {
+				if (!this.ended) this.chosen(tag, info.from);
+			},
+			onCancel: () => this.cancel(),
+			onBack: () => this.goStep("title"),
+			onEmpty: () => this.afterTag(),
+			onChange: (kind) => {
+				if (this.ended) return;
+				if (kind === "list") this.renderSummary();
+				this.renderHint();
+				this.sv.redraw();
+			},
+		});
 
 		// Step 3: the description, only when lines follow the task.
 		if (this.candCount) {
@@ -858,13 +666,11 @@ export class Composer {
 			});
 			this.helpBtn.addEventListener("mouseleave", () => this.closeHelpSoon());
 		}
-		this.input.addEventListener("focus", () => {
+		this.picker.input.addEventListener("focus", () => {
 			if (this.step !== "tag") this.goStep("tag", false);
 		});
-		this.input.addEventListener("input", () => this.onInput());
-		this.input.addEventListener("keydown", (e) => this.onPanelKey(e));
 		panel.addEventListener("keydown", (e) => {
-			if (e.target !== this.input) this.onPanelKey(e);
+			if (e.target !== this.picker.input) this.onPanelKey(e);
 		});
 
 		if (this.phone) doc.body.appendChild(panel);
@@ -914,12 +720,12 @@ export class Composer {
 			item([tab], this.t("hint.tag"));
 			item([esc], this.t("hint.cancel"));
 		} else if (this.step === "tag") {
-			const row = this.chips[this.hi];
+			const row = this.picker.current();
 			item(["↑", "↓"], this.t("hint.move"));
 			item([enter], row?.create ? this.t("hint.create") : this.t("hint.pick"));
-			if (this.level) item([shift, tab], this.t("hint.up"));
-			else if (row && !this.filter && row.parent) item([tab], this.t("hint.subtags"));
-			else item([esc], this.filter ? this.t("hint.clear") : this.t("hint.cancel"));
+			if (this.picker.level) item([shift, tab], this.t("hint.up"));
+			else if (row && !this.picker.filter && row.parent) item([tab], this.t("hint.subtags"));
+			else item([esc], this.picker.filter ? this.t("hint.clear") : this.t("hint.cancel"));
 		} else {
 			item(["↓", "↑"], this.t("hint.line"));
 			item([enter], this.t("hint.place"));
@@ -1049,12 +855,10 @@ export class Composer {
 		this.panel.style.bottom = `${bottom}px`;
 		const visibleTop = vv ? vv.offsetTop : 0;
 		const room = Math.max(160, win.innerHeight - bottom - visibleTop - 56);
-		const list = this.panel.querySelector<HTMLElement>(".sk-sessions-list");
-		if (list) {
-			list.style.maxHeight = "";
-			const rest = this.panel.offsetHeight - list.offsetHeight;
-			list.style.maxHeight = `${Math.max(80, Math.min(220, room - rest))}px`;
-		}
+		const list = this.picker.listEl;
+		list.style.maxHeight = "";
+		const rest = this.panel.offsetHeight - list.offsetHeight;
+		list.style.maxHeight = `${Math.max(80, Math.min(220, room - rest))}px`;
 		this.panel.style.maxHeight = `${room}px`;
 		const active = doc.activeElement;
 		if (active instanceof HTMLElement && this.panel.contains(active)) active.scrollIntoView({ block: "nearest" });
@@ -1299,7 +1103,7 @@ export class Composer {
 		// Place at once: what the line previews. At the tag step that is the row under the cursor, even
 		// when a tag was chosen before; elsewhere the proposal, when nothing was chosen.
 		if (takePreview) {
-			if (this.step === "tag") tag = this.chips[this.hi]?.tag ?? tag;
+			if (this.step === "tag") tag = this.picker.current()?.tag ?? tag;
 			else if (!tag) tag = this.suggested;
 		}
 		const state = this.view.state;
@@ -1422,6 +1226,7 @@ export class Composer {
 		window.cancelAnimationFrame(this.frame);
 		window.clearTimeout(this.helpTimer);
 		this.resize?.disconnect();
+		this.picker?.destroy();
 		for (const c of this.cleanups.splice(0)) c();
 		this.panel?.remove();
 		this.svg?.remove();

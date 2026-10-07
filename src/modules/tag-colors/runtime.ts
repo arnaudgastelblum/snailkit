@@ -2,6 +2,7 @@ import { MarkdownRenderChild, Menu, type Modal } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import type { ModuleContext } from "../../core/context";
 import { TagCard } from "./card";
+import { registerTaskPlaceholders } from "./task-placeholder";
 import { TagSuggest } from "./suggest";
 import { assignSlots, buildCss, capsule, slotHue, tagKey } from "./colors";
 import { classes, ColorModal, ReassignModal } from "./dialogs";
@@ -38,6 +39,7 @@ export class TagRuntime implements ColorHost {
 		this.refresh();
 		ctx.registerEditorExtension(editorExtension(this));
 		this.registerSuggest();
+		registerTaskPlaceholders(this);
 		ctx.registerMarkdownPostProcessor((el, context) => {
 			const render = () => {
 				if (this.stopped || !el.closest(".markdown-preview-view") || el.closest(".popover, .canvas-node, .search-result")) return;

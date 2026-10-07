@@ -2,6 +2,10 @@ import type { StringsOf } from "../../../i18n";
 import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
+	"settings.placeholder": "Espacio para etiquetas en tareas",
+	"settings.placeholder-desc": "Muestra un pequeño botón de etiqueta en las tareas pendientes sin etiqueta. Elige una etiqueta para añadirla a tu nota.",
+	"placeholder.add": "Añadir una etiqueta a esta tarea",
+	"placeholder.failed": "No se pudo guardar la etiqueta. Inténtalo de nuevo.",
 	"module.name": "Colores de etiquetas",
 	"module.description": "Reconoce familias de etiquetas con colores estables y cápsulas compactas.",
 	"settings.display": "Apariencia",

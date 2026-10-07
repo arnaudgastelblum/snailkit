@@ -9,7 +9,7 @@ import type { TabState, WorkbenchTabHost, WorkbenchTabInstance } from "../../cor
 import { mountMap, type MapHandle, type MapState, type MapStrings } from "../../ui/map";
 import { Surface } from "../../ui/surface";
 import { dateWords, flip, fly, initialOf, reduced, todayLabel, winOf } from "./fx";
-import { dropBlock, feature, groupOf, hide, moveBlock, newGroup, pullOut, putBack, renameGroup, deleteGroup, setGroup, show, type Block, type Layout } from "./logic/arrange";
+import { dropBlock, feature, groupOf, hide, moveBlock, newGroup, pullOut, putBack, readingOrder, renameGroup, deleteGroup, setGroup, show, type Block, type Layout } from "./logic/arrange";
 import { blockLines, domainOf, emptyBlock, isPage, openTasksByBlock, pageContent, trailOf, visibleLines } from "./logic/blocks";
 import { dateLabel, dayKey, dueLabel, relLabel, splitDated, type DateWords } from "./logic/dates";
 import { mapStateAt, usableState, VAULT_ROOT } from "./logic/map";
@@ -18,7 +18,11 @@ import { groupRecents } from "./logic/recents";
 import { familyTags, foldTag, hasTag, leafOf, tagFamilies } from "./logic/tags";
 import { dueCounts, oldDailyTasks, todayChips, toSortCount } from "./logic/today";
 import type { HomeRuntime } from "./runtime";
-import { LENSES } from "./settings-logic";
+import { moveUnder, parentLink } from "../../core/places/move";
+import { cleanNoteName, dropRefusal, freeNotePath } from "./logic/moves";
+import { moveBefore, orderOf, withOrder } from "./logic/order";
+import { mountPinsRow } from "./pins-row";
+import { LENSES, startLens } from "./settings-logic";
 import type { HomeLens, HomePage, HomeTabState } from "./types";
 
 /** Families of tags shown before "N more tags", and sub-tags per family. */
@@ -27,6 +31,19 @@ const TAG_KIDS = 6;
 /** Notes listed on a page before "Show N more". */
 const PAGE_NOTES = 60;
 const TAG_CARDS = 40;
+
+/** A note just created on the Map while its name field is open. */
+interface Naming {
+	path: string;
+	file: TFile;
+	content: string;
+	mtime: number;
+	size: number;
+	/** Something wrote in the note since it was created (Sync, another plugin): never removed then. */
+	touched: boolean;
+	/** Stops watching the note for writes. */
+	off: () => void;
+}
 
 /** What one drawing needs, computed once. */
 interface Frame {
@@ -98,6 +115,11 @@ export class HomeView implements WorkbenchTabInstance {
 	private map: MapHandle | null = null;
 	private mapBox: HTMLElement | null = null;
 	private mapState: MapState | null = null;
+	private pins: { update(): void; destroy(): void } | null = null;
+	private pinsBox: HTMLElement | null = null;
+	private pinsRail: ReturnType<HomeRuntime["rail"]> | null = null;
+	/** A note just created on the Map, its name field open (redraws wait until it closes). */
+	private naming: Naming | null = null;
 	private readonly phoneOpen = new Set<string>();
 	/** Tasks checked while the page is shown: they stay, struck through, until the page is left. */
 	private readonly justDone = new Set<string>();
@@ -128,7 +150,7 @@ export class HomeView implements WorkbenchTabInstance {
 		this.doc = el.ownerDocument;
 		const state = readState(host.state);
 		this.page = state.page ?? null;
-		this.lens = state.lens ?? (LENSES.includes(rt.settings.lens as HomeLens) ? (rt.settings.lens as HomeLens) : "domains");
+		this.lens = state.lens ?? startLens(rt.settings);
 		this.mapState = state.map ?? null;
 
 		this.root = el.createDiv({ cls: "sk-home-tab", attr: { "data-layout": host.layout } });
@@ -212,7 +234,7 @@ export class HomeView implements WorkbenchTabInstance {
 	dataChanged(): void {
 		if (this.destroyed) return;
 		// Not shown, a note flying, a block being dragged or a "?" panel open: drawn when that ends.
-		if (!this.root.isShown() || this.flying || this.drag || this.popup) {
+		if (!this.root.isShown() || this.flying || this.drag || this.popup || this.naming) {
 			this.stale = true;
 			return;
 		}
@@ -278,6 +300,7 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 		this.inline = null;
 		this.destroyMap();
+		this.destroyPins();
 		this.observer.disconnect();
 		for (const timer of this.timers) winOf(this.root).clearTimeout(timer);
 		this.timers.clear();
@@ -573,24 +596,74 @@ export class HomeView implements WorkbenchTabInstance {
 				this.chip(row, { key: "chip:old", act: "old", icon: "calendar-clock", label: this.tn("today.old", chip.count) });
 			}
 		}
+		// A new brainstorm, with Brainstorm on (its service starts one and opens it).
+		if (this.startBrainstorm()) this.chip(row, { key: "chip:new-brainstorm", act: "new-brainstorm", icon: "plus", label: this.t("today.new-brainstorm") });
 	}
 
+	/** The Brainstorm service's start(), or null without it. */
+	private startBrainstorm(): (() => Promise<void>) | null {
+		const sessions = this.rt.sessions() as (ReturnType<HomeRuntime["sessions"]> & { start?: () => Promise<void> }) | undefined;
+		return sessions && typeof sessions.start === "function" ? () => sessions.start!() : null;
+	}
+
+	/**
+	 * The Pins row: the vault pins of Note rail as small tokens (pins-row.ts: × to remove, drag to
+	 * reorder, folders in a popover, a menu). One component kept across redraws, like the Map;
+	 * mounted again when the Note rail service changes.
+	 */
 	private drawPins(): void {
 		const rail = this.rt.rail();
-		if (!rail) return;
-		let pins: string[] = [];
+		let count = 0;
 		try {
-			pins = rail.vaultPins().filter((p) => this.world.exists(p));
+			const groups = rail?.listPins();
+			count = groups ? groups.loose.length + groups.folders.length : 0;
 		} catch {
-			pins = [];
+			count = 0;
 		}
-		if (!pins.length) return;
+		if (!rail || !count) {
+			this.destroyPins();
+			return;
+		}
+		if (this.pins && this.pinsRail !== rail) this.destroyPins();
 		const sec = this.section(this.body, "pins", this.t("pins.title"));
-		const row = sec.createDiv({ cls: "sk-home-chips sk-home-pins" });
-		for (const path of pins) {
-			const hue = this.hueOf(path);
-			this.chip(row, { key: `pin:${path}`, act: "note", arg: path, pin: path, hue, dot: true, label: this.name(path), title: path });
+		if (!this.pins || !this.pinsBox) {
+			this.pinsBox = this.doc.createElement("div");
+			this.pinsBox.className = "sk-home-pins";
+			this.pinsRail = rail;
+			try {
+				this.pins = mountPinsRow(this.pinsBox, rail, {
+					openNote: (path, event) => this.openNote(path, null, event),
+					t: (key, vars) => this.t(key, vars),
+					dot: (path) => {
+						const hue = this.hueOf(path);
+						return hue === null ? null : `hsl(${hue} var(--sk-dot-s) var(--sk-dot-l))`;
+					},
+					toast: (message, options) => this.rt.ctx.toast(message, options),
+				});
+			} catch (error) {
+				console.error("[Snailkit] home: the pins row could not open", error);
+				this.pins = null;
+			}
+		} else this.pins.update();
+		sec.appendChild(this.pinsBox);
+	}
+
+	private destroyPins(): void {
+		try {
+			this.pins?.destroy();
+		} catch (error) {
+			console.error("[Snailkit] home: pins cleanup failed", error);
 		}
+		this.pins = null;
+		this.pinsRail = null;
+		this.pinsBox?.remove();
+		this.pinsBox = null;
+	}
+
+	/** The token of a pinned note in the Pins row (where a newly pinned note flies to). */
+	private pinToken(path: string): HTMLElement | null {
+		for (const el of Array.from(this.body.querySelectorAll<HTMLElement>(".sk-home-pins [data-pin-key]"))) if (el.dataset.pinKey === `pin:${path}`) return el;
+		return null;
 	}
 
 	private drawLensSection(): void {
@@ -642,13 +715,13 @@ export class HomeView implements WorkbenchTabInstance {
 	}
 
 	/** Switches the Home's view: the old one fades out, the new one comes in. */
-	private setLens(lens: HomeLens, viaKey = false): void {
+	private setLens(lens: HomeLens, viaKey = false, chosen = true): void {
 		if (lens === this.lens) {
 			if (viaKey) this.body.querySelector<HTMLElement>(`[data-lens="${lens}"]`)?.focus();
 			return;
 		}
 		this.lens = lens;
-		void this.rt.setLens(lens);
+		void this.rt.setLens(lens, chosen);
 		this.host.saveState();
 		const segm = this.body.querySelector<HTMLElement>(".sk-home-lens-segm");
 		const view = this.body.querySelector<HTMLElement>(".sk-home-lens");
@@ -844,6 +917,12 @@ export class HomeView implements WorkbenchTabInstance {
 						openPage: (id) => this.mapPage(id),
 						pin: (id, from) => void this.togglePin(id, from),
 						menu: (id, event) => this.mapMenu(id, event),
+						// Domains under the home page keep the order of the Domains view; any other note
+						// keeps an order of its own per parent (settings, never the notes).
+						canMove: (id) => this.canOrder(id),
+						move: (id, beforeId) => this.orderNote(id, beforeId),
+						canDrop: (id, target) => dropRefusal(this.world, id, target) === null,
+						drop: (id, target) => void this.moveNote(id, target),
 						escape: () => {
 							if (this.inline && !this.touch) this.input.focus({ preventScroll: true });
 							else this.body.querySelector<HTMLElement>(".sk-home-lens-segm [aria-pressed='true']")?.focus();
@@ -860,7 +939,6 @@ export class HomeView implements WorkbenchTabInstance {
 			}
 		}
 		const help = view.createDiv({ cls: "sk-home-mhelp" });
-		help.createSpan({ cls: "sk-home-mhelp-text" }).append(rich(this.t("map.help")));
 		const q = help.createEl("button", { cls: "sk-btn is-ghost is-icon is-s", attr: { type: "button", "aria-label": this.t("map.help-button"), "aria-haspopup": "dialog", "aria-expanded": "false" } });
 		setIcon(q, "circle-help");
 		q.dataset.mapq = "";
@@ -872,6 +950,8 @@ export class HomeView implements WorkbenchTabInstance {
 	}
 
 	private destroyMap(): void {
+		// The name field goes with the Map: the note keeps the name it has.
+		if (this.naming) this.endNaming();
 		if (this.map) {
 			this.mapState = this.map.getState();
 			try {
@@ -889,7 +969,7 @@ export class HomeView implements WorkbenchTabInstance {
 	private mapPage(id: string): void {
 		const source = this.rt.mapSource;
 		if (id === source.home() || id === VAULT_ROOT) {
-			this.setLens("domains", true);
+			this.setLens("domains", true, false);
 			return;
 		}
 		const f = this.frame ?? this.makeFrame();
@@ -910,12 +990,204 @@ export class HomeView implements WorkbenchTabInstance {
 		const root = this.map?.getState().root ?? source.home();
 		if (node.hasChildren && id !== root) menu.addItem((i) => i.setTitle(this.t("menu.recenter")).setIcon("crosshair").onClick(() => this.map?.recenter(id)));
 		menu.addItem((i) => i.setTitle(this.t(pinned ? "menu.unpin" : "menu.pin")).setIcon("pin").onClick(() => void this.togglePin(id, null)));
+		menu.addItem((i) => i.setTitle(this.t("menu.new-note")).setIcon("file-plus").onClick(() => void this.newNoteUnder(id)));
+		// A domain under the home page: move it up or down, the same order as the Domains view.
+		const layout = this.rt.layout();
+		const section = layout.sections.find((s) => s.blocks.some((b) => b.id === id));
+		if (section && root === source.home() && layout.featured?.id !== id) {
+			const arr = this.rt.arrangement();
+			const at = section.blocks.findIndex((b) => b.id === id);
+			menu.addSeparator();
+			menu.addItem((i) => i.setTitle(this.t("menu.up")).setIcon("arrow-up").setDisabled(at <= 0).onClick(() => void this.arrange(moveBlock(arr, layout, id, -1), `dom:${id}`)));
+			menu.addItem((i) => i.setTitle(this.t("menu.down")).setIcon("arrow-down").setDisabled(at >= section.blocks.length - 1).onClick(() => void this.arrange(moveBlock(arr, layout, id, 1), `dom:${id}`)));
+		}
+		// Any domain block under the home page can be hidden from here; "N hidden domains" under the Map brings it back.
+		if (root === source.home() && layout.order.some((b) => b.id === id)) {
+			const name = this.name(id);
+			menu.addItem((i) => i.setTitle(this.t("menu.hide")).setIcon("eye-off").onClick(() => {
+				void this.arrange(hide(this.rt.arrangement(), id), null, this.t("toast.hidden", { name }));
+			}));
+		}
 		const f = this.frame ?? this.makeFrame();
 		if (isPage(this.world, id, f.domains, f.pulled)) {
 			menu.addSeparator();
 			menu.addItem((i) => i.setTitle(this.t("menu.domain-page")).setIcon("layout-list").onClick(() => this.go({ kind: "domain", path: id })));
 		}
 		this.showMenu(menu, event);
+	}
+
+	/** A domain under the home page (ordered like the Domains view), or any other note below the root. */
+	private canOrder(id: string): boolean {
+		const source = this.rt.mapSource;
+		if (id === VAULT_ROOT || id === source.home()) return false;
+		const parent = source.parent(id);
+		if (parent === null || parent === VAULT_ROOT || parent === source.home()) return readingOrder(this.rt.layout()).some((b) => b.id === id);
+		return true;
+	}
+
+	/** A note dragged between two of its siblings on the Map. */
+	private orderNote(id: string, before: string | null): void {
+		const source = this.rt.mapSource;
+		const parent = source.parent(id);
+		if (parent === null || parent === VAULT_ROOT || parent === source.home()) {
+			const layout = this.rt.layout();
+			const last = readingOrder(layout).filter((b) => b.id !== id).pop();
+			const target = before ? { before } : last ? { after: last.id } : null;
+			if (target) void this.arrange(dropBlock(this.rt.arrangement(), layout, id, target), `dom:${id}`);
+			return;
+		}
+		const shown = source.children(parent).map((n) => n.id);
+		const next = moveBefore(shown, id, before);
+		if (next.join("\n") === shown.join("\n")) return;
+		const order = this.rt.noteOrder();
+		if ((orderOf(order, parent) ?? []).join("\n") === next.join("\n")) return;
+		void this.rt.setNoteOrder(withOrder(order, parent, next));
+		this.map?.update();
+	}
+
+	private fileAt(path: string): TFile | null {
+		const f = this.rt.app.vault.getAbstractFileByPath(path);
+		return f instanceof TFile ? f : null;
+	}
+
+	/** A note dropped onto another on the Map: that one becomes its parent (`up`), with Undo. */
+	private async moveNote(id: string, target: string): Promise<void> {
+		if (dropRefusal(this.world, id, target) !== null) return;
+		const file = this.fileAt(id);
+		const parent = this.fileAt(target);
+		if (!file || !parent) return;
+		const name = this.name(id);
+		const change = await moveUnder(this.rt.app, file, parent);
+		if (!change) {
+			this.rt.ctx.toast(this.t("toast.move-failed", { name }));
+			return;
+		}
+		this.rt.ctx.toast(this.t("toast.moved", { name, parent: this.name(target) }), {
+			action: {
+				label: this.t("common.undo"),
+				run: () =>
+					void change
+						.undo()
+						.then((done) => {
+							if (!done) this.rt.ctx.toast(this.t("toast.undo-changed", { name }));
+						})
+						.catch((error: unknown) => console.error("[Snailkit] home: undo failed", error)),
+			},
+		});
+	}
+
+	/**
+	 * "New note here" on the Map: a note in the same folder as `parentPath`, with `up` toward it,
+	 * named "Untitled" in a field on the Map at once. Enter keeps the name typed, Escape removes the
+	 * note while it is still as created.
+	 */
+	private async newNoteUnder(parentPath: string): Promise<void> {
+		const app = this.rt.app;
+		const parent = this.fileAt(parentPath);
+		if (!parent || this.naming) return;
+		const folder = parent.parent?.path ?? "";
+		const base = cleanNoteName(this.t("map.untitled")) || "Untitled";
+		const taken = new Set(app.vault.getAllLoadedFiles().map((f) => f.path.toLowerCase()));
+		const path = freeNotePath(folder === "/" ? "" : folder, base, (p) => taken.has(p.toLowerCase()));
+		const link = parentLink(app, path, parent);
+		const content = `---\nup: "${link.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"\n---\n`;
+		let file: TFile;
+		try {
+			file = await app.vault.create(path, content);
+		} catch (error) {
+			console.error("[Snailkit] home: could not create the note", error);
+			this.rt.ctx.toast(this.t("toast.create-failed"));
+			return;
+		}
+		const vault = app.vault;
+		const naming: Naming = { path: file.path, file, content, mtime: file.stat.mtime, size: file.stat.size, touched: false, off: () => undefined };
+		const ref = vault.on("modify", (changed) => {
+			if (changed === file) naming.touched = true;
+		});
+		naming.off = () => vault.offref(ref);
+		this.naming = naming;
+		const started = Date.now();
+		const attempt = () => {
+			if (this.destroyed || this.naming?.path !== file.path) return;
+			if (!this.fileAt(file.path)) {
+				this.endNaming();
+				return;
+			}
+			this.rt.mapSource.invalidate();
+			if (this.map?.edit(file.path, this.nameField(file))) return;
+			// The places index takes a moment to see the new note; after 4 s, open it instead.
+			if (Date.now() - started < 4000) this.later(120, attempt);
+			else {
+				this.endNaming();
+				this.openNote(file.path, null);
+			}
+		};
+		attempt();
+	}
+
+	/** The name field closes (or the Map goes away): the note stays as it is, the Home redraws again. */
+	private endNaming(): void {
+		const naming = this.naming;
+		if (!naming) return;
+		this.naming = null;
+		naming.off();
+		this.stale = true;
+		this.catchUp();
+	}
+
+	/** The name field of a note just created on the Map. */
+	private nameField(file: TFile) {
+		const app = this.rt.app;
+		const done = () => this.endNaming();
+		return {
+			value: file.basename,
+			label: this.t("map.name-label"),
+			commit: async (typed: string): Promise<boolean> => {
+				const name = cleanNoteName(typed) || file.basename;
+				if (name === file.basename) {
+					done();
+					return true;
+				}
+				const folder = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+				const path = `${folder}${name}.md`;
+				const other = app.vault.getAbstractFileByPath(path) ?? (app.vault as unknown as { getAbstractFileByPathInsensitive?(p: string): unknown }).getAbstractFileByPathInsensitive?.(path);
+				if (other && other !== file) {
+					this.rt.ctx.toast(this.t("map.name-taken", { name }));
+					return false;
+				}
+				try {
+					await app.fileManager.renameFile(file, path);
+				} catch (error) {
+					console.error("[Snailkit] home: could not rename the note", error);
+					this.rt.ctx.toast(this.t("map.name-taken", { name }));
+					return false;
+				}
+				done();
+				return true;
+			},
+			cancel: () => {
+				const naming = this.naming;
+				if (!naming || naming.file !== file) {
+					done();
+					return;
+				}
+				// Escape: the note goes to the trash only if it is still exactly as created (same
+				// file, same time and size, no write seen, same text), checked again after reading.
+				this.naming = null;
+				this.stale = true;
+				this.catchUp();
+				const untouched = () => !naming.touched && app.vault.getAbstractFileByPath(naming.path) === file && file.stat.mtime === naming.mtime && file.stat.size === naming.size;
+				if (!untouched()) {
+					naming.off();
+					return;
+				}
+				void app.vault
+					.read(file)
+					.then((text) => (text === naming.content && untouched() ? app.fileManager.trashFile(file) : undefined))
+					.catch((error: unknown) => console.error("[Snailkit] home: could not remove the new note", error))
+					.finally(() => naming.off());
+			},
+		};
 	}
 
 	// ----- Tags -----
@@ -1337,6 +1609,11 @@ export class HomeView implements WorkbenchTabInstance {
 			case "brainstorms":
 				this.host.select("sessions");
 				return;
+			case "new-brainstorm": {
+				const start = this.startBrainstorm();
+				if (start) void start().catch((error: unknown) => console.error("[Snailkit] home: could not start a brainstorm", error));
+				return;
+			}
 			case "old":
 				this.go({ kind: "old-dailies" }, null, viaKey);
 				return;
@@ -1370,7 +1647,7 @@ export class HomeView implements WorkbenchTabInstance {
 		const onHome = !this.page && !this.searching;
 		const keep = this.surface.current?.dataset.key ?? null;
 		if (rail.isPinned(path)) {
-			const chip = onHome ? this.byKey(`pin:${path}`) : null;
+			const chip = onHome ? this.pinToken(path) : null;
 			const after = async () => {
 				await rail.setPinned(path, false);
 				if (onHome) flip(this.body, () => this.render({ keepKey: keep && keep !== `pin:${path}` ? keep : null }));
@@ -1389,7 +1666,7 @@ export class HomeView implements WorkbenchTabInstance {
 		// The new chip waits, invisible, for its copy to land (set inside the redraw so that FLIP leaves it alone).
 		flip(this.body, () => {
 			this.render({ keepKey: keep });
-			chip = this.byKey(`pin:${path}`);
+			chip = this.pinToken(path);
 			if (chip && !still) chip.addClass("is-landing");
 		});
 		if (!chip || still) return;
@@ -1639,7 +1916,7 @@ export class HomeView implements WorkbenchTabInstance {
 
 	/** A redraw that waited (drag, panel) happens now. */
 	private catchUp(): void {
-		if (!this.stale || this.destroyed || this.drag || this.popup || this.flying) return;
+		if (!this.stale || this.destroyed || this.drag || this.popup || this.flying || this.naming) return;
 		this.later(0, () => this.dataChanged());
 	}
 

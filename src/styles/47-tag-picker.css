@@ -1,0 +1,381 @@
+/* The tag picker (src/ui/tag-picker): a calm column, one tag in color at a time. Used by
+   Brainstorm and by any tool that asks for a tag. The capsule shows a chosen tag anywhere. */
+/* ----- tag capsules ----- */
+.sk-tag-capsule {
+	display: inline-flex;
+	align-items: stretch;
+	height: 22px;
+	font-size: 12px;
+	line-height: 1;
+	white-space: nowrap;
+	border-radius: 999px;
+	overflow: hidden;
+	vertical-align: middle;
+	border: 1px solid color-mix(in srgb, var(--sk-tag-r-fg, var(--sk-accent)) 30%, transparent);
+	background: var(--sk-tag-l-bg, var(--sk-surface));
+}
+.sk-tag-capsule-root {
+	display: flex;
+	align-items: center;
+	padding: 0 8px 0 9px;
+	background: var(--sk-tag-r-bg, var(--sk-accent-wash));
+	color: var(--sk-tag-r-fg, var(--sk-accent-text));
+	font-variant: small-caps;
+	text-transform: lowercase;
+	letter-spacing: 0.06em;
+	font-weight: 600;
+}
+.sk-tag-capsule-leaf {
+	display: flex;
+	align-items: center;
+	padding: 0 9px 0 8px;
+	color: var(--sk-tag-l-fg, var(--text-normal));
+	border-left: 1px solid color-mix(in srgb, var(--sk-tag-r-fg, var(--sk-accent)) 22%, transparent);
+}
+
+.sk-tag-picker .sk-tag-picker-it kbd {
+	display: inline-block;
+	min-width: 1.6em;
+	padding: 0 4px;
+	border: 1px solid var(--sk-line);
+	border-bottom-width: 2px;
+	border-radius: 4px;
+	background: var(--sk-surface);
+	color: var(--text-muted);
+	font-family: inherit;
+	font-size: 10.5px;
+	line-height: 1.4;
+	text-align: center;
+	white-space: nowrap;
+}
+/* The picker: a field and a column. */
+.sk-tag-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.sk-tag-picker-field {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	height: 32px;
+	padding: 0 8px 0 9px;
+	border-radius: var(--sk-radius-s);
+	background: var(--sk-surface-sunken);
+	transition: box-shadow var(--sk-fast), background var(--sk-fast);
+}
+.sk-tag-picker-field:focus-within {
+	background: var(--sk-surface);
+	box-shadow: 0 0 0 1px var(--sk-accent-line), 0 0 0 4px var(--sk-accent-soft);
+}
+.sk-tag-picker-field-icon {
+	display: flex;
+	color: var(--text-faint);
+}
+.sk-tag-picker-field-icon svg {
+	width: 14px;
+	height: 14px;
+}
+.sk-tag-picker-crumb {
+	display: none;
+	align-items: center;
+	gap: 5px;
+	flex: none;
+}
+.sk-tag-picker-crumb::after {
+	content: "/";
+	color: var(--text-faint);
+}
+.sk-tag-picker-field.is-deep .sk-tag-picker-crumb {
+	display: inline-flex;
+}
+.sk-tag-picker-crumb .sk-tag-capsule {
+	height: 20px;
+	font-size: 11.5px;
+}
+.sk-tag-picker input.sk-tag-picker-input {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0 !important;
+	border-radius: 0;
+	background: none !important;
+	box-shadow: none;
+	font-size: 14px;
+	color: var(--text-normal);
+}
+.sk-tag-picker input.sk-tag-picker-input:focus,
+.sk-tag-picker input.sk-tag-picker-input:focus-visible {
+	box-shadow: none;
+	outline: none;
+}
+.sk-tag-picker-list {
+	position: relative;
+	max-height: 236px;
+	margin: 0 -4px;
+	padding: 2px 4px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	scrollbar-color: var(--sk-line) transparent;
+}
+/* The bar under the row at hand, in the color of its tag; it slides from row to row. */
+.sk-tag-picker-cursor {
+	position: absolute;
+	top: 0;
+	left: 4px;
+	right: 4px;
+	height: 30px;
+	border-radius: 7px;
+	background: var(--sk-tag-r-bg, var(--sk-surface-sunken));
+	opacity: 0;
+	pointer-events: none;
+	transition: transform var(--sk-slow) var(--sk-spring), height var(--sk-slow) var(--sk-spring), background var(--sk-fast), opacity var(--sk-fast);
+}
+.sk-tag-picker-cursor.is-shown {
+	opacity: 1;
+}
+.sk-tag-picker-list.is-snap .sk-tag-picker-cursor {
+	transition: none;
+}
+.sk-tag-picker-it {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	height: 30px;
+	padding: 0 8px 0 9px;
+	border-radius: 7px;
+	color: var(--text-normal);
+	cursor: var(--cursor);
+	transition: color var(--sk-fast);
+}
+.sk-tag-picker-it.is-gap {
+	margin-top: 7px;
+}
+.sk-tag-picker-it.is-gap::before {
+	content: "";
+	position: absolute;
+	top: -4px;
+	left: 9px;
+	right: 9px;
+	height: 1px;
+	background: var(--sk-line);
+}
+.sk-tag-picker-it-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--sk-tag-r-fg, var(--text-faint));
+	opacity: 0.75;
+	transition: transform var(--sk-slow) var(--sk-spring), opacity var(--sk-fast);
+}
+.sk-tag-picker-it-name {
+	flex: none;
+	min-width: 0;
+	max-width: 60%;
+	overflow: hidden;
+	font-size: 13.5px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.sk-tag-picker-it-root {
+	color: var(--text-muted);
+}
+.sk-tag-picker-it-sep {
+	margin: 0 2px;
+	color: var(--text-faint);
+}
+.sk-tag-picker-it-name mark {
+	background: none;
+	color: inherit;
+	font-weight: 600;
+	text-decoration: underline;
+	text-decoration-color: var(--sk-accent-line);
+	text-underline-offset: 2px;
+}
+.sk-tag-picker-it-kids {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-faint);
+	font-size: 12px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.sk-tag-picker-it-why {
+	flex: none;
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: 11.5px;
+	white-space: nowrap;
+}
+.sk-tag-picker button.sk-tag-picker-it-more {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	margin-right: -6px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: none;
+	box-shadow: none;
+	color: var(--text-faint);
+	cursor: var(--cursor);
+	transition: background var(--sk-fast), color var(--sk-fast);
+}
+.sk-tag-picker button.sk-tag-picker-it-more:hover {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+.sk-tag-picker-it-more svg {
+	width: 13px;
+	height: 13px;
+}
+.sk-tag-picker kbd.sk-tag-picker-it-enter {
+	display: none;
+	flex: none;
+	margin-left: 4px;
+}
+.sk-tag-picker-it.is-hi {
+	color: var(--sk-tag-r-fg, var(--text-normal));
+}
+.sk-tag-picker-it.is-hi .sk-tag-picker-it-root,
+.sk-tag-picker-it.is-hi .sk-tag-picker-it-sep {
+	color: inherit;
+}
+.sk-tag-picker-it.is-hi .sk-tag-picker-it-name {
+	font-weight: 500;
+}
+.sk-tag-picker-it.is-hi .sk-tag-picker-it-dot {
+	opacity: 1;
+	transform: scale(1.25);
+}
+.sk-tag-picker-it.is-hi .sk-tag-picker-it-kids,
+.sk-tag-picker-it.is-hi .sk-tag-picker-it-why,
+.sk-tag-picker .sk-tag-picker-it.is-hi button.sk-tag-picker-it-more {
+	color: inherit;
+	opacity: 0.7;
+}
+.sk-tag-picker .sk-tag-picker-it.is-hi kbd.sk-tag-picker-it-enter {
+	display: inline-block;
+	border-color: currentColor;
+	background: transparent;
+	color: inherit;
+	opacity: 0.7;
+}
+.sk-tag-picker-it.is-new .sk-tag-picker-it-dot {
+	width: 9px;
+	height: 9px;
+	border: 1.5px dashed var(--text-faint);
+	background: none;
+}
+.sk-tag-picker-it.is-new .sk-tag-picker-it-name {
+	color: var(--text-muted);
+	font-style: italic;
+}
+.sk-tag-picker-it.is-new .sk-tag-picker-it-name b {
+	color: var(--text-normal);
+	font-style: normal;
+	font-weight: 500;
+}
+.sk-tag-picker-it.is-new.is-hi .sk-tag-picker-it-name,
+.sk-tag-picker-it.is-new.is-hi .sk-tag-picker-it-name b {
+	color: inherit;
+}
+.sk-tag-picker-empty {
+	padding: 8px 9px;
+	color: var(--text-faint);
+	font-size: 12.5px;
+}
+
+/* On a touch screen: larger rows and buttons, no key hints. */
+.sk-tag-picker.is-touch .sk-tag-picker-field {
+	height: 40px;
+}
+.sk-tag-picker.is-touch .sk-tag-picker-list {
+	max-height: 220px;
+}
+.sk-tag-picker.is-touch .sk-tag-picker-it,
+.sk-tag-picker.is-touch .sk-tag-picker-cursor {
+	height: 40px;
+}
+.sk-tag-picker.is-touch .sk-tag-picker-it-name {
+	font-size: 15px;
+}
+.sk-tag-picker.is-touch button.sk-tag-picker-it-more {
+	width: 34px;
+	height: 34px;
+	margin-right: -8px;
+}
+.sk-tag-picker.is-touch .sk-tag-picker-it-more svg {
+	width: 16px;
+	height: 16px;
+}
+.sk-tag-picker.is-touch kbd.sk-tag-picker-it-enter {
+	display: none !important;
+}
+
+/* On its own (openTagPicker): a popover under its anchor, or a sheet at the bottom on a phone. */
+.sk-tag-picker-pop {
+	position: fixed;
+	z-index: var(--layer-menu, 65);
+	padding: 8px 10px;
+	background: var(--sk-surface);
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-l);
+	box-shadow: var(--sk-shadow-pop);
+	font-family: var(--font-interface);
+	font-size: 13px;
+	line-height: 1.4;
+	color: var(--text-normal);
+	transform-origin: top left;
+	animation: sk-rise var(--sk-fast) var(--sk-ease) both;
+}
+.sk-tag-picker-pop.is-sheet {
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: var(--layer-modal, 50);
+	padding: 18px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+	border: 0;
+	border-top: 1px solid var(--sk-line);
+	border-radius: 22px 22px 0 0;
+	transform-origin: bottom center;
+	animation: sk-rise var(--sk-slow) var(--sk-ease) both;
+}
+.sk-tag-picker-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--layer-modal, 50);
+	background: rgba(0, 0, 0, 0.18);
+}
+.sk-tag-picker-grabber {
+	position: absolute;
+	top: 6px;
+	left: 50%;
+	width: 36px;
+	height: 4px;
+	margin-left: -18px;
+	border-radius: 2px;
+	background: var(--sk-line);
+}
+.sk-tag-picker-sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+.sk-tag-picker-pop.is-sheet {
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	transition: bottom var(--sk-fast) var(--sk-ease);
+}

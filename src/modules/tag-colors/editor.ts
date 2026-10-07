@@ -43,7 +43,8 @@ export class TagWidget extends WidgetType {
 }
 
 export function decorations(view: EditorView, plugin: TagRuntime) {
-	if (!view.state.field(editorLivePreviewField, false)) return Decoration.none;
+	const live = view.state.field(editorLivePreviewField, false);
+	if (!live && !plugin.settings.taskPlaceholder) return Decoration.none;
 	const ranges: Range<Decoration>[] = [], seen = new Set<number>();
 	for (const visible of view.visibleRanges) {
 		let begin: { from: number; to: number } | null = null;
@@ -60,7 +61,7 @@ export function decorations(view: EditorView, plugin: TagRuntime) {
 			const tag = view.state.doc.sliceString(start + 1, node.to);
 			const classes = plugin.classes(tag);
 			const touched = view.state.selection.ranges.some(range => range.from <= node.to && range.to >= start);
-			const decoration = touched ? Decoration.mark({ class: `sk-tag-colors-raw ${classes}` })
+			const decoration = touched || !live ? Decoration.mark({ class: `sk-tag-colors-raw ${classes}` })
 				: Decoration.replace({ widget: new TagWidget(plugin, tag, classes) });
 			ranges.push(decoration.range(start, node.to));
 		} });

@@ -9,6 +9,8 @@ interface Entry { row: MapRow; el: HTMLElement; signature: string }
 export class MapScene {
 	readonly entries = new Map<string, Entry>();
 	rows: MapRow[] = [];
+	/** The last columns drawing folded the root into a pill. */
+	folded = false;
 	private groups = new Map<string, HTMLElement>();
 	private edges = new Map<string, SVGPathElement>();
 	private svg: SVGSVGElement;
@@ -31,7 +33,7 @@ export class MapScene {
 		return this.canvas.measureText(text).width;
 	};
 
-	draw(state: MapState, mode: MapMode, width: number, open: ReadonlySet<string>, animate = true): void {
+	draw(state: MapState, mode: MapMode, width: number, open: ReadonlySet<string>, animate = true, keepFolded = false, grown: ReadonlySet<string> = new Set()): void {
 		const ancestors = this.root && this.root !== state.root ? new Set([this.root, ...pathFrom(this.options.source, this.root, state.root).slice(0, -1)]) : new Set<string>();
 		this.root = state.root;
 		const before = new Map([...this.entries].map(([key, entry]) => [key, entry.el.getBoundingClientRect()]));
@@ -81,17 +83,21 @@ export class MapScene {
 			return el;
 		};
 		if (mode === "columns") {
-			const geometry = columnLayout(this.options.source, state, width, this.options.home, this.measure, this.options.strings.more);
+			const geometry = columnLayout(this.options.source, state, width, this.options.home, this.measure, this.options.strings.more, keepFolded, grown);
+			this.folded = geometry.folded;
 			this.box.style.minWidth = `${geometry.width}px`;
+			this.box.style.height = `${geometry.height}px`;
 			if (geometry.root) {
 				const row = geometry.root;
 				const el = attach(row, this.box, geometry.columns.length > 0);
+				el.classList.toggle("is-folded", geometry.folded);
 				Object.assign(el.style, { left: `${row.x}px`, top: `${row.y}px`, width: `${row.width}px`, maxWidth: `${row.width}px` });
 			}
 			for (const col of geometry.columns) {
 				const container = group(col.parent, this.box);
-				container.classList.toggle("is-overflow", col.height > L.height - 16);
-				Object.assign(container.style, { left: `${col.x}px`, top: `${col.top}px`, width: `${col.width}px`, height: `${Math.min(col.height, L.height - 16)}px` });
+				container.classList.toggle("is-overflow", col.height > col.visible);
+				container.classList.toggle("is-grown", col.grown);
+				Object.assign(container.style, { left: `${col.x}px`, top: `${col.top}px`, width: `${col.width}px`, height: `${col.visible}px` });
 				for (const row of col.rows) {
 					const expanded = geometry.columns.some((next) => next.parent === row.node?.id);
 					const el = attach(row, container, expanded);
@@ -105,7 +111,9 @@ export class MapScene {
 				}
 			}
 		} else {
+			this.folded = false;
 			this.box.style.minWidth = "";
+			this.box.style.height = "";
 			const root = this.options.source.node(state.root);
 			if (root) {
 				const rootRow: MapRow = { key: nodeKey(root.id), node: root, parent: null, depth: 0, position: 1, size: 1, more: 0 };
@@ -116,7 +124,7 @@ export class MapScene {
 					container.classList.add("is-open");
 					let inner = container.firstElementChild as HTMLElement | null;
 					if (!inner) { inner = this.box.ownerDocument.createElement("div"); inner.className = "sk-map-tree-inner"; container.append(inner); }
-					for (const row of childRows(this.options.source, id, depth, ancestors)) {
+					for (const row of childRows(this.options.source, id, depth, ancestors, grown.has(id))) {
 						const expanded = !!row.node?.hasChildren && depth < L.depth && open.has(row.node.id);
 						const el = attach(row, inner, expanded);
 						// Restore preorder after a sibling is expanded, without moving an already focused row.
@@ -231,14 +239,18 @@ export class MapScene {
 		for (const [key, entry] of this.entries) {
 			const parent = entry.row.parent && this.entries.get(nodeKey(entry.row.parent));
 			if (!parent) continue;
-			const label = parent.el.querySelector<HTMLElement>(".sk-map-label")!;
+			// The folded root hides its name: the branch leaves from the pill itself.
+			const label = parent.el.classList.contains("is-folded") ? parent.el : parent.el.querySelector<HTMLElement>(".sk-map-label")!;
 			const p = position(label), r = position(entry.el);
 			let edge = this.edges.get(key); const fresh = !edge;
 			if (!edge) {
 				edge = this.box.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "path");
 				edge.setAttribute("pathLength", "1"); this.svg.append(edge); this.edges.set(key, edge);
 			}
-			const d = branchPath(p.x + label.offsetWidth + 4, p.y + label.offsetHeight / 2, r.x - 2, r.y + entry.el.offsetHeight / 2);
+			// The right edge of the parent's column (or of the root): the branch runs straight to it.
+			const column = parent.el.parentElement !== this.box ? parent.el.parentElement : null;
+			const run = column ? column.offsetLeft + column.offsetWidth + 2 : parent.el.offsetLeft + parent.el.offsetWidth + 2;
+			const d = branchPath(p.x + label.offsetWidth + 4, p.y + label.offsetHeight / 2, r.x - 2, r.y + entry.el.offsetHeight / 2, run);
 			edge.setAttribute("d", d);
 			edge.style.setProperty("d", `path("${d}")`);
 			const clip = entry.el.closest<HTMLElement>(".is-overflow");

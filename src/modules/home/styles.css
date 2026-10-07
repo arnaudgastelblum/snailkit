@@ -277,10 +277,12 @@
 	border-radius: 50%;
 	background: var(--sk-home-warn);
 }
-.sk-home-chip.is-landing {
+.sk-home-chip.is-landing,
+.sk-home-pins .is-landing {
 	opacity: 0;
 }
-.sk-home-chip.is-landed {
+.sk-home-chip.is-landed,
+.sk-home-pins .is-landed {
 	animation: sk-home-land 520ms var(--sk-spring);
 }
 .sk-home-dot {
@@ -1299,7 +1301,15 @@
 	}
 	.sk-home-col.is-searching .sk-home-results,
 	.sk-home-chip.is-landed,
+	.sk-home-pins .is-landed,
 	.sk-home-pop {
 		animation: none;
 	}
+}
+
+/* The Map keeps its left edge on the column but may run to the right edge of the view, so the
+   third column shows long note names whole (the column itself stays 760 px). */
+.sk-home-col .sk-home-map {
+	width: calc(100cqw - max(24px, (100cqw - 760px) / 2) - 24px);
+	max-width: none;
 }

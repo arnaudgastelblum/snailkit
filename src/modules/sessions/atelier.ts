@@ -32,6 +32,10 @@ export interface SessionInfo {
 	done?: number;
 	/** "- [?]" lines only. */
 	undecided?: number;
+	/** Open tasks without a tag. */
+	untagged?: number;
+	/** Lines written in the body. */
+	lines?: number;
 }
 
 /** Open, to sort (open with tasks without a tag or lines to decide), or closed. */

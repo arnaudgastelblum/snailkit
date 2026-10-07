@@ -2,6 +2,10 @@ import type { StringsOf } from "../../../i18n";
 import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
+	"settings.placeholder": "Tagknop bij taken",
+	"settings.placeholder-desc": "Toon een kleine tagknop bij onvoltooide taken zonder tag. Kies een tag om die aan je notitie toe te voegen.",
+	"placeholder.add": "Een tag aan deze taak toevoegen",
+	"placeholder.failed": "De tag kon niet worden opgeslagen. Probeer het opnieuw.",
 	"module.name": "Tagkleuren",
 	"module.description": "Herken tagfamilies aan vaste kleuren en compacte capsules.",
 	"settings.display": "Weergave",

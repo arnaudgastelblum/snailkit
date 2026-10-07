@@ -125,6 +125,10 @@ A missing note is created (empty: your daily note template is not applied). When
 
 ### Opening a task
 
+The **Note** section below the task details shows its source note as read-only Markdown, with the task gently highlighted and brought into view. Its header shows the note name and folder; **Open note** opens it at the task line (Ctrl/Cmd opens a new tab). Links work normally, and preview checkboxes cannot change the note. In the side panel, this section starts collapsed.
+
+Initially, the preview shows at most 40 lines before and after the task. **Show whole note** expands it; **Show task context** returns to the excerpt. An excerpt may cut a Markdown block or omit link definitions; use the whole note for full context. Note changes refresh the preview after a short delay, preserving its scroll position where possible. Selecting another task resets the preview. An unavailable note shows a message instead.
+
 **Open in note** (the arrow of a row, `O`, a double click outside the title) shows the note in a tab that already has it, else opens it (in a new tab when the list is a page, so the list stays), and puts the cursor at the end of the task line. From a Workbench standing in a new tab (see [Opening by itself](workbench.md#opening-by-itself)), the note takes its place, unless you pinned that tab.
 
 ### Safety

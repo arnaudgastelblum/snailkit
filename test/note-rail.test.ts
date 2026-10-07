@@ -10,6 +10,126 @@ import { commandHotkeys, hotkeyText, pillAction } from "../src/modules/note-rail
 import { addNotePin, getNotePins, pinLinkpath, pinLinkpaths, pinsAdd, pinsRemove, pinsReorder, removeNotePin, reorderNotePins, type PinResolver } from "../src/modules/note-rail/pins";
 import { cleanVaultPins, DEFAULT_SETTINGS, moveInOrder, pinsKey, railOrder, remapVaultPins } from "../src/modules/note-rail/settings";
 import type { NoteRailSettings } from "../src/modules/note-rail/types";
+import { editPinGroups, flattenPinGroups, readPinGroups, remapPinGroups } from "../src/modules/note-rail/vault-pins";
+import { NoteRailController } from "../src/modules/note-rail/controller";
+import type { NoteRailService } from "../src/core/services";
+
+test("vault pin service: shared mutations, detached snapshots, events, unsubscribe and stopped service", async () => {
+	const stored = structuredClone(DEFAULT_SETTINGS);
+	stored.vaultPins = ["A.md", "B.md"];
+	const files = new Map(["A.md", "B.md"].map((path) => [path, Object.assign(new TFile(), { path })]));
+	let saves = 0;
+	const ctx = {
+		settings: stored,
+		app: { vault: { getAbstractFileByPath: (path: string) => files.get(path) } },
+		saveSettings: async () => { saves++; harness.pinsChanged(); },
+	};
+	const controller = new NoteRailController(ctx as unknown as ConstructorParameters<typeof NoteRailController>[0]);
+	const harness = controller as unknown as { service(): NoteRailService; pinsChanged(): void; disposed: boolean };
+	const service = harness.service();
+	let changes = 0;
+	const off = service.onPinsChange(() => changes++);
+	const id = await service.createPinFolder("Reading");
+	assert.ok(id);
+	assert.equal(changes, 1);
+	await service.movePin("B.md", 0, id);
+	await service.renamePinFolder(id, "References");
+	assert.equal(changes, 3);
+	assert.deepEqual(service.listPins(), { loose: ["A.md"], folders: [{ id, name: "References", pins: ["B.md"] }] });
+	service.listPins().folders[0].pins.length = 0;
+	assert.deepEqual(service.vaultPins(), ["A.md", "B.md"]);
+	await service.setPinned("B.md", false);
+	assert.deepEqual(service.listPins().folders[0].pins, []);
+	await service.setPinned("B.md", true);
+	assert.deepEqual(service.listPins().loose, ["A.md", "B.md"]);
+	await service.movePin("B.md", 0, id);
+	await service.deletePinFolder(id);
+	assert.deepEqual(service.listPins(), { loose: ["A.md", "B.md"], folders: [] });
+	await service.setPinned("Deleted.md", true);
+	assert.equal(service.isPinned("Deleted.md"), false);
+	const heard = changes;
+	off();
+	await service.removePin("A.md");
+	assert.equal(changes, heard);
+	harness.disposed = true;
+	const saved = saves;
+	await service.removePin("B.md");
+	assert.equal(await service.createPinFolder("Later"), null);
+	assert.equal(saves, saved);
+	assert.deepEqual(service.listPins(), { loose: [], folders: [] });
+});
+
+test("vault pin folders: legacy migration preserves loose order and sanitizes corrupt data", () => {
+	assert.deepEqual(readPinGroups(["B.md", "A.md", "B.md", null, ""], undefined), { loose: ["B.md", "A.md"], folders: [] });
+	const groups = readPinGroups(["A.md", "B.md", "C.md"], [
+		null, { id: "", name: "Bad", pins: [] },
+		{ id: "one", name: " Reading ", pins: ["B.md", "B.md", "Missing.md"] },
+		{ id: "one", name: "Duplicate", pins: ["A.md"] },
+		{ id: "two", name: "Projects", pins: ["B.md", "C.md"] },
+	]);
+	assert.deepEqual(groups, { loose: ["A.md"], folders: [
+		{ id: "one", name: "Reading", pins: ["B.md"] }, { id: "two", name: "Projects", pins: ["C.md"] },
+	] });
+});
+
+test("vault pin folders: moves use final indices and keep each pin in exactly one list", () => {
+	const source = readPinGroups(["A.md", "B.md", "C.md"], [{ id: "one", name: "Reading", pins: ["C.md"] }]);
+	const original = structuredClone(source);
+	let next = editPinGroups(source, { kind: "move", path: "A.md", index: 1 });
+	assert.deepEqual(next.loose, ["B.md", "A.md"]);
+	next = editPinGroups(next, { kind: "move", path: "A.md", index: 0, folderId: "one" });
+	assert.deepEqual(next.folders[0].pins, ["A.md", "C.md"]);
+	next = editPinGroups(next, { kind: "move", path: "A.md", index: Infinity, folderId: "one" });
+	assert.deepEqual(next.folders[0].pins, ["C.md", "A.md"]);
+	next = editPinGroups(next, { kind: "move", path: "C.md", index: -20, folderId: null });
+	assert.deepEqual(next.loose, ["C.md", "B.md"]);
+	assert.deepEqual(editPinGroups(next, { kind: "move", path: "B.md", index: 0, folderId: "missing" }), next);
+	assert.deepEqual(editPinGroups(next, { kind: "move", path: "missing.md", index: 0 }), next);
+	assert.deepEqual(source, original);
+	assert.equal(new Set(flattenPinGroups(next)).size, 3);
+});
+
+test("vault pin folders: rename, reorder, deletion keeps pins loose, empty names are ignored", () => {
+	let next = readPinGroups(["A.md", "B.md", "C.md"], [{ id: "one", name: "Reading", pins: ["B.md", "C.md"] }]);
+	next = editPinGroups(next, { kind: "create-folder", id: "two", name: " Projects " });
+	next = editPinGroups(next, { kind: "move-folder", id: "two", index: 0 });
+	assert.deepEqual(next.folders.map((f) => f.id), ["two", "one"]);
+	next = editPinGroups(next, { kind: "rename-folder", id: "one", name: " References " });
+	assert.equal(next.folders[1].name, "References");
+	assert.deepEqual(editPinGroups(next, { kind: "rename-folder", id: "one", name: " " }), next);
+	assert.deepEqual(editPinGroups(next, { kind: "create-folder", id: "three", name: " " }), next);
+	next = editPinGroups(next, { kind: "delete-folder", id: "one" });
+	assert.deepEqual(next.loose, ["A.md", "B.md", "C.md"]);
+	assert.deepEqual(next.folders, [{ id: "two", name: "Projects", pins: [] }]);
+	assert.deepEqual(editPinGroups(next, { kind: "delete-folder", id: "missing" }), next);
+});
+
+test("vault pin folders: removal and old flat writers cannot resurrect grouped pins", () => {
+	const source = readPinGroups(["A.md", "B.md"], [{ id: "one", name: "Reading", pins: ["B.md"] }]);
+	const next = editPinGroups(source, { kind: "remove", path: "B.md" });
+	assert.deepEqual(flattenPinGroups(next), ["A.md"]);
+	assert.deepEqual(next.folders[0].pins, []);
+	assert.deepEqual(readPinGroups(["A.md"], source.folders).folders[0].pins, []);
+	const snapshot = readPinGroups(flattenPinGroups(source), source.folders);
+	snapshot.folders[0].pins.push("C.md");
+	assert.deepEqual(source.folders[0].pins, ["B.md"]);
+});
+
+test("vault pin folders: file and directory renames and deletes preserve groups and sibling prefixes", () => {
+	const source = readPinGroups(["Notes/A.md", "Notes/B.md", "Notes-other/C.md"], [
+		{ id: "one", name: "Reading", pins: ["Notes/B.md", "Notes-other/C.md"] },
+	]);
+	let next = remapPinGroups(source, "Notes", "Archive", false);
+	assert.deepEqual(next.loose, ["Archive/A.md"]);
+	assert.deepEqual(next.folders[0].pins, ["Archive/B.md", "Notes-other/C.md"]);
+	next = remapPinGroups(next, "Archive/B.md", "Archive/D.md", true);
+	assert.deepEqual(next.folders[0].pins, ["Archive/D.md", "Notes-other/C.md"]);
+	next = remapPinGroups(next, "Archive", null, false);
+	assert.deepEqual(flattenPinGroups(next), ["Notes-other/C.md"]);
+	next = remapPinGroups(next, "Notes-other/C.md", null, true);
+	assert.deepEqual(next, { loose: [], folders: [{ id: "one", name: "Reading", pins: [] }] });
+	assert.deepEqual(source.loose, ["Notes/A.md"]);
+});
 
 const settings = (over: Partial<NoteRailSettings> = {}): NoteRailSettings => ({ ...structuredClone(DEFAULT_SETTINGS), ...over });
 

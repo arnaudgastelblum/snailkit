@@ -20,6 +20,48 @@ import { normalizeWord, parseQuickAdd } from "../src/modules/tasks/quick-add";
 import { TaskIndex } from "../src/modules/tasks/task-index";
 import type { Context, Task, TasksSettings } from "../src/modules/tasks/types";
 import { TaskWriter } from "../src/modules/tasks/writer";
+import { noteWindow } from "../src/modules/tasks/note-window";
+
+test("note preview bounds its context and marks only the selected occurrence", () => {
+	const lines = Array.from({ length: 150 }, (_, n) => `Line ${n}`);
+	lines[70] = lines[72] = "- [ ] Read #reading";
+	const task = { line: 72, raw: lines[72] };
+	const excerpt = noteWindow(lines.join("\r\n"), task);
+	assert.equal(excerpt.start, 32);
+	assert.equal(excerpt.end, 113);
+	assert.equal(excerpt.truncated, true);
+	assert.equal(excerpt.markdown.split("\n").length, 81);
+	assert.equal(excerpt.markdown.split("sk-tasks-note-anchor").length, 2);
+	assert.match(excerpt.markdown.split("\n")[40], /note-anchor/);
+	const whole = noteWindow(lines.join("\n"), task, true);
+	assert.equal(whole.start, 0);
+	assert.equal(whole.end, 150);
+	assert.equal(whole.truncated, false);
+});
+
+test("note preview relocates an exact task and avoids marking missing or ambiguous tasks", () => {
+	const raw = "  1. [ ] Read #reading";
+	const moved = noteWindow(`Heading\nText\n${raw}`, { line: 0, raw });
+	assert.equal(moved.line, 2);
+	assert.match(moved.markdown, /1\. \[ \] <span/);
+	assert.equal(moved.truncated, false);
+	for (const text of ["", "Other text", `${raw}\n${raw}`]) {
+		const missing = noteWindow(text, { line: 9, raw });
+		assert.equal(missing.line, -1);
+		assert.doesNotMatch(missing.markdown, /note-anchor/);
+	}
+});
+
+test("note preview skips partial fences and properties before the task", () => {
+	const raw = "- [ ] Read #reading";
+	for (const delimiter of ["```", "~~~~", "---"]) {
+		const lines = [delimiter, ...Array(90).fill("content"), delimiter, raw];
+		const excerpt = noteWindow(lines.join("\n"), { line: 92, raw });
+		assert.equal(excerpt.start, 92);
+		assert.match(excerpt.markdown, /^- \[ \] <span/);
+		assert.equal(noteWindow(lines.join("\n"), { line: 92, raw }, true).start, 0);
+	}
+});
 
 const FLAGS = flagSet("urgent");
 

@@ -2,7 +2,7 @@
 
 # Tag colors
 
-Recognize a tag's family at a glance, with compact capsules and colors that stay put. Your notes never change.
+Recognize a tag's family at a glance, with compact capsules and colors that stay put. Coloring never changes your notes; the optional task placeholder adds a tag only when you choose one.
 
 ## What it does
 
@@ -11,6 +11,7 @@ Recognize a tag's family at a glance, with compact capsules and colors that stay
 - Assigns colors automatically, most used families first. Each child gets a distinct color while its family's 14 slots are available.
 - Lets you choose a tag or family color from 14 swatches or a color picker.
 - Follows light and dark themes, with readable OKLCH colors and unchanged line height.
+- Optionally shows a small dashed `tag` chip beside unfinished tasks without a tag, in Live Preview, Source mode and Reading view.
 
 ## How to use it
 
@@ -19,6 +20,7 @@ Recognize a tag's family at a glance, with compact capsules and colors that stay
 3. In Live Preview, move the cursor away from a tag to see its capsule. Touch the tag with the cursor or selection to edit its original, tinted text.
 4. Right-click a capsule or a Reading view tag. Choose **Change tag color…** for its body, or **Change family color…** for every capsule in that family.
 5. Choose a swatch, use the color picker, or choose **Reset to automatic**. Click a capsule to search for that tag.
+6. Optionally enable **Tag placeholder on tasks**. Click or tap a task's dashed chip, then choose an existing tag or type a new one. The shared picker offers this note's tags first, recent choices next, then tags from the vault.
 
 ## Settings
 
@@ -26,6 +28,7 @@ Recognize a tag's family at a glance, with compact capsules and colors that stay
 | --- | --- | --- |
 | Uppercase family name | On | Shows the family name in capitals. Off keeps the spelling used in the note. |
 | Color properties and tag pane | On | Recolors Obsidian's tag property pills and tag names in the Tags pane. |
+| Tag placeholder on tasks | Off | Adds a dashed tag button to unfinished tasks without a tag. Choosing a tag writes it into that task. |
 | Most used tags | Top 20 | Shows tag capsules and occurrence counts; click a capsule to choose its color. |
 | Hand-picked colors | None | Lists your chosen colors, with buttons to change or reset each one. |
 | Reassign automatic colors | On request | Rebuilds the automatic registry from current usage after confirmation. Keeps hand-picked colors. Also available in the command palette. |
@@ -36,7 +39,13 @@ Settings and chosen colors apply immediately. You can choose colors while the mo
 
 The capsule contains the first tag level without `#`. Its joined body contains the remaining levels, separated by `›`, with faded intermediate levels and a bold final level. A simple tag has only the family capsule. All parts remain inline and inherit line height; their sizes follow headings. Display capitalization and chevrons never replace the text stored in notes.
 
-Live Preview uses Obsidian's parsed hashtag nodes, so ordinary text, inline code, and fenced code are not converted. Any selection touching the tag, including either boundary, reveals its original text. Source mode remains uncolored. Reading view keeps the original tag link and its native click behavior. Properties keep their original pill text; the Tags pane keeps its original structure. Canvas, search results, and link hover previews are outside this module's rendering scope.
+Live Preview uses Obsidian's parsed hashtag nodes, so ordinary text, inline code, and fenced code are not converted. Any selection touching the tag, including either boundary, reveals its original text. Source mode remains uncolored unless task placeholders are enabled, in which case parsed tags keep their source text with a color tint. Reading view keeps the original tag link and its native click behavior. Properties keep their original pill text; the Tags pane keeps its original structure. Canvas, search results, and link hover previews are outside the color renderer's scope.
+
+Task placeholders appear only on unchecked tasks (`[ ]`), including numbered and nested tasks and actual task items inside callouts. Completed or custom-status tasks, ordinary callout text, frontmatter and code blocks are excluded. A tag in inline code, a comment or a link target does not count as a task tag. While Brainstorm has `sk-sessions-composing` on an editor's scroller, its placeholders are hidden and insertion is blocked. The chip has no Tab stop; mouse and touch open the shared picker, whose field supports keyboard navigation. Phones use its bottom sheet.
+
+Choosing a tag inserts ` #tag` before a trailing sequence of Tasks dates, priority markers and `%%...%%` comments, or at the end of the task text. Trailing whitespace and line endings are preserved. The original line number and entire line must still match; edits while the picker is open cancel the insertion silently. Editor insertion is one isolated undoable transaction. Reading view uses `vault.process` with the same check; it does not add an editor undo transaction. Ambiguous Reading view sections are skipped instead of guessing which source line to edit. A task's continuation lines are not rewritten.
+
+Editor decorations inspect visible ranges only and refresh after an 80 ms debounce. Vault tag counts and same-note metadata are read when the picker opens, not on each keystroke. The last 12 successful placeholder choices are saved in `placeholderRecent`; other tag pickers do not change this list. New tags receive the existing palette's fallback color immediately, then join the normal registry after metadata settles.
 
 Tag keys ignore case and a leading `#`; Unicode names are supported. `#Project/Website` and `#project/website` share colors. New tags are assigned after metadata updates settle for one second; registry saves are debounced. Before indexing finishes, an unknown tag can temporarily use its hash-derived color. Once registered, it keeps its slot even if frequencies change or it disappears from the vault.
 
@@ -48,7 +57,7 @@ The palette uses `slot × 360 / 14 + 18` degrees. Light theme body background/te
 
 Clicking a Live Preview capsule opens `tag:#<tag>` in Obsidian's Search core plugin. Enable that core plugin to use search. Capsules also support Enter and Space, and taps on mobile. Reading view uses Obsidian's link handling.
 
-Turning the module off removes its editor extension, dynamic palette, observers, timers, and classes on existing elements. Reading links regain their original child nodes. Open module dialogs close. Existing note surfaces should clear without a reload; Obsidian refreshes its editor and Markdown processors during disable. If a third-party renderer caches a detached copy of a capsule, reopen that view to rerender it. No note is written by this module.
+Turning the module off removes its editor extensions, task placeholders, dynamic palette, observers, timers, and classes on existing elements. Reading links regain their original child nodes. Open module dialogs and the placeholder picker close. Existing note surfaces should clear without a reload; Obsidian refreshes its editor and Markdown processors during disable. If a third-party renderer caches a detached copy of a capsule, reopen that view to rerender it. Tags you explicitly inserted remain in the note.
 
 The registry is saved inside the module settings as `slots` and `overrides` arrays of `[tagKey, number]` entries. Slots are integers from 0 to 13; overrides are hues from 0 inclusive to 360 exclusive. Migration accepts the source's object-shaped registries and validates either format. There is no automatic import from another plugin's data file.
 

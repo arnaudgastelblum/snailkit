@@ -1,6 +1,8 @@
 // Bookmarks: notes pinned to this note (in its frontmatter) and vault-wide pins (in the settings).
 import { Keymap, Notice, Platform, setIcon, TFile } from "obsidian";
 import type { HoverParent, HoverPopover } from "obsidian";
+import type { NoteRailService } from "../../../../core/services";
+import { mountPinManager } from "../../pin-manager";
 import { addNotePin, getNotePins, getVaultPins, pinsReorder, pinWritesSettled, removeNotePin, reorderNotePins } from "../../pins";
 import { asElement, asNode, dur, reducedMotion, SPRING } from "../../rail/motion";
 import { hueOf, placeFinder } from "../../parents";
@@ -62,6 +64,7 @@ class BookmarksPanel implements PanelInstance {
 	private rootEl: HTMLElement;
 	private note: PinList;
 	private vault: PinList;
+	private vaultManager: ReturnType<typeof mountPinManager> | null = null;
 	private noteAddEl: HTMLElement;
 	private vaultAddEl: HTMLElement;
 	private vaultAddLabel: HTMLElement;
@@ -103,6 +106,19 @@ class BookmarksPanel implements PanelInstance {
 		this.noteAddEl.addEventListener("click", () => this.openSuggest());
 
 		this.vault = this.createList("vault", ctx.t("bookmarks.vault"));
+		const rail = ctx.service<NoteRailService>("note-rail");
+		if (rail) this.vaultManager = mountPinManager(this.vault.itemsEl, rail, {
+			t: ctx.t,
+			openNote: (path, event) => {
+				const file = ctx.app.vault.getAbstractFileByPath(path);
+				if (file instanceof TFile && event) void this.open(file, event);
+			},
+			dot: (path) => {
+				const file = ctx.app.vault.getAbstractFileByPath(path);
+				const area = file instanceof TFile ? placeFinder(ctx.app).placeOf(file).area : null;
+				return area ? `hsl(${hueOf(area.path)} var(--sk-dot-s) var(--sk-dot-l))` : null;
+			},
+		}, false);
 		this.vaultAddEl = this.createAdd("pin", ctx.t("bookmarks.pin-current"));
 		this.vaultAddLabel = this.vaultAddEl.querySelector("span:last-child") as HTMLElement;
 		this.vaultAddEl.addEventListener("click", () => this.toggleCurrentInVault());
@@ -233,7 +249,10 @@ class BookmarksPanel implements PanelInstance {
 		if (this.pendingNote !== null && sig(notePins) === this.pendingNote) this.clearPending();
 		// While our own write is on its way, the cache still shows the old order: keep ours.
 		if (this.pendingNote === null) this.renderList(this.note, notePins);
-		this.renderList(this.vault, getVaultPins(app, settings));
+		if (this.vaultManager) {
+			this.vault.files = getVaultPins(app, settings);
+			this.vaultManager.update();
+		} else this.renderList(this.vault, getVaultPins(app, settings));
 		this.updateMeta();
 	}
 
@@ -418,6 +437,11 @@ class BookmarksPanel implements PanelInstance {
 	private toggleCurrentInVault(): void {
 		const file = this.ctx.view.file;
 		if (!file) return;
+		const rail = this.ctx.service<NoteRailService>("note-rail");
+		if (rail) {
+			void rail.setPinned(file.path, !rail.isPinned(file.path)).catch(() => new Notice(this.ctx.t("bookmarks.save-error")));
+			return;
+		}
 		if (this.vault.files.some((f) => f.path === file.path)) this.removePin(this.vault, file.path);
 		else this.addPin(this.vault, file);
 	}
@@ -475,6 +499,14 @@ class BookmarksPanel implements PanelInstance {
 	}
 
 	private onMouseOver(e: MouseEvent): void {
+		const managed = asElement(e.target)?.closest<HTMLElement>("[data-pin-key]");
+		if (managed?.dataset.pinKey?.startsWith("pin:")) {
+			this.ctx.app.workspace.trigger("hover-link", {
+				event: e, source: this.ctx.hoverSource, hoverParent: this.hoverParent,
+				targetEl: managed, linktext: managed.dataset.pinKey.slice(4), sourcePath: this.ctx.view.file?.path ?? "",
+			});
+			return;
+		}
 		const row = asElement(e.target)?.closest<HTMLElement>(".sk-note-rail-bm-row");
 		if (!row || this.drag?.active) return;
 		const hit = this.fileOfRow(row);
@@ -581,9 +613,9 @@ class BookmarksPanel implements PanelInstance {
 			return;
 		}
 		if (drag.touch) drag.timer = this.win.setTimeout(() => this.activateDrag(), LONG_PRESS_MS);
-		row.addEventListener("pointermove", this.onPointerMove);
-		row.addEventListener("pointerup", this.onPointerUp);
-		row.addEventListener("pointercancel", this.onPointerCancel);
+		this.win.addEventListener("pointermove", this.onPointerMove, true);
+		this.win.addEventListener("pointerup", this.onPointerUp, true);
+		this.win.addEventListener("pointercancel", this.onPointerCancel, true);
 		row.addEventListener("lostpointercapture", this.onPointerCancel);
 	}
 
@@ -640,9 +672,9 @@ class BookmarksPanel implements PanelInstance {
 		if (!d) return;
 		this.drag = null;
 		this.win.clearTimeout(d.timer);
-		d.row.removeEventListener("pointermove", this.onPointerMove);
-		d.row.removeEventListener("pointerup", this.onPointerUp);
-		d.row.removeEventListener("pointercancel", this.onPointerCancel);
+		this.win.removeEventListener("pointermove", this.onPointerMove, true);
+		this.win.removeEventListener("pointerup", this.onPointerUp, true);
+		this.win.removeEventListener("pointercancel", this.onPointerCancel, true);
 		d.row.removeEventListener("lostpointercapture", this.onPointerCancel);
 		try {
 			if (d.row.hasPointerCapture(d.pointerId)) d.row.releasePointerCapture(d.pointerId);
@@ -853,6 +885,7 @@ class BookmarksPanel implements PanelInstance {
 		if (this.destroyed) return;
 		this.endDrag(false);
 		this.destroyed = true;
+		this.vaultManager?.destroy();
 		this.win.clearTimeout(this.pendingTimer);
 		this.win.cancelAnimationFrame(this.vaultFrame);
 		this.swallowUntilUp?.();

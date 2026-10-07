@@ -1,5 +1,6 @@
 // Core strings, English reference. Keys starting with `common.` are shared words any module may use.
-// `workbench.*` belongs to the Workbench view (src/core/workbench).
+// `workbench.*` belongs to the Workbench view (src/core/workbench), `tag-picker.*` to the shared tag
+// picker (src/ui/tag-picker).
 export const en = {
 	"plugin.tagline": "Small, calm tools for your notes. Turn on only the ones you want.",
 	"plugin.welcome": "Snailkit is installed. Pick the tools you want in its settings.",
@@ -55,4 +56,18 @@ export const en = {
 	"common.default": "Default: {value}",
 	"common.on": "On",
 	"common.off": "Off",
+	"tag-picker.label": "Tag",
+	"tag-picker.placeholder": "Tag, or a new name",
+	"tag-picker.sub-placeholder": "Sub-tag of {tag}",
+	"tag-picker.search": "Search or create a tag",
+	"tag-picker.no-match": "No tag matches",
+	"tag-picker.create": "Create the tag {tag}",
+	"tag-picker.create-row": "create",
+	"tag-picker.subtags": "Sub-tags ({key})",
+	"tag-picker.why.chosen": "chosen",
+	"tag-picker.why.suggested": "suggested",
+	"tag-picker.why.recent": "recent",
+	"tag-picker.why.near": "subject of the note",
+	"tag-picker.why.parent": "the tag alone",
+	"tag-picker.key.tab": "Tab",
 };

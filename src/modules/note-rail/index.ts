@@ -19,7 +19,7 @@ export const noteRail = defineModule<NoteRailSettings>({
 	category: "organize",
 	strings: { en, fr, nl, es },
 	defaults: DEFAULT_SETTINGS,
-	keepOnReset: ["vaultPins", "bookmarksTips"],
+	keepOnReset: ["vaultPins", "vaultPinFolders", "bookmarksTips"],
 	activate(ctx) {
 		new NoteRailController(ctx).start();
 	},

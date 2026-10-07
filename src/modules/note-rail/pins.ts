@@ -3,7 +3,8 @@
 //   settings), as a list of "[[link]]" strings. Obsidian keeps frontmatter links up to date on rename.
 // - Vault pins live in the settings as vault paths (the controller follows renames and deletes).
 import { TFile, type App } from "obsidian";
-import { cleanVaultPins, pinsKey } from "./settings";
+import { pinsKey } from "./settings";
+import { flattenPinGroups, readPinGroups } from "./vault-pins";
 import type { NoteRailSettings } from "./types";
 
 /** Link path of one frontmatter value ("[[A|x]]", "[[A#h]]", "A"), or null. Pure. */
@@ -47,7 +48,7 @@ export function getNotePins(app: App, file: TFile, settings: NoteRailSettings): 
 /** Vault-wide pins that still exist, in order. */
 export function getVaultPins(app: App, settings: NoteRailSettings): TFile[] {
 	const out: TFile[] = [];
-	for (const path of cleanVaultPins(settings.vaultPins)) {
+	for (const path of flattenPinGroups(readPinGroups(settings.vaultPins, settings.vaultPinFolders))) {
 		const f = app.vault.getAbstractFileByPath(path);
 		if (f instanceof TFile) out.push(f);
 	}

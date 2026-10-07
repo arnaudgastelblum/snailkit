@@ -1,4 +1,8 @@
 export const en = {
+	"settings.placeholder": "Tag placeholder on tasks",
+	"settings.placeholder-desc": "Show a small tag button on unfinished tasks without a tag. Choose a tag to add it to your note.",
+	"placeholder.add": "Add a tag to this task",
+	"placeholder.failed": "The tag could not be saved. Please try again.",
 	"module.name": "Tag colors",
 	"module.description": "Recognize tag families with stable colors and compact capsules.",
 	"settings.display": "Display",

@@ -38,6 +38,17 @@ export interface DailyConfigShape {
 	template: string;
 }
 
+export interface VaultPinFolder {
+	id: string;
+	name: string;
+	pins: string[];
+}
+
+export interface VaultPinGroups {
+	loose: string[];
+	folders: VaultPinFolder[];
+}
+
 export interface NoteRailService {
 	version: 1;
 	/** Vault pins (the Bookmarks panel's "Vault" list), vault paths in their order. */
@@ -45,6 +56,17 @@ export interface NoteRailService {
 	isPinned(path: string): boolean;
 	/** Pins a note to the vault (at the end) or unpins it. Saved in the Note rail settings. */
 	setPinned(path: string, pinned: boolean): Promise<void>;
+	/** Detached snapshot; loose pins first, then ordered folders and their ordered pins. */
+	listPins(): VaultPinGroups;
+	removePin(path: string): Promise<void>;
+	/** Final zero-based index in the destination; null means loose. Missing destinations are ignored. */
+	movePin(path: string, index: number, folderId?: string | null): Promise<void>;
+	/** Empty names return null. IDs survive renames. */
+	createPinFolder(name: string): Promise<string | null>;
+	renamePinFolder(id: string, name: string): Promise<void>;
+	/** Appends the folder's pins to the loose list, in order. */
+	deletePinFolder(id: string): Promise<void>;
+	movePinFolder(id: string, index: number): Promise<void>;
 	/** Called when the vault pins change. Returns an unsubscribe function. */
 	onPinsChange(callback: () => void): () => void;
 	/** Where daily notes are: the Calendar settings over Obsidian's Daily notes plugin. */

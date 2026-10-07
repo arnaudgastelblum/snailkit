@@ -3,6 +3,11 @@ import type { StringsOf } from "../../../i18n";
 import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
+	"preview.note": "Notitie",
+	"preview.open": "Notitie openen",
+	"preview.whole": "Hele notitie tonen",
+	"preview.excerpt": "Taakcontext tonen",
+	"preview.unavailable": "Deze notitie kon niet worden geladen.",
 	"module.name": "Taken",
 	"module.description": "Elke taak met een #tag, uit al je notities, in de Werkbank: afvinken, prioriteren, plannen en verplaatsen in een lijst per tag.",
 	"view.title": "Werkbank",

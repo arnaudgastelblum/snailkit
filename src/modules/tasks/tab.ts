@@ -12,6 +12,7 @@ import {
 } from "./group";
 import type { ViewAction } from "./api";
 import type { TasksHub } from "./hub";
+import { TaskNotePreview } from "./note-preview";
 import { PRIORITIES } from "./parse";
 import { parseQuickAdd } from "./quick-add";
 import type { Priority, Task } from "./types";
@@ -83,6 +84,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	/** What the details showed last time, so their entrance animation plays only on a change. */
 	private shownDetail: string | null = null;
 	private shownProp: string | null = null;
+	private notePreview: TaskNotePreview | null = null;
 
 	constructor(
 		private readonly hub: TasksHub,
@@ -177,6 +179,8 @@ export class TasksTab implements WorkbenchTabInstance {
 	destroy(): void {
 		if (this.closed) return;
 		this.closed = true;
+		this.notePreview?.unload();
+		this.notePreview = null;
 		if (this.scoped) this.hub.ctx.app.keymap.popScope(this.keyScope);
 		this.scoped = false;
 		const { scope, query, sel, open, adding, draft, editProp, propsFor } = this.st;
@@ -268,6 +272,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			return;
 		}
 		this.pending = false;
+		this.notePreview?.detach();
 		const scroll = this.listEl.scrollTop;
 		const addInput = this.listEl.querySelector<HTMLInputElement>(".sk-tasks-add input");
 		const adding = addInput && this.rootEl.doc.activeElement === addInput ? { value: addInput.value, pos: addInput.selectionStart ?? 0 } : null;
@@ -279,6 +284,10 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (this.navEl) this.renderNav();
 		this.renderList();
 		if (this.detailEl) this.renderDetail();
+		if (this.notePreview && !this.rootEl.contains(this.notePreview.el)) {
+			this.notePreview.unload();
+			this.notePreview = null;
+		}
 		this.listEl.scrollTop = scroll;
 		if (adding) {
 			const input = this.listEl.querySelector<HTMLInputElement>(".sk-tasks-add input");
@@ -1191,6 +1200,15 @@ export class TasksTab implements WorkbenchTabInstance {
 				box.addEventListener("click", () => void hub.writer.toggleSubtask(t, sub));
 			}
 		}
+		if (this.notePreview && (this.notePreview.task.key !== t.key || this.notePreview.task.path !== t.path)) {
+			this.notePreview.unload();
+			this.notePreview = null;
+		}
+		if (!this.notePreview) {
+			this.notePreview = new TaskNotePreview(hub, t, this.layout === "side", (line, event) => void this.host.open(t.path, line, event));
+			this.notePreview.mount(body, t);
+			this.notePreview.load();
+		} else this.notePreview.mount(body, t);
 	}
 
 	// ----- drag and drop -----

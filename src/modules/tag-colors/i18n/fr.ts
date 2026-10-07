@@ -2,6 +2,10 @@ import type { StringsOf } from "../../../i18n";
 import type { en } from "./en";
 
 export const fr: StringsOf<typeof en> = {
+	"settings.placeholder": "Emplacement de tag sur les tâches",
+	"settings.placeholder-desc": "Affiche un petit bouton tag sur les tâches non terminées sans tag. Choisissez un tag pour l’ajouter à votre note.",
+	"placeholder.add": "Ajouter un tag à cette tâche",
+	"placeholder.failed": "Le tag n’a pas pu être enregistré. Veuillez réessayer.",
 	"module.name": "Couleurs des tags",
 	"module.description": "Repérez les familles de tags avec des couleurs stables et des capsules compactes.",
 	"settings.display": "Affichage",

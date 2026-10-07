@@ -10,8 +10,10 @@ export interface HomeSettings {
 	homePage: string;
 	/** Folders left out of the Map, the domains and the rail's area (comma separated vault paths). */
 	ignoredFolders: string;
-	/** The Home's view, the last one chosen: "domains", "map" or "tags". */
+	/** The Home's view, the last one chosen: "map", "domains" or "tags". */
 	lens: string;
+	/** True once the user picked a view: until then the Home opens on the Map. */
+	lensChosen: boolean;
 
 	// The arrangement of the domains (user data, kept by "Reset to defaults"). Every entry is a
 	// vault path, followed through renames and dropped when the note is deleted.
@@ -27,23 +29,27 @@ export interface HomeSettings {
 	hidden: string[];
 	/** Sub-MOCs shown as their own block, out of their domain. */
 	pulledOut: string[];
+	/** The order of the notes under a parent, dragged on the Map: [parent path, child paths]. */
+	noteOrder: Array<[string, string[]]>;
 }
 
 export const DEFAULTS: HomeSettings = {
 	openWorkbench: "startup-and-new-tabs",
 	homePage: "",
 	ignoredFolders: "",
-	lens: "domains",
+	lens: "map",
+	lensChosen: false,
 	domainOrder: [],
 	featured: "",
 	groups: [],
 	domainGroups: [],
 	hidden: [],
 	pulledOut: [],
+	noteOrder: [],
 };
 
 /** Settings that hold the user's data rather than preferences. */
-export const KEEP_ON_RESET: Array<keyof HomeSettings & string> = ["domainOrder", "featured", "groups", "domainGroups", "hidden", "pulledOut"];
+export const KEEP_ON_RESET: Array<keyof HomeSettings & string> = ["domainOrder", "featured", "groups", "domainGroups", "hidden", "pulledOut", "noteOrder"];
 
 /** The Home's three views of the domains. */
 export type HomeLens = "domains" | "map" | "tags";

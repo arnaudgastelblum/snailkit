@@ -57,7 +57,7 @@ export interface MapStrings {
 export interface MapState {
 	/** The node shown as the root (the home page until the user recenters). */
 	root: string;
-	/** The unfolded branch under the root, first column first (3 ids at most). */
+	/** The unfolded branch under the root, first column first (4 ids at most). */
 	chain: string[];
 	/** The node that had the cursor, or null. */
 	focus: string | null;
@@ -90,6 +90,14 @@ export interface MapEvents {
 	pin(id: string, from: HTMLElement): void;
 	/** Right click, Shift+F10, the menu key, a long press on phones: the caller shows its menu (it may call handle.recenter). */
 	menu(id: string, event: MouseEvent | KeyboardEvent): void;
+	/** Whether a node can be dragged up or down among its siblings (mouse, columns). */
+	canMove?(id: string): boolean;
+	/** A dragged node was dropped before `beforeId` (null: after the last sibling): the caller saves the order and redraws. */
+	move?(id: string, beforeId: string | null): void;
+	/** Whether a dragged node may be dropped onto `target` to hang under it (no loop, not its parent already). */
+	canDrop?(id: string, target: string): boolean;
+	/** A dragged node was dropped onto `target` (the middle of it): the caller makes it its parent. */
+	drop?(id: string, target: string): void;
 	/** Escape on the vault's root: the caller takes the focus back (its search field). */
 	escape?(): void;
 	/** The root or the unfolded branch changed: the caller saves the state. */
@@ -106,18 +114,45 @@ export interface MapHandle {
 	/** The container's size changed (columns or tree, column widths). */
 	layout(): void;
 	getState(): MapState;
+	/**
+	 * Unfolds the branch that shows this node (recentering when it is deeper than the columns).
+	 * False when the node is not under the root or not among the shown children.
+	 */
+	reveal(id: string): boolean;
+	/**
+	 * A text field in place of the node's name (the node revealed first). Enter or leaving the field
+	 * calls commit (resolve false to keep the field open), Escape calls cancel. False when the node
+	 * cannot be shown.
+	 */
+	edit(id: string, options: MapEdit): boolean;
 	/** Removes everything it added (DOM, listeners, timers, animations). */
 	destroy(): void;
 }
 
+/** The inline name field of MapHandle.edit. */
+export interface MapEdit {
+	/** The text in the field at first (selected). */
+	value: string;
+	/** Screen readers: what the field is for ("Name of the new note"). */
+	label: string;
+	commit(value: string): boolean | void | Promise<boolean | void>;
+	cancel(): void;
+}
+
 /** Fixed numbers of the Map (DEV-PLAN.md, from the validated mock-up). */
 export const MAP_LIMITS = {
-	/** Columns under the root. */
-	depth: 3,
+	/** Levels under the root (columns, or levels of the tree). */
+	depth: 4,
+	/** Columns shown beside the full root: a fourth one folds the root into a pill. */
+	columns: 3,
+	/** Width of the folded root, px. */
+	rootPill: 30,
 	/** Children shown per node before "N more". */
 	children: 8,
 	/** Height of the columns view, px. */
 	height: 340,
+	/** Tallest the columns view grows when "N more" opens (about 20 rows); longer columns scroll. */
+	maxHeight: 640,
 	rowStep: 30,
 	nodeHeight: 28,
 	rootMinWidth: 104,
@@ -134,4 +169,6 @@ export const MAP_LIMITS = {
 	doubleClick: 220,
 	holdToRecenter: 450,
 	longPress: 500,
+	/** Dragging over a folded node this long unfolds it, ms. */
+	springOpen: 800,
 } as const;

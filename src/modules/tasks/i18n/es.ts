@@ -3,6 +3,11 @@ import type { StringsOf } from "../../../i18n";
 import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
+	"preview.note": "Nota",
+	"preview.open": "Abrir nota",
+	"preview.whole": "Mostrar toda la nota",
+	"preview.excerpt": "Mostrar el contexto de la tarea",
+	"preview.unavailable": "No se pudo cargar esta nota.",
 	"module.name": "Tareas",
 	"module.description": "Todas las tareas con un #tag, de todas tus notas, en el Taller: márcalas, priorízalas, prográmalas y muévelas en una lista agrupada por tag.",
 	"view.title": "Taller",

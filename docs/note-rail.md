@@ -72,6 +72,8 @@ pins:
 
 Vault pins are managed from the panel and the commands, not from the settings page. **Reset to defaults** on the settings page keeps your vault pins.
 
+It also keeps their folders and ordering.
+
 ## Exact behavior
 
 ### The rail
@@ -126,13 +128,52 @@ Vault pins are managed from the panel and the commands, not from the settings pa
 
 **Vault** lists the vault pins, the same on every note, saved in Snailkit's settings. **Pin current note** adds the current note, or removes it when it is already there. Renaming or moving a pinned note or its folder updates the pin; deleting the note removes it.
 
+- Loose pins appear first, followed by folders in their own order. A folder contains a name and ordered pins, with no nesting. Click its heading to collapse or expand it; the count includes its hidden pins. Expansion lasts for this panel's lifetime.
+- Use **New folder** (+) or the context menu to create a folder. Right-click a pin to remove it or move it into a folder or **Outside folders**. Right-click a folder to rename, reorder or delete it. Deleting a folder appends its pins to the loose list in their existing order; it never deletes notes.
+- With a mouse, drag pins over other pins to reorder, onto a folder heading to append to that folder, or onto the loose area to move out. When there are no loose pins, the **Outside folders** drop target appears while dragging. Drag folder headings over one another to reorder folders. An outline marks the destination. Esc cancels a drag.
+- Keyboard: Tab or Up/Down focuses entries, Enter opens a note or folds a folder, Alt+Up/Down reorders within the current list, and Delete removes a pin. Shift+F10 or the context-menu key opens all management actions, including moves between folders. Touch users can use the removal button and context menu; vault-folder dragging is for mouse and pen.
+- Existing `vaultPins` arrays become loose pins in the same order. `vaultPinFolders` adds stable IDs, names and ordered membership in the Note rail settings. The flat array remains available to older consumers and includes grouped pins. A pin belongs to at most one folder. Malformed folders and duplicate memberships are ignored. Empty folders remain after their last note is deleted. Folder names need not be unique.
+
 On both lists:
 
 - Click a pin to open it in the same pane; Ctrl or Cmd click, or middle click, opens a new tab. Clicking the current note only closes the panel.
 - Hover a pin while holding Ctrl or Cmd to see Obsidian's page preview (core plugin **Page preview**; the source is listed as Snailkit: Note rail).
-- Drag a pin up or down to reorder (on touch screens, hold it first). Esc during a drag puts it back. A pin only moves within its own list.
+- Drag a pin up or down to reorder. In **This note**, touch dragging starts with a long press and a pin stays in that list. Vault pins move between their folders as described above. Esc cancels a drag.
 - The x button removes a pin, never the note itself.
-- Keyboard: Up and Down move, Enter opens, Delete or Backspace removes, Alt+Up and Alt+Down reorder.
+- Keyboard: Up and Down move, Enter opens, Delete removes (Backspace also works in **This note**), Alt+Up and Alt+Down reorder.
+
+#### Shared service and Home component
+
+The `note-rail` service keeps `version: 1` and its existing `vaultPins()`, `isPinned()`, `setPinned()`, `onPinsChange()` and `dailyConfig()` members. Additions:
+
+| Member | Behavior |
+| --- | --- |
+| `listPins()` | Detached `{ loose: string[], folders: { id, name, pins: string[] }[] }` snapshot. |
+| `removePin(path)` | Removes a pin, including folder membership. |
+| `movePin(path, index, folderId?)` | Moves an existing pin to its final zero-based index. Omit the folder or pass `null` for loose pins. Indices are clamped; `Infinity` appends. A missing destination is a no-op. |
+| `createPinFolder(name)` | Returns the stable ID, or `null` for a blank name or a stopped service. |
+| `renamePinFolder(id, name)` | Trims the name; blank names are ignored. |
+| `deletePinFolder(id)` | Keeps the pins, appending them to the loose list. |
+| `movePinFolder(id, index)` | Reorders folders using a final zero-based index. |
+
+All mutations return promises and save only module settings. `onPinsChange` also covers folder creation, rename, deletion, membership and ordering, including settings received from another device. Its return value unsubscribes. Writes through a stopped service are ignored. New pins must resolve to an existing vault file.
+
+`src/modules/home/pins-row.ts` exports a component ready for the Home owner to mount:
+
+```ts
+const pins = mountPinsRow(container, rail, {
+	openNote: (path, event) => openNote(path, event),
+	t: (key, vars) => t(key, vars),
+	dot: (path) => colorForNote(path), // Optional CSS color or null.
+	toast: (message, options) => toast(message, options), // Optional shared ToastOptions.
+});
+// Service changes update it automatically. Refresh dots or external display changes explicitly:
+pins.update();
+// Before replacing the view, or when the note-rail service disappears:
+pins.destroy();
+```
+
+Pins are small tokens with an x on hover or focus; folders open a popover. The same context actions and keyboard moves work in both surfaces. Passing `toast` enables Undo after removal, restoring the previous position and folder if it still exists. Undo never overwrites a pin added meanwhile, and a deleted or renamed path is not re-created. The owner supplies translations through `t`; missing keys fall back to English. Home can copy these keys from the four Note rail language tables: `pins.new-folder`, `pins.rename-folder`, `pins.delete-folder`, `pins.folder-name`, `pins.remove`, `pins.removed`, `pins.undo`, `pins.loose`, `pins.move-to` (`{name}`), `pins.move-up`, `pins.move-down`, `pins.save`, `pins.cancel`, `pins.error`, `pins.empty`. Shared styles live in `src/styles/65-pins.css`.
 
 ### Open tasks
 
@@ -180,4 +221,4 @@ Only the pins property of a note when you pin, unpin or reorder its pins, the bo
 - Pinned panels are forgotten when the module restarts (turning it off and on, changing Snailkit's language).
 - Live Preview: the highlight of a previewed heading sits slightly high on some themes.
 - With **Readable line length** off and a narrow pane, the rail can overlap the start of the text; Make room only uses the space the pane has.
-- Touch screens: the panels work with taps; dragging pins needs a long press first.
+- Touch screens: note-local pins support long-press dragging. Vault pins use buttons and context actions; dragging between their folders needs a mouse or pen.

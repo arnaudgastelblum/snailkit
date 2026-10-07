@@ -7,7 +7,8 @@ import { editorInfoField, Platform, Scope, setIcon, type KeymapEventHandler, typ
 import { Composer } from "./compose";
 import { guardField, guardFilters, ours, refresh, spacerField } from "./guard";
 import { undo, undoDepth } from "./history";
-import { fish, groupTag, hiddenLines, indentWidth, isQuestion, lineInfo, looksLikeTask, sentenceAt, sentences, withoutTag, type LineInfo, type Sentence } from "./logic";
+import { bodyStart, fish, groupTag, hiddenLines, indentWidth, isQuestion, lineInfo, looksLikeTask, sentenceAt, sentences, summarize, withoutTag, type LineInfo, type Sentence } from "./logic";
+import { Saisie } from "./saisie";
 import type { SessionsRuntime } from "./runtime";
 
 export { ours, refresh };
@@ -95,14 +96,14 @@ class TagWidget extends WidgetType {
 		el.className = "sk-sessions-tagslot" + (this.preview ? " is-preview" : "");
 		if (this.tag) {
 			const cap = doc.createElement("span");
-			cap.className = `sk-sessions-tag ${this.classes}`.trim();
+			cap.className = `sk-tag-capsule ${this.classes}`.trim();
 			const parts = this.tag.split("/");
 			const root = cap.appendChild(doc.createElement("span"));
-			root.className = "sk-sessions-tag-root";
+			root.className = "sk-tag-capsule-root";
 			root.textContent = parts[0];
 			if (parts.length > 1) {
 				const leaf = cap.appendChild(doc.createElement("span"));
-				leaf.className = "sk-sessions-tag-leaf";
+				leaf.className = "sk-tag-capsule-leaf";
 				leaf.textContent = parts.slice(1).join(" › ");
 			}
 			el.appendChild(cap);
@@ -120,6 +121,26 @@ class TagWidget extends WidgetType {
 	}
 	ignoreEvent(): boolean {
 		return true;
+	}
+}
+
+/** The invitation on the first empty line of a new brainstorm: gone with the first letter. */
+class InviteWidget extends WidgetType {
+	constructor(readonly text: string) {
+		super();
+	}
+	eq(other: InviteWidget): boolean {
+		return other.text === this.text;
+	}
+	toDOM(view: EditorView): HTMLElement {
+		const el = view.dom.ownerDocument.createElement("span");
+		el.className = "sk-sessions-invite";
+		el.setAttr("aria-hidden", "true");
+		el.textContent = this.text;
+		return el;
+	}
+	ignoreEvent(): boolean {
+		return false;
 	}
 }
 
@@ -155,6 +176,7 @@ export class SessionView {
 		this.actsEl.className = "sk-sessions-acts";
 		this.buildActs();
 		view.scrollDOM.appendChild(this.layer);
+		this.saisie = new Saisie(this);
 		this.listen(view.scrollDOM, "mousemove", (e) => this.onMove(e as MouseEvent));
 		this.listen(view.scrollDOM, "mouseleave", () => this.leaveSoon());
 		this.listen(view.contentDOM, "mousedown", (e) => this.onDown(e as MouseEvent), true);
@@ -178,6 +200,23 @@ export class SessionView {
 
 	private keyScope: Scope;
 	private scoped = false;
+	/** The pill, its card and the sealed look of a brainstorm note. */
+	readonly saisie: Saisie;
+	/** The line lit by "Show me" (its start), and a counter that restarts its pulse. */
+	private spot: { pos: number; n: number } | null = null;
+	private spotN = 0;
+
+	/** Lights one line ("Show me") and brings it to the middle of the view; null puts the light out. */
+	spotLine(pos: number | null, scroll: boolean): void {
+		if (this.destroyed) return;
+		this.spot = pos === null ? null : { pos, n: ++this.spotN };
+		this.view.dispatch({ effects: scroll && pos !== null ? [refresh.of(null), EditorView.scrollIntoView(pos, { y: "center" })] : refresh.of(null) });
+	}
+
+	/** The note was just finished here: the stamp lands. */
+	sealed(): void {
+		this.saisie.sealed();
+	}
 	/** Ctrl/Cmd+/ is Obsidian's "Toggle comment": only while a task is composed does it open the shortcuts instead. */
 	private helpKey: KeymapEventHandler | null = null;
 
@@ -192,9 +231,12 @@ export class SessionView {
 
 	/** Another leaf became active: a composition left in a hidden editor (always, on a phone) is cancelled, its text given back. */
 	onLeafChange(leaf: WorkspaceLeaf | null): void {
-		if (!this.composer || this.destroyed) return;
+		if (this.destroyed) return;
 		const container = (leaf?.view as { containerEl?: HTMLElement } | undefined)?.containerEl ?? null;
 		const inActive = !!container && container.contains(this.view.dom);
+		// Another note took the screen: the pill's card or sheet would act on this one.
+		if (!inActive) this.saisie.closeFloating();
+		if (!this.composer) return;
 		const hidden = !this.view.dom.isConnected || this.view.dom.offsetParent === null;
 		if (!inActive && (Platform.isMobile || hidden)) this.composer.cancel(false);
 	}
@@ -227,6 +269,8 @@ export class SessionView {
 		if (this.destroyed) return;
 		const active = !this.rt.stopped && this.rt.activeFor(this.file);
 		if (active === this.active && !first) {
+			// Still at work here, but the note may have been adopted, archived or brought back: the pill follows.
+			this.saisie.update();
 			this.redraw();
 			return;
 		}
@@ -241,6 +285,7 @@ export class SessionView {
 			this.markers = [];
 			this.drawMarkers();
 		}
+		this.saisie.update();
 		this.redraw();
 	}
 
@@ -260,6 +305,8 @@ export class SessionView {
 				.map((d) => ({ ...d, from: u.changes.mapPos(d.from, -1), to: u.changes.mapPos(d.to, 1) }))
 				.filter((d) => u.state.doc.sliceString(d.from, d.to) === d.produced);
 			this.transient = this.transient.map((x) => ({ ...x, pos: u.changes.mapPos(x.pos) }));
+			if (this.spot) this.spot = { ...this.spot, pos: u.changes.mapPos(this.spot.pos) };
+			this.saisie.update();
 			if (this.hover && !this.hover.kb) this.hover = null;
 			else if (this.hover) this.hover = this.validHover(this.hover, u.state);
 		}
@@ -305,6 +352,7 @@ export class SessionView {
 		}
 		this.composer?.end(false);
 		this.composing(false);
+		this.saisie.destroy();
 		this.destroyed = true;
 		if (this.scoped) this.rt.app.keymap.popScope(this.keyScope);
 		this.scoped = false;
@@ -325,12 +373,37 @@ export class SessionView {
 			ranges.push(Decoration.mark({ class: "sk-sessions-hl" + (h.kb ? " is-kb" : "") }).range(h.from, h.to));
 		}
 		if (this.composer) this.composer.decorations(state, ranges, (tag, preview, onClick) => new TagWidget(tag, preview, this.t("panel.tag-pill"), tag ? this.rt.tagClasses(tag) : "", onClick));
+		if (this.spot && this.spot.pos <= state.doc.length) {
+			ranges.push(Decoration.line({ class: `sk-sessions-spot is-pulse-${this.spot.n % 2}` }).range(state.doc.lineAt(this.spot.pos).from));
+		}
+		const invite = this.inviteAt(state);
+		if (invite !== null) ranges.push(Decoration.widget({ widget: new InviteWidget(this.t("invite.prompt")), side: 1 }).range(invite));
 		for (const x of this.transient) {
 			if (x.pos > state.doc.length) continue;
 			const line = state.doc.lineAt(x.pos);
 			ranges.push(Decoration.line({ class: x.cls, attributes: x.style ? { style: x.style } : undefined }).range(line.from));
 		}
 		return Decoration.set(ranges, true);
+	}
+
+	/** Where the invitation goes in a brainstorm with no idea yet (the first empty line of its body), or null. */
+	private inviteAt(state: EditorState): number | null {
+		if (this.composer || state.doc.length > 4000 || !this.rt.isSession(this.file)) return null;
+		const lines: string[] = [];
+		for (let i = 1; i <= state.doc.lines; i++) lines.push(state.doc.line(i).text);
+		if (summarize(lines, this.rt.isClosing).ideas > 0) return null;
+		let at = bodyStart(lines);
+		if (at >= lines.length) {
+			// Nothing but the header: the first empty line after it.
+			let k = lines.length - 1;
+			while (k >= 0 && !lines[k].trim()) k--;
+			at = k + 1;
+		} else if (lines[at].trim()) return null;
+		if (at >= lines.length) return null;
+		// Where the cursor waits, when it is on an empty line below the header.
+		const caret = state.doc.lineAt(state.selection.main.head);
+		if (caret.number - 1 >= at && !caret.text.trim()) return caret.from;
+		return state.doc.line(at + 1).from;
 	}
 
 	/** Adds short-lived classes to lines (the landing of a task, its description settling). */
@@ -610,10 +683,18 @@ export class SessionView {
 					const lineEnd = view.coordsAtPos(view.state.doc.line(h.line).to, -1);
 					if (c) acts = { x: left - o.x, y: Platform.isMobile ? (lineEnd ?? c).bottom - o.y + 6 : (c.top + c.bottom) / 2 - o.y, right: view.contentDOM.getBoundingClientRect().right - o.x };
 				}
-				return { marks, acts, left: left - o.x, minX: scroller.left - o.x + 6 };
+				let seal: { top: number; left: number; right: number } | null = null;
+				if (this.saisie.isSealed) {
+					const content = view.contentDOM.getBoundingClientRect();
+					const line = view.contentDOM.querySelector(".cm-line") as HTMLElement | null;
+					const right = line ? line.getBoundingClientRect().right : content.right;
+					seal = { top: content.top - o.y, left: left - o.x, right: right - o.x };
+				}
+				return { marks, acts, left: left - o.x, minX: scroller.left - o.x + 6, seal };
 			},
 			write: (r) => {
 				this.drawMarkers(r.marks.filter(Boolean) as Array<{ m: Marker; y: number }>, Math.max(r.minX + 9, r.left - 22));
+				if (r.seal) this.saisie.place(r.seal.top, r.seal.left, r.seal.right);
 				const h = this.hover;
 				if (r.acts && h) {
 					this.updateActLabels(h);

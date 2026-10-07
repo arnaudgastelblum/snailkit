@@ -9,6 +9,8 @@ export interface TagColorsSettings {
 	tagCard: boolean;
 	/** The tag menu on "#" (in place of Obsidian's): this note, its area, then the vault; Tab, Enter, Shift+Enter. */
 	tagSuggest: boolean;
+	taskPlaceholder: boolean;
+	placeholderRecent: string[];
 	slots: Array<[string, number]>;
 	overrides: Array<[string, number]>;
 }
@@ -35,7 +37,8 @@ export function entries(value: unknown, slots: boolean): Array<[string, number]>
 }
 
 export function migrate(stored: Record<string, unknown>): Record<string, unknown> {
-	return { ...stored, slots: entries(stored.slots, true), overrides: entries(stored.overrides, false) };
+	const recent = Array.isArray(stored.placeholderRecent) ? stored.placeholderRecent.filter((tag): tag is string => typeof tag === "string" && !!tagKey(tag)).map(tagKey) : [];
+	return { ...stored, placeholderRecent: [...new Set(recent)].slice(0, 12), slots: entries(stored.slots, true), overrides: entries(stored.overrides, false) };
 }
 
 export function registry(settings: TagColorsSettings, key: "slots" | "overrides"): Registry {

@@ -313,3 +313,32 @@
 	padding: 4px;
 	--icon-size: 16px;
 }
+/* A quiet, pointer-only invitation; shared tokens follow both themes. */
+.sk-tag-colors-task-placeholder {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 21px;
+	margin-inline: 6px 2px;
+	padding: 0 9px;
+	border: 1px dashed var(--sk-accent-line);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--sk-accent-text);
+	box-shadow: none;
+	font-size: 12px;
+	font-weight: 500;
+	vertical-align: baseline;
+	cursor: pointer;
+	transition: background var(--sk-fast) var(--sk-ease);
+}
+.sk-tag-colors-task-placeholder svg { width: 12px; height: 12px; }
+.sk-tag-colors-task-placeholder:hover,
+.sk-tag-colors-task-placeholder:focus { background: var(--sk-accent-soft); box-shadow: none; }
+.sk-sessions-composing .sk-tag-colors-task-placeholder { display: none; }
+@media (pointer: coarse) {
+	.sk-tag-colors-task-placeholder { min-height: 28px; padding-inline: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-tag-colors-task-placeholder { transition: none; }
+}

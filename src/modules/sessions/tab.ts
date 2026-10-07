@@ -6,13 +6,17 @@
 // alone, the actions in a menu.
 // The data comes from the runtime; the logic lives in atelier.ts.
 import { MarkdownView, Menu, Platform, Scope, setIcon, TFile } from "obsidian";
-import { ago, contextsOf, FILTERS, filterCounts, filterSessions, layoutTimeline, searchable, stateOf, tabCount, tabTone, type SessionFilter, type SessionInfo } from "./atelier";
+import { ago, contextsOf, filterSessions, layoutTimeline, searchable, stateOf, tabCount, tabTone, type SessionInfo } from "./atelier";
 import { capsule } from "./capsule";
-import { hhmm, isTagName, type SummaryQuestion } from "./logic";
+import { fillCard, miniFrieze, stateLabel, type CardAction, type Words } from "./card";
+import { leadOf, weekRecap, type Flow } from "./flow";
+import { isTagName, type SummaryQuestion } from "./logic";
 import type { SessionsRuntime } from "./runtime";
 import type { ViewTab, ViewTabHost, ViewTabInstance } from "./types";
 
 const TIMELINE_KEY = "snailkit-sessions-timeline";
+const DONE_KEY = "snailkit-sessions-done-open";
+const RECAP_KEY = "snailkit-sessions-recap";
 
 /** The tab as the Workbench knows it, and the views it has mounted. */
 export class SessionsTab {
@@ -66,7 +70,11 @@ export class SessionsTab {
 const reduced = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 class TabView implements ViewTabInstance {
-	private filter: SessionFilter = "all";
+	/** The archived brainstorms are shown (their own group, at the bottom). */
+	private showArchived = false;
+	/** The "Finished" group is unfolded. */
+	private doneOpen = false;
+	private recapHidden = false;
 	private context: string | null = null;
 	private query = "";
 	/** The selected session (its detail on the right, page layout). */
@@ -80,10 +88,15 @@ class TabView implements ViewTabInstance {
 	private main: HTMLElement;
 	private search: HTMLInputElement;
 	private timeline: HTMLElement;
+	private legend: HTMLElement;
 	private track: HTMLElement;
 	private tip: HTMLElement;
-	private filtersEl: HTMLElement;
-	private thumb: HTMLElement;
+	private leadEl: HTMLElement;
+	private archBtn: HTMLElement;
+	/** The card shown over a row (mouse only). */
+	private hoverCard: HTMLElement | null = null;
+	private hoverPath: string | null = null;
+	private hoverTimer = 0;
 	private contextsEl: HTMLElement;
 	private resize: ResizeObserver | null = null;
 	private list: HTMLElement;
@@ -112,6 +125,7 @@ class TabView implements ViewTabInstance {
 		this.main = this.desk ? this.root.createDiv({ cls: "sk-sessions-desk-main" }) : this.root;
 		const top = this.desk ? this.main.createDiv({ cls: "sk-sessions-desk-top" }) : this.root;
 
+		this.leadEl = top.createDiv({ cls: "sk-sessions-lead" });
 		const head = top.createDiv({ cls: "sk-sessions-tab-head" });
 		const searchBox = head.createDiv({ cls: "sk-sessions-tab-search" });
 		setIcon(searchBox.createSpan({ cls: "sk-sessions-tab-search-icon" }), "search");
@@ -146,20 +160,37 @@ class TabView implements ViewTabInstance {
 
 		this.timeline = top.createDiv({ cls: "sk-sessions-tl", attr: { role: "group", "aria-label": t("tab.timeline") } });
 		this.track = this.timeline.createDiv({ cls: "sk-sessions-tl-track" });
+		// What the shapes mean, shown while the pointer is over the timeline: the state never depends on the color alone.
+		this.legend = top.createDiv({ cls: "sk-sessions-tl-legend", attr: { "aria-hidden": "true" } });
+		for (const [state, key] of [["open", "flow.write"], ["triage", "tab.state-triage"], ["closed", "flow.closed"]] as const) {
+			const item = this.legend.createSpan({ cls: "sk-sessions-tl-legend-item" });
+			item.createSpan({ cls: `sk-sessions-tl-legend-mark is-${state}` });
+			item.createSpan({ text: t(key) });
+		}
 		this.tip = this.root.createDiv({ cls: "sk-sessions-tl-tip" });
 
 		const bar = top.createDiv({ cls: "sk-sessions-tab-bar" });
-		this.filtersEl = bar.createDiv({ cls: "sk-segm sk-sessions-tab-filters", attr: { role: "tablist" } });
-		this.thumb = this.filtersEl.createDiv({ cls: "sk-segm-thumb" });
 		this.contextsEl = bar.createDiv({ cls: "sk-sessions-contexts", attr: { role: "group", "aria-label": t("tab.contexts") } });
+		this.archBtn = bar.createEl("button", { cls: "sk-btn is-ghost is-s sk-sessions-arch-toggle", attr: { type: "button", "data-focus-key": "arch" } });
+		this.archBtn.addEventListener("click", () => {
+			this.showArchived = !this.showArchived;
+			this.render();
+		});
+
 		this.list = this.main.createDiv({ cls: "sk-sessions-tab-list", attr: { role: "listbox", "aria-label": t("tab.list") } });
+		if (!Platform.isMobile) {
+			this.list.addEventListener("mouseover", (e) => this.onListHover(e));
+			this.list.addEventListener("mouseleave", () => this.hoverSoon(null));
+		}
 		if (this.desk) {
 			this.helpBar(this.main.createDiv({ cls: "sk-sessions-desk-foot" }));
 			this.detail = this.root.createDiv({ cls: "sk-sessions-detail", attr: { role: "region", "aria-label": t("desk.label") } });
 		}
-		if (typeof ResizeObserver === "function") {
-			this.resize = new ResizeObserver(() => this.placeThumb(false));
-			this.resize.observe(this.filtersEl);
+		try {
+			this.doneOpen = rt.app.loadLocalStorage(DONE_KEY) === "open";
+			this.recapHidden = rt.app.loadLocalStorage(RECAP_KEY) === "hidden";
+		} catch {
+			/* defaults */
 		}
 
 		this.search.addEventListener("input", () => {
@@ -254,6 +285,7 @@ class TabView implements ViewTabInstance {
 		if (this.destroyed) return;
 		this.destroyed = true;
 		this.pop?.close();
+		this.closeHover();
 		for (const id of this.timers) window.clearTimeout(id);
 		window.clearTimeout(this.longPress);
 		if (this.scoped) this.rt.app.keymap.popScope(this.keyScope);
@@ -277,8 +309,25 @@ class TabView implements ViewTabInstance {
 		return this.rt.sessionInfos().find((s) => s.path === path) ?? null;
 	}
 
+	private get words(): Words {
+		const ctx = this.rt.ctx;
+		return { t: (k, v) => ctx.t(k, v), tn: (k, n, v) => ctx.tn(k, n, v) };
+	}
+
+	/** The groups as shown: in progress, then finished (when unfolded), then archived (when shown). */
+	private groups(all: SessionInfo[] = this.rt.sessionInfos()): { live: SessionInfo[]; done: SessionInfo[]; archived: SessionInfo[] } {
+		const visible = filterSessions(all, "all", this.query, this.context);
+		return {
+			live: visible.filter((s) => !s.closed),
+			done: visible.filter((s) => s.closed),
+			archived: this.showArchived ? filterSessions(all, "archived", this.query, this.context) : [],
+		};
+	}
+
+	/** The rows on screen, in order. */
 	private shown(all: SessionInfo[] = this.rt.sessionInfos()): SessionInfo[] {
-		return filterSessions(all, this.filter, this.query, this.context);
+		const g = this.groups(all);
+		return [...g.live, ...(this.doneOpen ? g.done : []), ...g.archived];
 	}
 
 	/**
@@ -297,18 +346,24 @@ class TabView implements ViewTabInstance {
 		const had = !!before && this.root.contains(before);
 		const key = had ? before!.dataset.focusKey ?? null : null;
 		const all = this.rt.sessionInfos();
-		const contexts = contextsOf(all.filter((s) => (this.filter === "archived" ? s.archived : !s.archived)));
+		const contexts = contextsOf(all.filter((s) => this.showArchived || !s.archived));
 		if (this.context && !contexts.some((c) => c.toLowerCase() === this.context!.toLowerCase())) this.context = null;
 		const shown = this.shown(all);
 		if (this.desk && (!this.selected || !shown.some((s) => s.path === this.selected))) this.selected = shown[0]?.path ?? null;
 		if (this.confirming && !all.some((s) => s.path === this.confirming)) this.confirming = null;
-		this.renderFilters(all);
+		this.renderLead(all);
 		this.renderContexts(contexts);
+		this.archBtn.empty();
+		setIcon(this.archBtn.createSpan({ cls: "sk-sessions-card-icon" }), "archive");
+		this.archBtn.createSpan({ text: this.t(this.showArchived ? "tab.hide-archived" : "tab.show-archived") });
+		this.archBtn.setAttr("aria-pressed", String(this.showArchived));
+		this.archBtn.toggleClass("is-hidden", !this.showArchived && !all.some((s) => s.archived));
 		this.timeline.toggleClass("is-hidden", !this.showTimeline);
+		this.legend.toggleClass("is-hidden", !this.showTimeline);
 		this.timelineBtn.toggleClass("is-on", this.showTimeline);
 		this.timelineBtn.setAttr("aria-label", this.t(this.showTimeline ? "tab.timeline-hide" : "tab.timeline-show"));
 		this.timelineBtn.setAttr("aria-pressed", String(this.showTimeline));
-		if (this.showTimeline) this.renderTimeline(all.filter((s) => (this.filter === "archived" ? true : !s.archived)), new Set(shown.map((s) => s.path)));
+		if (this.showTimeline) this.renderTimeline(all.filter((s) => this.showArchived || !s.archived), new Set(shown.map((s) => s.path)));
 		this.renderList(all, shown);
 		this.renderDetail();
 		if (had && !this.root.contains(this.doc.activeElement)) {
@@ -325,38 +380,64 @@ class TabView implements ViewTabInstance {
 		return Math.max(0, rows.findIndex((r) => r.dataset.path === this.selected));
 	}
 
-	/** The filters as a segmented control: the thumb slides under the active one. */
-	private renderFilters(all: SessionInfo[]): void {
-		const counts = filterCounts(all);
-		for (const el of Array.from(this.filtersEl.children)) if (el !== this.thumb) el.remove();
-		for (const f of FILTERS) {
-			if (f === "archived" && !counts.archived && this.filter !== "archived") continue;
-			const b = this.filtersEl.createEl("button", { cls: `sk-btn sk-sessions-filter is-${f}`, attr: { type: "button", role: "tab", "aria-selected": String(f === this.filter), "data-focus-key": `filter:${f}` } });
-			b.createSpan({ text: this.t(`tab.filter-${f}`) });
-			b.createSpan({ cls: "sk-sessions-filter-count", text: String(counts[f]) });
-			b.addEventListener("click", () => {
-				this.filter = f;
+	/**
+	 * The sentence at the top: how many are in progress and what waits, with the Sort button; a
+	 * discreet recap of the week under it (it can be hidden).
+	 */
+	private renderLead(all: SessionInfo[]): void {
+		const el = this.leadEl;
+		el.empty();
+		const now = Date.now();
+		const lead = leadOf(all.map((s) => this.rt.flowOf(s, now)));
+		const line = el.createDiv({ cls: "sk-sessions-lead-line" });
+		const p = line.createEl("p");
+		const soft = (text: string) => p.createSpan({ cls: "sk-sessions-lead-soft", text });
+		let action: { label: string; icon: string; primary: boolean; run: () => void } | null = null;
+		if (!lead.live) {
+			p.appendText(this.t("tab.lead-free") + " ");
+			soft(this.t("tab.lead-free-2"));
+		} else if (lead.untagged + lead.undecided) {
+			p.appendText(this.tn("tab.lead-live", lead.live));
+			if (lead.untagged) {
+				soft(" · ");
+				p.appendText(this.tn("tab.lead-untagged", lead.untagged));
+			}
+			if (lead.undecided) {
+				soft(" · ");
+				p.appendText(this.tn("flow.undecided", lead.undecided));
+			}
+			action = { label: this.t("tab.sort"), icon: "list-filter", primary: true, run: () => this.rt.startSort(null, this.root) };
+		} else {
+			p.appendText(this.tn("tab.lead-live", lead.live) + " ");
+			soft("· " + (lead.ready ? this.t("tab.lead-sorted-ready", { ready: this.tn("tab.lead-ready", lead.ready) }) : this.t("tab.lead-sorted")));
+		}
+		if (action) {
+			const b = line.createEl("button", { cls: "sk-btn" + (action.primary ? " is-primary" : ""), attr: { type: "button", "data-focus-key": "lead" } });
+			setIcon(b.createSpan({ cls: "sk-sessions-card-icon" }), action.icon);
+			b.createSpan({ text: action.label });
+			b.addEventListener("click", action.run);
+		}
+		const week = weekRecap(all.filter((s) => !s.archived), now);
+		if (!this.recapHidden && week.brainstorms) {
+			const recap = el.createDiv({ cls: "sk-sessions-recap" });
+			recap.createSpan({ text: this.t("tab.recap", { brainstorms: this.tn("tab.recap-brainstorms", week.brainstorms), tasks: this.tn("flow.tasks", week.tasks) }) });
+			const x = recap.createEl("button", { cls: "sk-btn is-ghost is-icon is-s", attr: { type: "button" } });
+			setIcon(x, "x");
+			x.createSpan({ cls: "sk-sessions-sr", text: this.t("tab.recap-hide") });
+			x.addEventListener("click", () => {
+				this.recapHidden = true;
+				try {
+					this.rt.app.saveLocalStorage(RECAP_KEY, "hidden");
+				} catch {
+					/* not kept */
+				}
 				this.render();
 			});
 		}
-		this.placeThumb(!this.thumbPlaced);
 	}
-	private thumbPlaced = false;
 
-	/** Moves the thumb under the active filter; `snap` moves it at once (first drawing, resize). */
-	private placeThumb(snap: boolean): void {
-		if (this.destroyed) return;
-		const active = this.filtersEl.querySelector('.sk-sessions-filter[aria-selected="true"]') as HTMLElement | null;
-		if (!active || !active.offsetWidth) return;
-		const thumb = this.thumb;
-		if (snap) thumb.style.transition = "none";
-		thumb.style.width = `${active.offsetWidth}px`;
-		thumb.style.transform = `translateX(${active.offsetLeft}px)`;
-		if (snap) {
-			void thumb.offsetWidth;
-			thumb.style.transition = "";
-		}
-		this.thumbPlaced = true;
+	private tn(key: string, n: number, vars?: Record<string, string | number>): string {
+		return this.rt.ctx.tn(key, n, vars);
 	}
 
 	/** Chips of the contexts present: All, then each one. Hidden when no session has a context. */
@@ -464,55 +545,75 @@ class TabView implements ViewTabInstance {
 			this.list.createDiv({ cls: "sk-sessions-tab-empty", text: this.t("tab.empty") });
 			return;
 		}
-		if (!shown.length) {
-			this.list.createDiv({ cls: "sk-sessions-tab-empty", text: this.t(this.filter === "archived" ? "tab.none-archived" : "tab.none") });
-			return;
-		}
+		const g = this.groups(all);
 		const date = new Intl.DateTimeFormat(this.rt.ctx.lang, { weekday: "short", day: "numeric", month: "short" });
-		const pinned = shown.some((s) => s.pin !== null && s.pin !== undefined);
-		let section: "pinned" | "rest" | null = null;
-		const focusable = this.desk ? this.selected : shown[0].path;
-		for (const s of shown) {
-			const isPinned = s.pin !== null && s.pin !== undefined;
-			if (pinned && section !== (isPinned ? "pinned" : "rest")) {
-				section = isPinned ? "pinned" : "rest";
-				const h = this.list.createDiv({ cls: "sk-sessions-section", attr: { role: "presentation" } });
-				if (isPinned) setIcon(h.createSpan({ cls: "sk-sessions-section-icon" }), "pin");
-				h.createSpan({ text: this.t(isPinned ? "tab.pinned" : "tab.recent") });
+		const focusable = this.desk ? this.selected : shown[0]?.path ?? null;
+		const now = Date.now();
+		const group = (key: string, list: SessionInfo[], fold: boolean | null, empty: string | null) => {
+			const head = this.list.createDiv({ cls: "sk-sessions-group" + (fold === false ? " is-shut" : ""), attr: { role: "presentation" } });
+			if (fold === null) {
+				head.createSpan({ text: this.t(key) });
+				head.createSpan({ cls: "sk-sessions-group-n", text: String(list.length) });
+			} else {
+				const b = head.createEl("button", { attr: { type: "button", "aria-expanded": String(fold), "data-focus-key": `group:${key}` } });
+				setIcon(b.createSpan({ cls: "sk-sessions-group-chev" }), "chevron-down");
+				b.createSpan({ text: this.t(key) });
+				b.createSpan({ cls: "sk-sessions-group-n", text: String(list.length) });
+				b.addEventListener("click", () => {
+					this.doneOpen = !this.doneOpen;
+					try {
+						this.rt.app.saveLocalStorage(DONE_KEY, this.doneOpen ? "open" : "shut");
+					} catch {
+						/* not kept */
+					}
+					this.render();
+				});
 			}
-			this.row(s, date, s.path === focusable);
-		}
+			if (fold === false) return;
+			if (!list.length && empty) this.list.createDiv({ cls: "sk-sessions-group-empty", text: this.t(empty) });
+			for (const s of list) this.row(s, date, s.path === focusable, now);
+		};
+		group("tab.group-live", g.live, null, this.query || this.context ? "tab.none" : "tab.none-live");
+		if (g.done.length) group("tab.group-done", g.done, this.doneOpen, null);
+		if (this.showArchived) group("tab.group-archived", g.archived, null, "tab.none-archived");
 		this.list.scrollTop = scroll;
 	}
 
-	private row(s: SessionInfo, date: Intl.DateTimeFormat, tabbable: boolean): void {
+	private row(s: SessionInfo, date: Intl.DateTimeFormat, tabbable: boolean, now: number): void {
 		const state = stateOf(s);
+		const flow = this.rt.flowOf(s, now);
 		const selected = this.desk && this.selected === s.path;
 		const row = this.list.createDiv({
-			cls: `sk-sessions-row is-${state}` + (selected ? " is-selected" : "") + (s.archived ? " is-archived" : ""),
+			cls: `sk-sessions-row is-${state} is-${flow.kind}` + (selected ? " is-selected" : "") + (s.archived ? " is-archived" : ""),
 			attr: { role: "option", tabindex: tabbable ? "0" : "-1", "aria-selected": String(selected), "data-path": s.path, "data-focus-key": `row:${s.path}` },
 		});
-		const dot = row.createSpan({ cls: "sk-sessions-row-dot" });
-		if (state === "triage") dot.setAttr("aria-label", this.t("tab.state-triage"));
-		const main = row.createDiv({ cls: "sk-sessions-row-main" });
-		const titleLine = main.createDiv({ cls: "sk-sessions-row-title" });
-		if (s.pin !== null && s.pin !== undefined) setIcon(titleLine.createSpan({ cls: "sk-sessions-row-pin", attr: { "aria-label": this.t("tab.pinned") } }), "pin");
-		titleLine.createSpan({ cls: "sk-sessions-row-name", text: s.title });
-		const meta = main.createDiv({ cls: "sk-sessions-row-meta" });
-		meta.createSpan({ text: `${date.format(s.created)} · ${hhmm(new Date(s.created))}` });
-		meta.createSpan({ cls: "sk-sessions-row-counts", text: this.counts(s) });
-		if (s.context) {
-			const ctx = (this.desk ? row : meta).createDiv({ cls: "sk-sessions-row-ctx" });
-			ctx.appendChild(capsule(this.doc, s.context, this.rt.tagClasses(s.context)));
+		const titleLine = row.createDiv({ cls: "sk-sessions-row-title" });
+		if (s.pin !== null && s.pin !== undefined) {
+			const pin = titleLine.createSpan({ cls: "sk-sessions-row-pin" });
+			setIcon(pin, "pin");
+			pin.createSpan({ cls: "sk-sessions-sr", text: this.t("tab.pinned") });
 		}
-		if (!this.desk) {
-			const more = row.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-sessions-row-more", attr: { type: "button", "aria-label": this.t("tab.more"), tabindex: "-1" } });
-			setIcon(more, "more-horizontal");
-			more.addEventListener("click", (e) => {
+		titleLine.createSpan({ cls: "sk-sessions-row-name", text: s.title });
+		if (s.context) titleLine.createSpan({ cls: "sk-sessions-row-hash", text: `#${s.context}` });
+		miniFrieze(row, flow);
+		const word = row.createSpan({ cls: "sk-sessions-row-word" + (flow.kind === "ready" ? " is-ready" : "") });
+		word.appendText(flow.kind === "ready" ? `${stateLabel(this.words, flow)} ✓` : stateLabel(this.words, flow));
+		if (flow.stale) {
+			const inv = word.createEl("button", { cls: "sk-sessions-row-invite", text: `· ${this.t("tab.finish-it")}`, attr: { type: "button", tabindex: "-1" } });
+			inv.addEventListener("click", (e) => {
 				e.stopPropagation();
-				this.menu(s.path, e);
+				void this.rt.finish(s.path);
 			});
 		}
+		row.createSpan({ cls: "sk-sessions-row-date", text: date.format(s.closed ? s.modified ?? s.created : s.modified ?? s.created) });
+		const more = row.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-sessions-row-more", attr: { type: "button", tabindex: "-1" } });
+		setIcon(more, "more-horizontal");
+		more.createSpan({ cls: "sk-sessions-sr", text: this.t("tab.more") });
+		more.addEventListener("click", (e) => {
+			e.stopPropagation();
+			this.closeHover();
+			this.menu(s.path, e);
+		});
 		if (this.confirming === s.path && !this.desk) this.confirmStrip(row.createDiv({ cls: "sk-sessions-row-confirm" }), s);
 
 		row.addEventListener("click", (e) => {
@@ -527,6 +628,7 @@ class TabView implements ViewTabInstance {
 		});
 		row.addEventListener("contextmenu", (e) => {
 			e.preventDefault();
+			this.closeHover();
 			this.menu(s.path, e);
 		});
 		// A long press opens the menu on touch screens (a click does not follow).
@@ -549,6 +651,89 @@ class TabView implements ViewTabInstance {
 			}, 500);
 		});
 	}
+
+	// ----- the card over a row -----
+
+	private onListHover(e: MouseEvent): void {
+		if (this.pop || this.editing) return;
+		const row = (e.target as HTMLElement).closest?.(".sk-sessions-row") as HTMLElement | null;
+		if (!row) return;
+		const path = row.dataset.path ?? null;
+		if (path === this.hoverPath && this.hoverCard) {
+			window.clearTimeout(this.hoverTimer);
+			return;
+		}
+		window.clearTimeout(this.hoverTimer);
+		this.hoverTimer = window.setTimeout(() => this.openHover(row), this.hoverCard ? 90 : 420);
+	}
+
+	private hoverSoon(_: null): void {
+		window.clearTimeout(this.hoverTimer);
+		this.hoverTimer = window.setTimeout(() => {
+			if (this.hoverCard && this.hoverCard.matches(":hover")) return;
+			this.closeHover();
+		}, 260);
+	}
+
+	private openHover(row: HTMLElement): void {
+		const path = row.dataset.path;
+		if (!path || this.destroyed || !row.isConnected) return;
+		const s = this.info(path);
+		if (!s) return;
+		const flow = this.rt.flowOf(s);
+		const fresh = !this.hoverCard;
+		const card = this.hoverCard ?? this.root.createDiv({ cls: "sk-sessions-card is-list", attr: { role: "dialog" } });
+		if (fresh) {
+			card.addEventListener("mouseenter", () => window.clearTimeout(this.hoverTimer));
+			card.addEventListener("mouseleave", () => this.hoverSoon(null));
+		}
+		this.hoverCard = card;
+		this.hoverPath = path;
+		for (const r of this.rows()) r.toggleClass("is-hover", r === row);
+		this.fillFor(card, s, flow, "list");
+		const box = this.root.getBoundingClientRect();
+		const mini = row.querySelector(".sk-sessions-mini") ?? row;
+		const rr = row.getBoundingClientRect();
+		const mr = mini.getBoundingClientRect();
+		const w = card.offsetWidth;
+		card.style.left = `${Math.max(8, Math.min(box.width - w - 8, mr.left - box.left - 20))}px`;
+		let top = rr.bottom - box.top + 4;
+		if (top + card.offsetHeight > box.height - 8) top = rr.top - box.top - card.offsetHeight - 4;
+		card.style.top = `${top}px`;
+		if (fresh && !reduced()) card.addClass("is-pop");
+	}
+
+	private closeHover(): void {
+		window.clearTimeout(this.hoverTimer);
+		this.hoverCard?.remove();
+		this.hoverCard = null;
+		this.hoverPath = null;
+		for (const r of this.rows()) r.removeClass("is-hover");
+	}
+
+	/** Fills a card for a session (the hover card, the detail). */
+	private fillFor(el: HTMLElement, s: SessionInfo, flow: Flow, where: "list" | "detail"): void {
+		const date = new Intl.DateTimeFormat(this.rt.ctx.lang, { weekday: "short", day: "numeric", month: "short" });
+		fillCard(el, this.words, flow, {
+			title: s.title,
+			aside: flow.kind === "ready" ? `${stateLabel(this.words, flow)} ✓` : stateLabel(this.words, flow),
+			asideReady: flow.kind === "ready",
+			where,
+			staleDate: s.modified ? date.format(s.modified) : undefined,
+			onAction: (a, e) => this.act(s.path, a, e),
+		});
+	}
+
+	private act(path: string, action: CardAction, e: MouseEvent): void {
+		this.closeHover();
+		const file = this.fileOf(path);
+		if (action === "sort") this.rt.startSort(path, this.root);
+		else if (action === "finish") void this.rt.finish(path);
+		else if (action === "archive" || action === "unarchive") this.archive(path);
+		else if (action === "reopen" && file) this.rt.reopen(file);
+		else if (action === "open") this.host.open(path, null, e);
+	}
+
 	private suppressClick = 0;
 
 	private rows(): HTMLElement[] {
@@ -923,8 +1108,8 @@ class TabView implements ViewTabInstance {
 		edit.addEventListener("click", () => this.startRename(s.path));
 
 		const meta = body.createDiv({ cls: "sk-sessions-det-meta" });
-		const state = stateOf(s);
-		meta.createSpan({ cls: `sk-sessions-det-state is-${state}`, text: this.t(`tab.state-${state}`) });
+		const kind = this.rt.flowOf(s).kind;
+		meta.createSpan({ cls: `sk-sessions-det-state is-${kind}`, text: this.t(`flow.${kind === "sort" ? "write" : kind}`) });
 		if (s.archived) meta.createSpan({ cls: "sk-sessions-det-state is-archived", text: this.t("tab.filter-archived") });
 		const ctxBtn = meta.createEl("button", { cls: "sk-sessions-det-ctx" + (s.context ? "" : " is-empty"), attr: { type: "button", "aria-label": this.t("desk.context-key"), "data-focus-key": "det:ctx" } });
 		if (s.context) ctxBtn.appendChild(capsule(this.doc, s.context, this.rt.tagClasses(s.context)));
@@ -934,31 +1119,12 @@ class TabView implements ViewTabInstance {
 		}
 		ctxBtn.addEventListener("click", () => this.openContext(s.path, ctxBtn));
 		const rtf = new Intl.RelativeTimeFormat(ctx.lang, { numeric: "auto" });
+		body.createDiv({ cls: "sk-sessions-det-age", text: this.t("desk.age", { started: rtf.format(...ago(s.created, Date.now())), edited: rtf.format(...ago(s.modified ?? s.created, Date.now())) }) });
+
 		const now = Date.now();
-		body.createDiv({ cls: "sk-sessions-det-age", text: this.t("desk.age", { started: rtf.format(...ago(s.created, now)), edited: rtf.format(...ago(s.modified ?? s.created, now)) }) });
-
-		const tri = data?.triage;
-		const progress = body.createDiv({ cls: "sk-sessions-det-progress" });
-		if (tri && tri.sorted !== null) {
-			const label = progress.createDiv({ cls: "sk-sessions-det-progress-label" });
-			label.createSpan({ text: this.t("desk.sorted", { n: tri.sorted }) });
-			if (tri.sorted < 100) label.createSpan({ cls: "sk-sessions-det-progress-left", text: ctx.tn("desk.left", tri.untagged + tri.undecided) });
-			const bar = progress.createDiv({ cls: "sk-sessions-det-bar", attr: { role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(tri.sorted) } });
-			const fill = bar.createDiv({ cls: "sk-sessions-det-bar-fill" + (tri.sorted === 100 ? " is-full" : "") });
-			fill.style.width = `${tri.sorted}%`;
-		} else progress.createDiv({ cls: "sk-sessions-det-progress-label is-none", text: this.t("desk.nothing-to-sort") });
-
-		const stats = body.createDiv({ cls: "sk-sessions-det-stats" });
-		const stat = (value: string, key: string, warn = false) => {
-			const box = stats.createDiv({ cls: "sk-sessions-det-stat" + (warn ? " is-warn" : "") });
-			box.createDiv({ cls: "sk-sessions-det-stat-n", text: value });
-			box.createDiv({ cls: "sk-sessions-det-stat-l", text: this.t(key) });
-		};
-		stat(String(s.ideas), "desk.stat-ideas");
-		stat(`${tri?.done ?? 0}/${tri?.tasks ?? 0}`, "desk.stat-tasks");
-		stat(String(tri?.undecided ?? 0), "desk.stat-decide", !!tri?.undecided && !s.closed);
-		stat(String(tri?.untagged ?? 0), "desk.stat-untagged", !!tri?.untagged && !s.closed);
-		stat(String(tri?.orphans.length ?? 0), "desk.stat-orphans");
+		const flow = this.rt.flowOf(s, now);
+		const card = body.createDiv({ cls: "sk-sessions-card is-detail" });
+		this.fillFor(card, s, flow, "detail");
 
 		if (data) {
 			const tasks = data.summary.tasks;

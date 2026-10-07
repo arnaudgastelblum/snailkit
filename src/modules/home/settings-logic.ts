@@ -2,10 +2,12 @@
 // cleaned (logic/arrange.ts). Pure, tested in test/home.test.ts.
 import type { AutoOpenMode } from "../../core/workbench/types";
 import { normalizeArrangement, type Arrangement } from "./logic/arrange";
+import { cleanOrder } from "./logic/order";
 import { DEFAULTS, type HomeLens, type HomeSettings } from "./types";
 
 export const OPEN_MODES: AutoOpenMode[] = ["startup-and-new-tabs", "startup", "never"];
-export const LENSES: HomeLens[] = ["domains", "map", "tags"];
+/** The views of the Home, in the switch's order; the Map first and by default. */
+export const LENSES: HomeLens[] = ["map", "domains", "tags"];
 
 /** "Templates, /Archive/" to clean vault folders, each once. */
 export function splitFolders(text: string): string[] {
@@ -37,7 +39,23 @@ export function cleanSettings(settings: HomeSettings): HomeSettings {
 		homePage: cleanNotePath(settings.homePage),
 		ignoredFolders: typeof settings.ignoredFolders === "string" ? settings.ignoredFolders : "",
 		lens: LENSES.includes(settings.lens as HomeLens) ? settings.lens : DEFAULTS.lens,
+		lensChosen: settings.lensChosen === true,
+		noteOrder: cleanOrder(settings.noteOrder),
 	};
+}
+
+/** The view the Home opens on: the one the user picked, else the Map. */
+export function startLens(settings: Pick<HomeSettings, "lens" | "lensChosen">): HomeLens {
+	return settings.lensChosen && LENSES.includes(settings.lens as HomeLens) ? (settings.lens as HomeLens) : "map";
+}
+
+/**
+ * Settings saved before the Map became the first view: a Map or Tags view kept there was the
+ * user's choice; "domains" was the old default and may never have been chosen.
+ */
+export function migrateSettings(stored: Record<string, unknown>): Record<string, unknown> {
+	if (typeof stored.lensChosen === "boolean") return stored;
+	return { ...stored, lensChosen: stored.lens === "map" || stored.lens === "tags" };
 }
 
 /** The arrangement part of the settings. */

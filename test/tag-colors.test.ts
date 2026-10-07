@@ -6,6 +6,50 @@ import { entries, migrate, registry, type ColorHost, type TagColorsSettings } fr
 import { classes, setOverride } from "../src/modules/tag-colors/dialogs";
 import { asTask, nextPart, rankTags, tagQuery, withoutTyped } from "../src/modules/tag-colors/suggest";
 import { mergeSettings } from "../src/core/settings";
+import { checkedSourceTaskInsertion, checkedTaskInsertion, hasTaskTag, taskLines, taskTagPosition, untaggedTasks } from "../src/modules/tag-colors/task-placeholder-logic";
+
+test("task placeholder: reading writes the exact line, preserves CRLF and checks the current context", () => {
+	const snapshot = "- [ ] Read";
+	assert.equal(checkedSourceTaskInsertion("Title\r\n- [ ] Read\r\n- [ ] Read\r\n", 2, snapshot, "reading"), "Title\r\n- [ ] Read\r\n- [ ] Read #reading\r\n");
+	assert.equal(checkedSourceTaskInsertion("```\n- [ ] Read\n```", 1, snapshot, "reading"), null);
+	assert.equal(checkedSourceTaskInsertion("---\n- [ ] Read\n---", 1, snapshot, "reading"), null);
+	assert.equal(checkedSourceTaskInsertion("Title\n- [x] Read", 1, snapshot, "reading"), null);
+	assert.equal(checkedSourceTaskInsertion("Title\nchanged\n- [ ] Read", 1, snapshot, "reading"), null);
+	assert.equal(checkedSourceTaskInsertion("Title", 1, snapshot, "reading"), null);
+});
+
+test("task placeholder: only unfinished tasks outside frontmatter and code", () => {
+	const source = ["---", "example: |", "  - [ ] YAML", "---", "- [ ] Read", "- [x] Done", "- [X] Done", "- [/] Busy", "- [ ] Tagged #reading", "```md", "- [ ] Code", "```", "> [!note] Callout", "> ordinary text", "> - [ ] Actual task", "1. [ ] Numbered", "    - [ ] Nested", "", "Paragraph", "", "    - [ ] Indented code", "~~~", "- [ ] More code", "~~~"].join("\n");
+	assert.deepEqual(untaggedTasks(source).map(t => t.text), ["- [ ] Read", "> - [ ] Actual task", "1. [ ] Numbered", "    - [ ] Nested"]);
+	assert.equal(taskLines(source).filter(t => !t.open).length, 3);
+	assert.equal(untaggedTasks("```\n- [ ] unclosed").length, 0);
+	assert.equal(untaggedTasks("---\n- [ ] unclosed").length, 0);
+	assert.equal(untaggedTasks("> ```\n> - [ ] code\n> ```\n> - [ ] task").length, 1);
+});
+
+test("task placeholder: real Unicode tags, code, links, comments and escaped hashes", () => {
+	for (const text of ["#project/web", "(#écriture)", "#日本語", "#topic-2", "#_topic"]) assert.ok(hasTaskTag(text), text);
+	for (const text of ["#123", "word#topic", "\\#topic", "`#topic`", "%% #topic %%", "[[Note#Heading]]", "[link](https://example.org/#topic)"]) assert.ok(!hasTaskTag(text), text);
+});
+
+test("task placeholder: inserts before trailing metadata, preserves whitespace and rejects stale tasks", () => {
+	for (const suffix of ["", " 📅 2026-10-08", " ✅ 2026-10-08 🔼", " ⏫ 📅 2026-10-08 %%id:abc%%", " %%one%% %%two%%", "   ", " 📅 2026-10-08  "]) {
+		const text = "- [ ] Read" + suffix;
+		const change = checkedTaskInsertion(text, text, "#reading")!;
+		assert.deepEqual(change, { at: 10, insert: " #reading" });
+		assert.equal(text.slice(0, change.at) + change.insert + text.slice(change.at), "- [ ] Read #reading" + suffix);
+	}
+	const middleDate = "- [ ] Read 📅 2026-10-08 then write";
+	assert.equal(taskTagPosition(middleDate), middleDate.length);
+	for (const current of ["- [ ] Edited", "- [x] Read", "- [ ] Read #existing", " - [ ] Read"]) assert.equal(checkedTaskInsertion(current, "- [ ] Read", "reading"), null);
+	for (const tag of ["bad tag", "bad\nline", "123", ""]) assert.equal(checkedTaskInsertion("- [ ] Read", "- [ ] Read", tag), null);
+	assert.deepEqual(checkedTaskInsertion("> 1. [ ] Lire", "> 1. [ ] Lire", "écriture"), { at: 13, insert: " #écriture" });
+});
+
+test("task placeholder: recent settings are bounded, deduplicated and survive reload", () => {
+	assert.deepEqual(migrate({ placeholderRecent: ["#Reading", "reading", null, 1, "", "project/web"] }).placeholderRecent, ["reading", "project/web"]);
+	assert.equal((migrate({ placeholderRecent: Array.from({ length: 30 }, (_, n) => `tag${n}`) }).placeholderRecent as string[]).length, 12);
+});
 
 test("tag parsing preserves display case and Unicode while keys ignore case", () => {
 	assert.equal(tagKey("#PrOjEcT/Écriture/日本語"), "project/écriture/日本語");
@@ -50,7 +94,7 @@ test("implicit ancestors, siblings and cousins receive distinct colors until exh
 });
 
 test("overrides distinguish family and body and reset restores the registry", async () => {
-	const settings: TagColorsSettings = { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, slots: Object.entries(assignSlots({}, { "project/website/design": 4 })), overrides: [] };
+	const settings: TagColorsSettings = { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, taskPlaceholder: false, placeholderRecent: [], slots: Object.entries(assignSlots({}, { "project/website/design": 4 })), overrides: [] };
 	let saves = 0;
 	const host = { settings, save: async () => { saves++; } } as ColorHost;
 	const before = tagHues("project/website/design", registry(settings, "slots"), {});
@@ -91,7 +135,7 @@ test("palette and custom hues meet 4.5:1 contrast in both themes", () => {
 });
 
 test("registry migration validates entries and survives core merging and JSON reload", () => {
-	const defaults: TagColorsSettings = { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, slots: [], overrides: [] };
+	const defaults: TagColorsSettings = { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, taskPlaceholder: false, placeholderRecent: [], slots: [], overrides: [] };
 	const old = { slots: { "#Reading": 3, invalid: 14, fractional: 1.2 }, overrides: { "#Project": 0, invalid: 360 } };
 	const saved = mergeSettings(defaults, migrate(old));
 	assert.deepEqual(saved.slots, [["reading", 3]]);
@@ -171,4 +215,11 @@ test("tag suggestions: never in code or links, Tab goes into a parent's sub-tags
 	const parent = { tag: "project", count: 2, origin: "vault" as const, parent: true };
 	assert.equal(nextPart("pro", parent), "project/", "a parent tag opens its sub-tags");
 	assert.equal(nextPart("pro", { ...parent, parent: false }), "project");
+});
+
+test("task placeholder: priorities are not a tag, the tag goes before them", () => {
+	assert.equal(hasTaskTag("- [ ] Call the plumber #high"), false);
+	assert.equal(hasTaskTag("- [ ] Call the plumber #high #home"), true);
+	assert.equal(taskTagPosition("- [ ] Call the plumber 📅 2026-10-09 #high"), "- [ ] Call the plumber".length);
+	assert.equal(taskTagPosition("- [ ] Call the #highway"), "- [ ] Call the #highway".length);
 });

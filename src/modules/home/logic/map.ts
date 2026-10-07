@@ -1,10 +1,12 @@
 // The Map's nodes, read from the vault through World (the Map component knows nothing of files).
 // Under the root: the domains in the order of the Domains view, hidden ones left out, with the
 // group names. Elsewhere: notes that have children first, then the other notes from the most
-// recent to the oldest, then the brainstorms. Dated titles show without their date. Answers are
+// recent to the oldest, then the brainstorms, unless the user dragged them into an order of their
+// own (logic/order.ts). Dated titles show without their date. Answers are
 // kept until invalidate() (the Map asks often). Pure over World.
 import type { MapNode, MapNodeKind, MapSource, MapState } from "../../../ui/map/types";
 import { splitDated } from "./dates";
+import { applyOrder } from "./order";
 import { type World } from "./world";
 
 /** The Map's root when the vault has no home page: the domains hang under it. */
@@ -29,6 +31,8 @@ export class HomeMapSource implements MapSource {
 		private readonly rootEntries: () => RootEntry[],
 		/** Name of the vault (the root's label without a home page). */
 		private readonly vaultName: string,
+		/** The order the user made under a parent (dragged on the Map), if any. */
+		private readonly savedOrder: (parent: string) => readonly string[] | undefined = () => undefined,
 	) {}
 
 	/** The data changed: answers are read again. */
@@ -132,7 +136,7 @@ export class HomeMapSource implements MapSource {
 			const rest = paths.filter((p) => !world.isBrainstorm(p));
 			const parents = rest.filter((p) => world.hasChildren(p)).sort(recent);
 			const notes = rest.filter((p) => !world.hasChildren(p)).sort(recent);
-			list = [...parents, ...notes, ...brain].map((p) => this.node(p)).filter((n): n is MapNode => !!n);
+			list = applyOrder([...parents, ...notes, ...brain], this.savedOrder(id)).map((p) => this.node(p)).filter((n): n is MapNode => !!n);
 		}
 		this.kids.set(id, list);
 		return list;
@@ -150,13 +154,15 @@ export class HomeMapSource implements MapSource {
 	}
 }
 
-/** Depth of the branch the Map unfolds under its root. */
-const DEPTH = 3;
+/** Depth of the branch the Map unfolds under its root toward a note (the fourth level folds the root). */
+const DEPTH = 4;
+/** Depth of the branch unfolded when no note leads the way (the root stays whole). */
+const FIRST_DEPTH = 2;
 const SHOWN = 8;
 
 /**
  * The branch unfolded under `root` at first: the way to `here` when it leads somewhere below the
- * root, else down the first node that has children, three levels at most. Never empty when the
+ * root, else down the first node that has children, three levels at most (four toward a note). Never empty when the
  * root has a child with children: the Map never arrives flat.
  */
 export function autoChain(source: MapSource, root: string, here: string | null): string[] {
@@ -177,7 +183,7 @@ export function autoChain(source: MapSource, root: string, here: string | null):
 	}
 	const chain: string[] = [];
 	let at = root;
-	while (chain.length < DEPTH) {
+	while (chain.length < FIRST_DEPTH) {
 		const next = source.children(at).slice(0, SHOWN).find((n) => n.hasChildren);
 		if (!next) break;
 		chain.push(next.id);

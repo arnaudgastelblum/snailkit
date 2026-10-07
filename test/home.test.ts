@@ -32,7 +32,9 @@ import { familyTags, hasTag, leafOf, tagFamilies } from "../src/modules/home/log
 import { typesInSearch } from "../src/modules/home/logic/keys";
 import { dueCounts, oldDailyTasks, todayChips, toSortCount } from "../src/modules/home/logic/today";
 import type { World } from "../src/modules/home/logic/world";
-import { cleanSettings, splitFolders } from "../src/modules/home/settings-logic";
+import { cleanSettings, migrateSettings, splitFolders, startLens, LENSES } from "../src/modules/home/settings-logic";
+import { applyOrder, cleanOrder, dropFromOrder, moveBefore, orderMentions, orderOf, renameInOrder, withOrder } from "../src/modules/home/logic/order";
+import { cleanNoteName, dropRefusal, freeNotePath } from "../src/modules/home/logic/moves";
 
 /** A note: its parent, when it was modified (higher is more recent), and what it is. */
 interface Spec {
@@ -245,9 +247,9 @@ test("stored settings are cleaned: unknown ids, empty groups, duplicates, bad va
 		pulledOut: [null, "S.md"],
 	});
 	assert.deepEqual(arr, { domainOrder: ["A.md", "B.md"], featured: "", groups: [["g1", "One"]], domainGroups: [["A.md", "g1"]], hidden: [], pulledOut: ["S.md"] });
-	const settings = cleanSettings({ openWorkbench: "sometimes" as never, lens: "graph", homePage: "  Home.md ", ignoredFolders: "a", domainOrder: [], featured: "", groups: [], domainGroups: [], hidden: [], pulledOut: [] });
+	const settings = cleanSettings({ openWorkbench: "sometimes" as never, lens: "graph", homePage: "  Home.md ", ignoredFolders: "a", domainOrder: [], featured: "", groups: [], domainGroups: [], hidden: [], pulledOut: [], lensChosen: false, noteOrder: [] });
 	assert.equal(settings.openWorkbench, "startup-and-new-tabs");
-	assert.equal(settings.lens, "domains");
+	assert.equal(settings.lens, "map");
 	assert.equal(settings.homePage, "Home.md");
 	assert.deepEqual(splitFolders(" Templates, /Archive/ ,, Templates"), ["Templates", "Archive"]);
 });
@@ -537,7 +539,7 @@ test("the Map's first branch: toward the note just opened, else the first node w
 	const order = () => w.domains().sort().map((path) => ({ path, group: null }));
 	const source = new HomeMapSource(w, order, "Vault");
 	assert.deepEqual(autoChain(source, "Home.md", "Clients/Acme Budget.md"), ["Clients/Acme.md", "Clients/Acme Intake.md", "Clients/Acme Budget.md"]);
-	assert.deepEqual(autoChain(source, "Home.md", "Clients/Review questions.md"), ["Clients/Acme.md", "Clients/Acme Intake.md", "Clients/2026-10-01 Acme Review.md"], "three levels at most");
+	assert.deepEqual(autoChain(source, "Home.md", "Clients/Review questions.md"), ["Clients/Acme.md", "Clients/Acme Intake.md", "Clients/2026-10-01 Acme Review.md", "Clients/Review questions.md"], "four levels toward a note");
 	assert.deepEqual(autoChain(source, "Home.md", "Inbox.md"), ["Areas/Practice.md"], "elsewhere: the first node with children, down");
 	assert.deepEqual(autoChain(source, "Clients/Acme Intake.md", null), ["Clients/2026-10-01 Acme Review.md"]);
 	assert.deepEqual(mapStateAt(source, "Clients/Acme.md", "Clients/Acme Budget.md"), { root: "Clients/Acme.md", chain: ["Clients/Acme Intake.md", "Clients/Acme Budget.md"], focus: null });
@@ -560,4 +562,79 @@ test("keys on the Home itself: a typed character searches, shortcuts and modifie
 	assert.equal(typesInSearch("t", { ...plain, meta: true }), false);
 	assert.equal(typesInSearch("1", { ...plain, alt: true }), false);
 	assert.equal(typesInSearch("a", { ...plain, composing: true }), false);
+});
+
+// ----- the Map: order of the notes, moves, new notes, first view -----
+
+test("Map order: the order made per parent, notes never placed first", () => {
+	assert.deepEqual(applyOrder(["a", "b", "c"], undefined), ["a", "b", "c"]);
+	assert.deepEqual(applyOrder(["a", "b", "c"], ["c", "a", "b"]), ["c", "a", "b"]);
+	// A new child (d) comes first; a child gone (x) is skipped; duplicates count once.
+	assert.deepEqual(applyOrder(["d", "a", "b", "c"], ["c", "x", "a", "b", "c"]), ["d", "c", "a", "b"]);
+	assert.deepEqual(moveBefore(["a", "b", "c"], "c", "a"), ["c", "a", "b"]);
+	assert.deepEqual(moveBefore(["a", "b", "c"], "a", null), ["b", "c", "a"]);
+	assert.deepEqual(moveBefore(["a", "b", "c"], "a", "c"), ["b", "a", "c"]);
+	assert.deepEqual(moveBefore(["a", "b"], "z", "a"), ["a", "b"]);
+	let order = withOrder([], "P.md", ["b", "a"]);
+	order = withOrder(order, "Q.md", ["x"]);
+	assert.deepEqual(orderOf(order, "P.md"), ["b", "a"]);
+	assert.deepEqual(orderOf(withOrder(order, "P.md", ["a", "b"]), "P.md"), ["a", "b"]);
+	assert.ok(orderMentions(order, "a") && orderMentions(order, "Q.md") && !orderMentions(order, "z"));
+	assert.deepEqual(renameInOrder(order, "P.md", "R.md"), [["R.md", ["b", "a"]], ["Q.md", ["x"]]]);
+	assert.deepEqual(renameInOrder(order, "a", "A"), [["P.md", ["b", "A"]], ["Q.md", ["x"]]]);
+	assert.deepEqual(dropFromOrder(order, "x"), [["P.md", ["b", "a"]]]);
+	assert.deepEqual(dropFromOrder(order, "P.md"), [["Q.md", ["x"]]]);
+	assert.deepEqual(cleanOrder([["P.md", ["a", "a", 3]], ["P.md", ["b"]], "junk", ["E.md", []]]), [["P.md", ["a"]]]);
+	assert.deepEqual(cleanOrder(null), []);
+});
+
+test("Map order: the Map's children follow the order made, the root keeps the domains' order", () => {
+	const w = vault();
+	const order = withOrder([], "Clients/Acme Intake.md", ["Clients/Acme Timeline.md", "Clients/Acme Budget.md"]);
+	const source = new HomeMapSource(w, () => w.domains().sort().map((path) => ({ path, group: null })), "Vault", (parent) => orderOf(order, parent));
+	// The dated review was never placed: it comes first, then the order made.
+	assert.deepEqual(source.children("Clients/Acme Intake.md").map((n) => n.id), [
+		"Clients/2026-10-01 Acme Review.md",
+		"Clients/Acme Timeline.md",
+		"Clients/Acme Budget.md",
+	]);
+	assert.deepEqual(source.children("Home.md").map((n) => n.id), ["Areas/Practice.md", "Clients/Acme.md", "Reading/Reading List.md"]);
+});
+
+test("Map moves: refused on itself, below itself, where it already is, or on the vault", () => {
+	const w = vault();
+	assert.equal(dropRefusal(w, "Clients/Acme Budget.md", "Areas/Practice.md"), null);
+	assert.equal(dropRefusal(w, "Clients/Acme Intake.md", "Clients/Acme Intake.md"), "loop");
+	assert.equal(dropRefusal(w, "Clients/Acme Intake.md", "Clients/Acme Budget.md"), "loop");
+	assert.equal(dropRefusal(w, "Clients/Acme.md", "Clients/Review questions.md"), "loop");
+	assert.equal(dropRefusal(w, "Clients/Acme Budget.md", "Clients/Acme Intake.md"), "same");
+	assert.equal(dropRefusal(w, "Clients/Acme Budget.md", "/"), "root");
+	assert.equal(dropRefusal(w, "Clients/Acme Budget.md", "Gone.md"), "gone");
+	// A note without a parent can go under any note.
+	assert.equal(dropRefusal(w, "Inbox.md", "Reading/Reading List.md"), null);
+});
+
+test("New note on the Map: a safe name, the first free path in the folder", () => {
+	assert.equal(cleanNoteName("  Family / trips: 2026?  "), "Family trips 2026");
+	assert.equal(cleanNoteName("[[Note]]#x"), "Note x");
+	assert.equal(cleanNoteName("..hidden"), "hidden");
+	assert.equal(cleanNoteName("   "), "");
+	const taken = new Set(["perso/untitled.md", "perso/untitled 1.md"]);
+	assert.equal(freeNotePath("Perso", "Untitled", (p) => taken.has(p.toLowerCase())), "Perso/Untitled 2.md");
+	assert.equal(freeNotePath("", "Untitled", () => false), "Untitled.md");
+	assert.equal(freeNotePath("/", "Untitled", () => false), "Untitled.md");
+});
+
+test("first view: the Map, unless the user picked another one", () => {
+	assert.deepEqual(LENSES, ["map", "domains", "tags"]);
+	assert.equal(startLens({ lens: "domains", lensChosen: false }), "map");
+	assert.equal(startLens({ lens: "domains", lensChosen: true }), "domains");
+	assert.equal(startLens({ lens: "tags", lensChosen: true }), "tags");
+	assert.equal(startLens({ lens: "nonsense", lensChosen: true }), "map");
+	// Saved before: "domains" was the default (maybe never picked), the others were picked.
+	assert.equal(migrateSettings({ lens: "domains" }).lensChosen, false);
+	assert.equal(migrateSettings({ lens: "tags" }).lensChosen, true);
+	assert.equal(migrateSettings({ lens: "map" }).lensChosen, true);
+	assert.equal(migrateSettings({}).lensChosen, false);
+	assert.equal(migrateSettings({ lens: "domains", lensChosen: true }).lensChosen, true);
 });

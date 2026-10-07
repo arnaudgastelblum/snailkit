@@ -24,6 +24,8 @@ import { TAB_ORDER } from "../../core/workbench/types";
 import type { PlacesService, SessionsService, SessionsSettings, TagColorsService, TasksWorkbench } from "./types";
 import { contextOf, contextsOf, createdAt, keepCreated, keepIn, renameCreated, renameIn, searchable, serviceList, toggleIn, triageOf, locateRaw, withContext, withCreated, type SessionInfo, type Triage } from "./atelier";
 import { SessionsTab } from "./tab";
+import { applyEdit, bodyLineCount, countsOf, flowOf, linesOf, type Flow, type LineEdit } from "./flow";
+import { Sorter } from "./tri";
 
 
 export class SessionsRuntime {
@@ -33,7 +35,11 @@ export class SessionsRuntime {
 	/** Read from each session's text: closed or not, how many choices still wait. */
 	private state = new Map<string, { closed: boolean; pending: number }>();
 	/** Counts and searchable text of each session, for the Sessions tab of the Workbench. */
-	private details = new Map<string, { summary: Summary; triage: Triage; context: string | null; text: string }>();
+	private details = new Map<string, { summary: Summary; triage: Triage; context: string | null; text: string; lines: number }>();
+	/** The sorting mode, while it is open. */
+	sorter: Sorter | null = null;
+	/** Counts the requests to open the sorting mode: only the last one opens. */
+	sortGeneration = 0;
 	private readonly tab = new SessionsTab(this);
 	private tabRemove: (() => void) | null = null;
 	private statusEl: HTMLElement | null = null;
@@ -213,6 +219,7 @@ export class SessionsRuntime {
 			window.clearTimeout(this.saveTimer);
 			void this.ctx.saveSettings();
 		}
+		this.sorter?.close("quit", true);
 		for (const view of [...this.views]) view.shutdown();
 		for (const modal of [...this.modals]) modal.close();
 		this.modals.clear();
@@ -254,7 +261,7 @@ export class SessionsRuntime {
 		const before = this.state.get(path);
 		const next = { closed: this.isClosing(last), pending: summary.pending };
 		this.state.set(path, next);
-		this.details.set(path, { summary, triage: triageOf(summary), context: contextOf(lines.slice(0, 40)), text: searchable(text.slice(0, 20000)) });
+		this.details.set(path, { summary, triage: triageOf(summary), context: contextOf(lines.slice(0, 40)), text: searchable(text.slice(0, 20000)), lines: bodyLineCount(lines, this.isClosing) });
 		this.tab.changed();
 		if (!before || before.closed !== next.closed || (before.pending > 0) !== (next.pending > 0)) this.changed();
 		this.updateStatus();
@@ -357,6 +364,8 @@ export class SessionsRuntime {
 				modified: file.stat.mtime,
 				done: d?.triage.done ?? 0,
 				undecided: d?.triage.undecided ?? 0,
+				untagged: d?.triage.untagged ?? 0,
+				lines: d?.lines ?? 0,
 			});
 		}
 		if (recorded) this.saveSoon();
@@ -375,7 +384,7 @@ export class SessionsRuntime {
 		return contextsOf(this.sessionInfos());
 	}
 
-	private file(path: string): TFile | null {
+	file(path: string): TFile | null {
 		const file = this.app.vault.getAbstractFileByPath(path);
 		return file instanceof TFile ? file : null;
 	}
@@ -399,6 +408,7 @@ export class SessionsRuntime {
 			this.settings.archived = toggleIn(this.settings.archived, path);
 			this.saveSoon();
 			this.changed();
+			this.refreshViews();
 		}
 		return on;
 	}
@@ -567,7 +577,7 @@ export class SessionsRuntime {
 	}
 
 	/** Appends the closing line at the bottom of the note. */
-	async writeClosing(file: TFile): Promise<void> {
+	async writeClosing(file: TFile, message?: (summary: Summary) => string): Promise<void> {
 		const { ctx } = this;
 		if (this.stopped) return;
 		let summary: Summary | null = null;
@@ -587,7 +597,10 @@ export class SessionsRuntime {
 		this.state.set(file.path, { closed: true, pending: s?.pending ?? 0 });
 		this.changed();
 		this.updateStatus();
-		ctx.toast(ctx.t("toast.closed"));
+		for (const view of this.views) if (view.file?.path === file.path) view.sealed();
+		const done = summary as Summary | null;
+		if (message && done) ctx.toast(message(done), { action: { label: ctx.t("flow.reopen"), run: () => this.reopen(file) }, duration: 6000 });
+		else ctx.toast(ctx.t("toast.closed"));
 	}
 
 	reopen(file: TFile): void {
@@ -674,6 +687,96 @@ export class SessionsRuntime {
 		const cm = (target.editor as unknown as { cm?: EditorView }).cm;
 		const view = cm ? viewOf(cm) : null;
 		view?.catchLine(line + 1, start, end);
+	}
+
+	// ----- the path: Write, Sort, Finish, Archive -----
+
+	/** Where a session stands, from what was last read of it. */
+	flowOf(s: SessionInfo, now = Date.now()): Flow {
+		return flowOf({ closed: s.closed, archived: !!s.archived, ideas: s.ideas, tasks: s.tasks, untagged: s.untagged ?? 0, undecided: s.undecided ?? 0, lines: s.lines ?? 0, modified: s.modified, now });
+	}
+
+	/** Where a note stands, from its text as the editor holds it. */
+	flowOfText(path: string, text: string, now = Date.now()): Flow {
+		const lines = text.split(/\r?\n/);
+		const summary = summarize(lines, this.isClosing);
+		const last = [...lines].reverse().find((l) => l.trim()) ?? "";
+		const file = this.file(path);
+		return flowOf({ closed: this.isClosing(last), archived: this.settings.archived.includes(path), ...countsOf(summary, bodyLineCount(lines, this.isClosing)), modified: file?.stat.mtime, now });
+	}
+
+	/** One session's info, or null. */
+	infoOf(path: string): SessionInfo | null {
+		return this.sessionInfos().find((s) => s.path === path) ?? null;
+	}
+
+	/** Finish: the closing line at the bottom of the note, the note sealed, a warm word. */
+	async finish(path: string): Promise<void> {
+		const file = this.file(path);
+		if (!file || this.stopped) return;
+		for (const view of this.views) if (view.file?.path === path) view.cancelCompose();
+		await this.writeClosing(file, (s) => this.ctx.t("seal.line", { ideas: this.ctx.tn("seal.ideas", s.ideas), tasks: this.ctx.tn("seal.tasks", s.tasks.length) }));
+	}
+
+	/** Archive or take out of the archive, with a toast that can undo it. */
+	archiveWithUndo(path: string, on: boolean): void {
+		const file = this.file(path);
+		this.setArchived(path, on);
+		this.ctx.toast(this.ctx.t(on ? "desk.archived" : "desk.unarchived"), {
+			action: { label: this.ctx.t("common.undo"), run: () => {
+				if (file && this.file(file.path) === file) this.setArchived(file.path, !on);
+			} },
+		});
+		this.refreshViews();
+	}
+
+	/** Opens the sorting mode on one session (its path) or on every session in progress (null). */
+	startSort(scope: string | null, returnFocus?: HTMLElement | null): void {
+		if (this.stopped) return;
+		this.sorter?.close("quit", true);
+		for (const view of this.views) view.cancelCompose();
+		void Sorter.open(this, scope, returnFocus ?? null);
+	}
+
+	/** The text of a session now: the open editor's, else the file's. */
+	async textOf(path: string): Promise<string | null> {
+		const file = this.file(path);
+		if (!file) return null;
+		return this.editorText(file) ?? (await this.app.vault.cachedRead(file));
+	}
+
+	/**
+	 * Changes lines of a note, in its open editor when there is one (so that Ctrl/Cmd+Z takes it
+	 * back there too), else on disk. `compute` gets the lines as they are just before the change and
+	 * returns the edit, or null to leave the note untouched. Returns the edit made, or null.
+	 */
+	async editNote(path: string, compute: (lines: string[]) => LineEdit | null): Promise<LineEdit | null> {
+		const file = this.file(path);
+		if (!file) return null;
+		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			const view = leaf.view;
+			if (!(view instanceof MarkdownView) || view.file?.path !== path) continue;
+			const editor = view.editor;
+			const text = editor.getValue();
+			const lines = linesOf(text);
+			const edit = compute(lines);
+			if (!edit) return null;
+			// The smallest change between the two texts, as one replacement (one step of the editor's history).
+			const next = applyEdit(lines, edit).join("\n");
+			let from = 0;
+			while (from < text.length && from < next.length && text[from] === next[from]) from++;
+			let tail = 0;
+			while (tail < text.length - from && tail < next.length - from && text[text.length - 1 - tail] === next[next.length - 1 - tail]) tail++;
+			if (from !== text.length || from !== next.length) editor.replaceRange(next.slice(from, next.length - tail), editor.offsetToPos(from), editor.offsetToPos(text.length - tail));
+			return edit;
+		}
+		let made: LineEdit | null = null;
+		await this.app.vault.process(file, (text) => {
+			const lines = linesOf(text);
+			made = compute(lines);
+			return made ? applyEdit(lines, made).join("\n") : text;
+		});
+		return made;
 	}
 
 	// ----- what the editors need -----

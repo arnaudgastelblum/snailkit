@@ -22,9 +22,9 @@ export class MapLifetime {
 		const id = this.win.requestAnimationFrame(() => { this.frames.delete(id); if (!this.dead) callback(); });
 		this.frames.add(id);
 	}
-	listen(target: EventTarget, type: string, callback: (event: Event) => void): void {
-		target.addEventListener(type, callback);
-		this.cleanups.push(() => target.removeEventListener(type, callback));
+	listen(target: EventTarget, type: string, callback: (event: Event) => void, capture = false): void {
+		target.addEventListener(type, callback, capture);
+		this.cleanups.push(() => target.removeEventListener(type, callback, capture));
 	}
 	add(cleanup: () => void): void { this.cleanups.push(cleanup); }
 	animate(el: Element, frames: Keyframe[], duration: number, delay = 0, spring = false, done?: () => void): void {

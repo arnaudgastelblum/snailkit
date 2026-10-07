@@ -292,3 +292,68 @@ test("without a home page, the domains are the top notes that have children", ()
 	assert.equal(places.placeOf(vault.files.get("A21.md")!).area?.path, "A.md", "the pill names the top note, as before");
 	places.dispose();
 });
+
+test("moving a note: the parent key kept (up, parent or moc), else up", async () => {
+	const { parentKeyIn, parentValue } = await import("../src/core/places/move");
+	assert.equal(parentKeyIn(undefined), "up");
+	assert.equal(parentKeyIn({ tags: ["a"] }), "up");
+	assert.equal(parentKeyIn({ up: "[[A]]" }), "up");
+	assert.equal(parentKeyIn({ parent: "[[A]]" }), "parent");
+	assert.equal(parentKeyIn({ MOC: "[[A]]" }), "MOC");
+	// The key the rule reads wins over an empty one earlier in the order.
+	assert.equal(parentKeyIn({ up: "", moc: "[[A]]" }), "moc");
+	// An empty parent key is filled rather than adding "up" beside it.
+	assert.equal(parentKeyIn({ parent: null }), "parent");
+	assert.equal(parentValue("[[A]]", "[[B]]"), "[[B]]");
+	assert.equal(parentValue(undefined, "[[B]]"), "[[B]]");
+	assert.deepEqual(parentValue(["[[A]]", "[[C]]"], "[[B]]"), ["[[B]]", "[[C]]"]);
+	assert.equal(parentValue(["[[A]]"], "[[B]]"), "[[B]]");
+});
+
+test("moving a note: refused on itself or below itself", async () => {
+	const { wouldLoop } = await import("../src/core/places/move");
+	const parents: Record<string, string | null> = { home: null, a: "home", b: "a", c: "b", x: "home", loop1: "loop2", loop2: "loop1" };
+	const parentOf = (p: string) => parents[p] ?? null;
+	assert.equal(wouldLoop("a", "a", parentOf), true);
+	assert.equal(wouldLoop("a", "c", parentOf), true);
+	assert.equal(wouldLoop("a", "x", parentOf), false);
+	assert.equal(wouldLoop("c", "a", parentOf), false);
+	assert.equal(wouldLoop("a", "home", parentOf), false);
+	// An existing loop elsewhere ends the walk.
+	assert.equal(wouldLoop("a", "loop1", parentOf), false);
+});
+
+test("moving a note: a loop is found however deep the chain", async () => {
+	const { wouldLoop } = await import("../src/core/places/move");
+	// n0 <- n1 <- ... <- n199: moving n0 under n199 would close a loop 200 levels down.
+	const parentOf = (p: string) => { const i = Number(p.slice(1)); return i > 0 ? `n${i - 1}` : null; };
+	assert.equal(wouldLoop("n0", "n199", parentOf), true);
+	assert.equal(wouldLoop("n150", "n10", parentOf), false);
+});
+
+test("moving a note: Undo puts the old value back only while the move's value is still there", async () => {
+	const { undoParent } = await import("../src/core/places/move");
+	// Key added by the move: removed again.
+	let fm: Record<string, unknown> = { up: "[[B]]", tags: ["x"] };
+	assert.equal(undoParent(fm, { key: "up", had: false, before: undefined, written: "[[B]]" }), true);
+	assert.deepEqual(fm, { tags: ["x"] });
+	// Old value put back.
+	fm = { parent: "[[B]]" };
+	assert.equal(undoParent(fm, { key: "parent", had: true, before: "[[A]]", written: "[[B]]" }), true);
+	assert.deepEqual(fm, { parent: "[[A]]" });
+	// Changed since (by hand or by a sync): nothing undone, nothing lost.
+	fm = { up: "[[C]]" };
+	assert.equal(undoParent(fm, { key: "up", had: false, before: undefined, written: "[[B]]" }), false);
+	assert.deepEqual(fm, { up: "[[C]]" });
+	fm = { mocs: ["[[B]]", "[[D]]", "[[E]]"] };
+	assert.equal(undoParent(fm, { key: "mocs", had: true, before: ["[[A]]", "[[D]]"], written: ["[[B]]", "[[D]]"] }), false);
+	assert.deepEqual(fm, { mocs: ["[[B]]", "[[D]]", "[[E]]"] });
+	// Removed since: stays removed.
+	fm = {};
+	assert.equal(undoParent(fm, { key: "up", had: true, before: "[[A]]", written: "[[B]]" }), false);
+	assert.deepEqual(fm, {});
+	// Lists compared by content.
+	fm = { mocs: ["[[B]]", "[[D]]"] };
+	assert.equal(undoParent(fm, { key: "mocs", had: true, before: ["[[A]]", "[[D]]"], written: ["[[B]]", "[[D]]"] }), true);
+	assert.deepEqual(fm, { mocs: ["[[A]]", "[[D]]"] });
+});

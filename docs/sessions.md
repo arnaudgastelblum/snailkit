@@ -40,31 +40,54 @@ Clean up the garage before winter.
 3. To use an existing note, run **Snailkit: Treat this note as a brainstorm**.
 4. Catch a sentence: hover it and click **+**, click its dot, or put the cursor in it and press `Ctrl+Enter` (`Cmd+Enter` on macOS).
 5. Rename the title if you like, press `Enter` to keep the proposed tag (or `Tab` to choose one: type to filter, `↑` `↓` to move, `Enter` to choose). When lines follow the task, adjust the description with `↓` and `↑` and press `Enter` to place it; otherwise the task is placed as soon as its tag is chosen.
-6. When you are done, run **Snailkit: Close the brainstorm** (or **Close this brainstorm** in the lightning panel of Note rail, or click the brainstorm in the status bar). Read the summary and choose **Close the brainstorm**. **Snailkit: Reopen the brainstorm** removes the closing line.
+6. Sort what waits: in the pill at the top right of the note, **Sort N lines** (see *Sorting* below).
+7. When you are done, **Finish** (in the pill, or at the end of the sorting): the closing line is written, the note is sealed. **Reopen** is always there. **Snailkit: Close the brainstorm** (or **Close this brainstorm** in the lightning panel of Note rail, or a click on the brainstorm in the status bar) still shows the summary first; **Snailkit: Reopen the brainstorm** removes the closing line.
+
+### Where it stands: four steps
+
+A brainstorm goes through four steps: **Write → Sort → Finish → Archive**. Where it stands is computed from the note, never stored: while it holds tasks without a tag or lines to decide (`- [?]`), the next step is **Sort**; otherwise **Finish**. It is said in words, color only helps: *New brainstorm*, *In progress*, *In progress · 2 without tag · 1 to decide*, *Ready to finish ✓*, *Finished*, *Archived*.
+
+- **The pill** at the top right of the note says it. Hover it (tap it on a phone: a sheet) for the **card**: the four steps, the current one lit; what you dropped and launched (*14 ideas dropped · 4 tasks launched · 1 to decide · 23 lines*: what was done, never what is left); one button for the next step (**Sort 3 lines**, **Finish**, **Archive**); and **Show me**, which lights the lines that wait one by one in the note (`←` `→` or the arrows to go from one to the next, `Esc` to stop). When the last tag is placed, the pill becomes *Ready to finish ✓* with a small ripple.
+- **A new brainstorm** waits with a soft question on its first empty line, *What is on your mind?*, gone with the first letter.
+- **Finish** writes the closing line and seals the note: a discreet stamp, a slightly tinted page, and one sentence, *13 ideas dropped, 4 launched. Mind lighter.*, with **Reopen**.
+
+### Sorting
+
+**Sort** opens one line at a time in the middle of the screen: from the pill, the lines of that brainstorm; from the Brainstorms tab, those of every brainstorm in progress. Each line shows where it comes from and offers four choices:
+
+| Key | Choice | In the note |
+| --- | --- | --- |
+| `1` | **Task + tag** | the tag column opens (the same as when composing); the line becomes `- [ ] Text #tag` |
+| `2` | **To decide** | `- [?] Text` (a line already to decide stays as it is) |
+| `3` | **Keep as an idea** | the checkbox goes, the text stays (`- Text`) |
+| `4` | **Delete** | the line goes, with its description |
+
+`Backspace` takes the last decision back, in the note too; `Esc` leaves (what was decided stays). A bar moves on, the card flies to its choice, and a short screen closes the round, with **Finish the brainstorm** when it is ready. In the note, each decision is also one step of the editor's history (`Ctrl+Z`).
 
 On a phone, tap a sentence: **+ Task** and **? To decide** appear under it. The window becomes a sheet at the bottom of the screen, open on the tag column, with large **−** and **+** buttons for the description.
 
 ### All your brainstorms, in the Workbench
 
-The [Workbench](workbench.md) gets a **Brainstorms** tab, whether the Tasks module is on or not, with the number of brainstorms still to sort next to its name, in orange. Open it with **Snailkit: Open the workbench: brainstorms**, or **All brainstorms** in the lightning panel of Note rail. It is a sorting desk:
+The [Workbench](workbench.md) gets a **Brainstorms** tab, whether the Tasks module is on or not, with the number of brainstorms still to sort next to its name. Open it with **Snailkit: Open the workbench: brainstorms**, or **All brainstorms** in the lightning panel of Note rail.
 
-- A **timeline** at the top: one bubble per brainstorm on a time axis (the last weeks, scroll sideways for older ones), larger when the brainstorm holds more tasks. Blue: open; orange: to sort; hollow: closed. Today is marked. Hover a bubble for its title and counts. The button next to the search shows or hides it.
-- A **search** (title and text of the brainstorms), **filters** (All, Open, To sort, Closed, and Archived once something is archived), each with its count, and **context chips** (All, then each context in use) when at least one brainstorm has a context.
-- The **list**: pinned brainstorms first, under **Pinned**, then the others, newest first. Each row shows the title, the date, the ideas, the tasks done out of the tasks created, the lines to decide, the context, and a dot: orange while something is left to sort.
+- At the top, one sentence rather than a dashboard: *3 in progress · 4 tasks await a tag · 1 to decide*, with **Sort** (every brainstorm in progress). Under it, a discreet recap, *This week: 3 brainstorms, 9 tasks launched*; its **×** hides it on this device.
+- A **timeline**: one bubble per brainstorm on a time axis (the last weeks, scroll sideways for older ones), larger when the brainstorm holds more tasks. Its shape says its state: full while in progress, a ring with a dot while something is to sort, hollow with a check once finished (a legend shows while the pointer is over it). Today is marked. Hover a bubble for its title and counts. The button next to the search shows or hides it.
+- A **search** (title and text of the brainstorms), **context chips** (All, then each context in use) when at least one brainstorm has a context, and **Archived** once something is archived.
+- The **list**, in groups: **In progress**, then **Finished** (folded; a click unfolds it, kept on this device), then **Archived** when shown. Pinned brainstorms come first in their group. Each row shows the title, the context, the four steps in small, one state in words and the date. Hover a row for the card (the steps, the tally, the next step, **Open**). A brainstorm left for a week without change says *Finish it?*.
 
 When the Workbench is a page, the **detail** of the selected brainstorm sits on the right:
 
 - its title (click it, or the pencil, or press `F2` to rename the note: links to it follow), its state and its **context**;
 - when it started and when it was last edited;
-- **Sorted at N %** with a bar, and the counts: ideas, tasks done, to decide, without tag, without follow-up;
-- its **tasks** (check them right there; click one to open the note at its line), the lines **to decide** (**Task** opens the note at the line and starts catching it as a task), and the **ideas without follow-up** (click one to open the note at its line);
+- the card: the four steps, the tally and the next step;
+- its **tasks** (check them right there; click one to open the note at its line), the lines **to decide** (**Task** opens the note at the line and starts catching it as a task), and the **free ideas** (click one to open the note at its line);
 - at the bottom: **Open to edit** (the note opens in a tab next to the Workbench, with everything you need to catch tasks), **Pin**, **Context**, **Archive** and **Delete**.
 
 In the side panel and on phones the list is alone: a click (a tap) opens the brainstorm, and the actions are in a menu: right click, long press, or the **⋯** button of the row.
 
 **Context.** A tag that says where a brainstorm belongs, for example `#work` or `#home`. **Context** offers the contexts already used by your other brainstorms; type to filter or to name a new one, `Enter` to choose; **Remove the context** takes it away. It is written in the note itself (see *Exact behavior*).
 
-**Archive** takes a brainstorm out of the list without touching the note; the **Archived** filter shows them, and **Unarchive** brings one back. **Delete** asks for a confirmation in the page, then moves the note to the trash, as your Obsidian settings say (system trash, Obsidian's `.trash` folder, or deleted for good).
+**Archive** takes a brainstorm out of the list without touching the note; **Archived** shows them, and **Unarchive** brings one back. **Delete** asks for a confirmation in the page, then moves the note to the trash, as your Obsidian settings say (system trash, Obsidian's `.trash` folder, or deleted for good).
 
 Keys in the tab:
 
@@ -146,7 +169,9 @@ The bar at the bottom of the window shows the two or three keys of the current s
 
 **The Brainstorms tab.** It is added to the Workbench while this module is on, after the Home and Tasks tabs; the Tasks module does not need to be on. Its counts come from the summary logic above, read from each brainstorm when it changes (never the whole vault at each keystroke). A brainstorm is "to sort" while it is open and holds tasks without a tag or `- [?]` lines; "Open" includes those. The date of a brainstorm is the moment it began, kept in the module settings: when it is created, or, for an adopted note, the date of the note at that moment. It follows renames and does not change when a synced copy of the note gets another file date. Brainstorms tracked before this date was kept take the file date once, then keep it. The timeline starts three weeks back (or at the first brainstorm, if older) and ends tomorrow; brainstorms of the same day stack up. Without a choice of yours, it is shown when the window is at least 640 pixels high; your choice is then kept on this device. The search looks for every word typed, ignoring case and accents, in the title and the first 20,000 characters of the note. The detail is shown when the Workbench is a page on a computer; on a phone, the list is always alone.
 
-**Sorted at N %, to decide, without follow-up.** The choices of a brainstorm are its tasks and its `- [?]` lines. A task is sorted when it has a tag or is checked; a `- [?]` line is never sorted until it becomes a task (or loses its `?`). *Sorted at N %* is the share of choices sorted, rounded down, so 100 % means nothing waits, exactly when the orange dot goes away. A brainstorm without tasks and without `- [?]` lines shows *Nothing to sort*. *To decide* counts the `- [?]` lines. *Without tag* counts the open tasks without a tag. *Ideas without follow-up* are the ideas that are neither a task nor a `- [?]` line: paragraphs of free text and questions left as sentences (the summary counts those questions with the lines to decide, since it offers to make them tasks). They never lower the percentage: a free note is allowed to stay a note.
+**The steps and the counts.** *Without tag* counts the open tasks without a tag; *to decide* the `- [?]` lines. While either is not zero, the step is **Sort**; then **Finish** once the brainstorm holds at least one task (a brainstorm without tasks can be finished too: its next step says so); the closing line makes it *Finished*, and archiving it, *Archived*. *Ideas dropped* counts the ideas as the summary does, *tasks launched* every task (checked or not), *lines* the lines written after the header (not blank, outside code and properties, closing line left out). *Free ideas* are the ideas that are neither a task nor a `- [?]` line: paragraphs of free text and questions left as sentences. A brainstorm in progress whose note did not change for 7 days is invited to finish (*Finish it?*); nothing more. Without anything to sort, **Sort** says so and opens nothing.
+
+**Sorting, exactly.** The lines offered are the open tasks without a tag and the `- [?]` lines, in the order of the notes (from the tab: brainstorms in progress, pinned first, then newest first). Each decision finds its line again just before writing it: at its place (which follows the decisions already made in the same note) if it still reads the same, else the only line of the note reading the same; it must still be something to sort (an open task without a tag, or a line to decide, outside code and properties). Otherwise nothing is written and a message says so. The change goes through the open editor of the note when there is one (one step of its history), else into the file. **Task + tag** writes the tag at the end of the line as the composition does and remembers it for the suggestions. **Delete** removes the task's description with it, only as it was shown: when the description changed meanwhile, the card shows it again as it is now and nothing is deleted; a line whose description holds a code block is never deleted from here. `Backspace` (or **Undo the last one**) puts the lines back exactly, only at the place the decision was made and only if that place and its neighbours still read as they were left; otherwise nothing is undone and a message says so. A note emptied by Delete is filled again. Keys pressed while a card flies are played in order once it has landed.
 
 **Checking a task** in the detail goes through the Tasks module when it knows the task (a tagged task: it writes its completion date as usual); otherwise only the checkbox changes. Nothing is written when the line changed since it was read.
 
@@ -162,7 +187,9 @@ The bar at the bottom of the window shows the two or three keys of the current s
 
 **Phones.** There is no hover: a tap on a sentence shows **+ Task** and **? To decide** under its line, until you tap elsewhere. While composing, the keyboard closes, the window is a sheet at the bottom of the screen above the editing toolbar, open on the tag column (a tap on the field brings the keyboard back to filter), the rows are taller, the chevron of a parent opens its sub-tags, and the grip is larger. The help bar and the **?** are not shown.
 
-**Buttons.** The window, the summary and the Brainstorms tab use Snailkit's shared buttons: **Place**, **Close the brainstorm** and **Open to edit** are the primary ones, **Cancel** and **Back** are quiet, the filters of the tab form a segmented control.
+**Buttons.** The window, the summary and the Brainstorms tab use Snailkit's shared buttons: **Place**, **Close the brainstorm**, **Open to edit** and the next step of a card are the primary ones, **Cancel** and **Back** are quiet.
+
+**Finish and Reopen.** **Finish** writes the same closing line as **Close the brainstorm** (without the summary) and shows the sealed note: the closing line stays the only trace in the file. **Reopen** (on the seal, in the card, in the message after finishing, or the command) removes it.
 
 **Motion.** Every animation follows the system's reduced motion setting: with it, things appear in place without moving.
 

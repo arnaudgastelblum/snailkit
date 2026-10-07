@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: NoteRailSettings = {
 	tocMaxLevel: 6,
 	pinsKey: "pins",
 	vaultPins: [],
+	vaultPinFolders: [],
 	bookmarksTips: 0,
 	showPlace: true,
 	showToday: true,
