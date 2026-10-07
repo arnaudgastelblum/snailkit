@@ -20,6 +20,10 @@ export interface TasksSettings {
 	sortMode: string;
 	priorityFilter: string[];
 	collapsed: string[];
+	/** Tags placed by the user in the navigator, siblings in this order (the others follow, by name). */
+	tagOrder: string[];
+	/** Open tasks placed by the user within their tag (task keys), for the "My order" sort. */
+	taskOrder: string[];
 }
 
 export type Context = ModuleContext<TasksSettings>;

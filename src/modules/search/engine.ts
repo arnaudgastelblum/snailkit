@@ -14,7 +14,7 @@ const LIGATURES: Readonly<Record<string, string>> = { "œ": "o", "Œ": "o", "æ"
 
 /** Preserve UTF-16 offsets, including ligatures and combining marks. */
 export function fold(text: string): string {
-	return text.replace(/[^\x00-\x7f]/g, char => {
+	return text.replace(/[\u0080-\uffff]/g, char => {
 		const ligature = LIGATURES[char];
 		if (ligature) return ligature;
 		const simple = char.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -26,7 +26,7 @@ export interface Token { kind: "tag" | "domain"; value: string }
 export interface Query { text: string; words: string[]; tokens: Token[]; tagPrefix: string | null }
 export function parseQuery(raw: string, tags: readonly string[] = []): Query {
 	const tokens: Token[] = [];
-	let text = raw.replace(/(?:^|\s)(#([^\s#]+)|in:([^\s]+))(?=\s)/gi, (_all, _token, tag, domain) => {
+	let text = raw.replace(/(?:^|\s)(#([^\s#]+)|in:([^\s]+))(?=\s)/gi, (_all: string, _token: string, tag: string | undefined, domain: string) => {
 		tokens.push({ kind: tag ? "tag" : "domain", value: tag ?? domain });
 		return " ";
 	}).trim();
@@ -94,7 +94,10 @@ export function readableText(text: string): string {
 		})
 		.replace(/^\s{0,3}(?:`{3,}|~{3,})[^\r\n]*/gm, blank)
 		.replace(/^[ \t]*(?:>\s*)*(?:(?:[-+*]|\d+[.)])\s+(?:\[[^\]\r\n]\]\s*)?|#{1,6}\s+|>\s*)/gm, blank)
-		.replace(/[*`~]|_{1,3}(?=\W|$)|(?<=^|\W)_{1,3}/g, blank);
+		.replace(/_{1,3}(?=\W|$)|(^|\W)_{1,3}|[*`~]/g, (all: string, separator: string | undefined) => {
+			// Match the separator first so a neighboring marker cannot consume it before an underscore.
+			return separator === undefined ? blank(all) : separator.replace(/[*`~]/g, blank) + blank(all.slice(separator.length));
+		});
 }
 export function compactText(text: string): string { return text.replace(/[^\S\r\n]+/g, " ").replace(/^ +| +$/gm, "").trim(); }
 /** Highlight every visible occurrence, merging overlapping query words. */

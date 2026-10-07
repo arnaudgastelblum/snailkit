@@ -1,0 +1,288 @@
+/* Search's scene in the settings showcase (demo.ts). --skd-u is 1/32 of the scene's width: the
+   scene is a 32 x 20 u canvas, and every box is placed in u. */
+.sk-demo-search {
+	--skd-u: calc(100cqw / 32);
+	position: absolute;
+	inset: 0;
+	font-size: var(--skd-u);
+	font-family: var(--font-interface);
+	line-height: 1.2;
+	color: var(--text-normal);
+}
+.sk-demo-search > * {
+	position: absolute;
+}
+.sk-demo-search-window {
+	inset: calc(1.2 * var(--skd-u)) calc(1.2 * var(--skd-u)) calc(-1 * var(--skd-u));
+	border-radius: calc(0.8 * var(--skd-u));
+	background: var(--background-primary);
+	box-shadow: 0 0 0 1px var(--background-modifier-border), var(--sk-shadow-pop);
+}
+.sk-demo-search-ico {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	width: 1.1em;
+	color: var(--text-muted);
+	font-weight: 600;
+}
+.sk-demo-search-ico svg.svg-icon {
+	width: 1em;
+	height: 1em;
+	stroke-width: 2;
+}
+
+/* The field */
+.sk-demo-search-field {
+	top: calc(2 * var(--skd-u));
+	left: calc(2 * var(--skd-u));
+	right: calc(2 * var(--skd-u));
+	height: calc(2.3 * var(--skd-u));
+	display: flex;
+	align-items: center;
+	gap: 0.55em;
+	padding: 0 calc(0.8 * var(--skd-u));
+	box-sizing: border-box;
+	border-radius: calc(0.55 * var(--skd-u));
+	box-shadow: inset 0 0 0 1.5px var(--sk-accent-line), 0 0 0 calc(0.2 * var(--skd-u)) var(--sk-accent-soft);
+	font-size: 1.15em;
+}
+.sk-demo-search-typed span {
+	display: inline-block;
+	overflow: hidden;
+	vertical-align: bottom;
+}
+.sk-demo-search-caret {
+	width: 1.5px;
+	height: 1.1em;
+	margin-left: -0.5em;
+	background: var(--sk-accent);
+}
+
+/* All · Notes · Tasks · Brainstorms */
+.sk-demo-search-filters {
+	top: calc(4.95 * var(--skd-u));
+	left: calc(2 * var(--skd-u));
+	display: flex;
+	gap: 0.15em;
+	padding: 0.15em;
+	border-radius: 0.55em;
+	background: var(--background-secondary);
+	font-size: 0.75em;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+.sk-demo-search-filters span {
+	padding: 0.2em 0.6em;
+	border-radius: 0.42em;
+}
+.sk-demo-search-filters .is-on {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-weight: 600;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* The results */
+.sk-demo-search-label {
+	left: calc(2.3 * var(--skd-u));
+	font-size: 0.72em;
+	color: var(--text-faint);
+}
+.sk-demo-search-g0 { top: calc(7.25 * var(--skd-u)); }
+.sk-demo-search-g1 { top: calc(10.3 * var(--skd-u)); }
+.sk-demo-search-g2 { top: calc(13.35 * var(--skd-u)); }
+.sk-demo-search-g3 { top: calc(16.4 * var(--skd-u)); }
+.sk-demo-search-row {
+	left: calc(2.3 * var(--skd-u));
+	width: calc(16.5 * var(--skd-u));
+	height: calc(1.8 * var(--skd-u));
+	display: flex;
+	align-items: center;
+	gap: 0.55em;
+	white-space: nowrap;
+	overflow: hidden;
+}
+.sk-demo-search-r0 { top: calc(8.25 * var(--skd-u)); }
+.sk-demo-search-r1 { top: calc(11.3 * var(--skd-u)); }
+.sk-demo-search-r2 { top: calc(14.35 * var(--skd-u)); }
+.sk-demo-search-r3 { top: calc(17.4 * var(--skd-u)); }
+.sk-demo-search-main {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 0.98em;
+}
+.sk-demo-search-sub,
+.sk-demo-search-snippet {
+	margin-left: 0.5em;
+}
+.sk-demo-search-sub,
+.sk-demo-search-from {
+	font-size: 0.78em;
+	color: var(--text-faint);
+}
+.sk-demo-search-from {
+	color: var(--text-muted);
+}
+.sk-demo-search-snippet {
+	font-size: 0.82em;
+	color: var(--text-muted);
+}
+.sk-demo-search-hit {
+	border-radius: 0.2em;
+	background: var(--sk-accent-wash);
+	color: var(--text-normal);
+	box-shadow: 0 0 0 0.08em var(--sk-accent-wash);
+}
+.sk-demo-search-tag {
+	--sk-hue: 175;
+	display: inline-block;
+	padding: 0.12em 0.5em;
+	border-radius: 0.35em;
+	background: hsl(var(--sk-hue) var(--sk-pill-s) var(--sk-pill-l));
+	color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l));
+}
+.sk-demo-search-tag .sk-demo-search-hit {
+	background: hsl(var(--sk-hue) var(--sk-pill-s) calc(var(--sk-pill-l) - 9%));
+	box-shadow: none;
+	color: inherit;
+}
+/* The selected row */
+.sk-demo-search-cursor {
+	left: calc(1.8 * var(--skd-u));
+	top: calc(11.3 * var(--skd-u));
+	width: calc(17.3 * var(--skd-u));
+	height: calc(1.8 * var(--skd-u));
+	border-radius: calc(0.45 * var(--skd-u));
+	background: var(--background-modifier-hover);
+	box-shadow: inset calc(0.16 * var(--skd-u)) 0 0 var(--sk-accent);
+}
+
+/* The preview */
+.sk-demo-search-preview {
+	top: calc(4.7 * var(--skd-u));
+	left: calc(19.8 * var(--skd-u));
+	right: calc(1.2 * var(--skd-u));
+	bottom: 0;
+	padding: calc(0.5 * var(--skd-u)) calc(1.1 * var(--skd-u));
+	border-left: 1px solid var(--background-modifier-border);
+	display: flex;
+	flex-direction: column;
+	gap: calc(0.75 * var(--skd-u));
+	overflow: hidden;
+}
+.sk-demo-search-preview.is-note {
+	opacity: 0;
+}
+.sk-demo-search-ptitle {
+	font-size: 0.95em;
+	font-weight: 700;
+	white-space: nowrap;
+}
+.sk-demo-search-bar {
+	width: 70%;
+	height: calc(0.32 * var(--skd-u));
+	border-radius: 99px;
+	background: var(--background-modifier-border);
+}
+.sk-demo-search-bar.is-long { width: 92%; }
+.sk-demo-search-bar.is-short { width: 45%; }
+.sk-demo-search-pline {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	font-size: 0.72em;
+	white-space: nowrap;
+}
+.sk-demo-search-box {
+	flex: none;
+	width: 0.95em;
+	height: 0.95em;
+	box-sizing: border-box;
+	border-radius: 0.25em;
+	border: 1.5px solid var(--text-faint);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-search,
+	.sk-demo.is-playing .sk-demo-search-k0,
+	.sk-demo.is-playing .sk-demo-search-k1,
+	.sk-demo.is-playing .sk-demo-search-k2,
+	.sk-demo.is-playing .sk-demo-search-label,
+	.sk-demo.is-playing .sk-demo-search-row,
+	.sk-demo.is-playing .sk-demo-search-cursor,
+	.sk-demo.is-playing .sk-demo-search-preview {
+		animation: 8s var(--sk-ease) infinite both;
+	}
+	.sk-demo.is-playing .sk-demo-search { animation-name: sk-demo-search-loop; animation-timing-function: linear; }
+	.sk-demo.is-playing .sk-demo-search-caret { animation: sk-demo-search-blink 1s steps(1) infinite; }
+	.sk-demo.is-playing .sk-demo-search-k0 { animation-name: sk-demo-search-k0; animation-timing-function: steps(1, end); }
+	.sk-demo.is-playing .sk-demo-search-k1 { animation-name: sk-demo-search-k1; animation-timing-function: steps(1, end); }
+	.sk-demo.is-playing .sk-demo-search-k2 { animation-name: sk-demo-search-k2; animation-timing-function: steps(1, end); }
+	.sk-demo.is-playing .sk-demo-search-g0,
+	.sk-demo.is-playing .sk-demo-search-r0 { animation-name: sk-demo-search-in0; }
+	.sk-demo.is-playing .sk-demo-search-g1,
+	.sk-demo.is-playing .sk-demo-search-r1 { animation-name: sk-demo-search-in1; }
+	.sk-demo.is-playing .sk-demo-search-g2,
+	.sk-demo.is-playing .sk-demo-search-r2 { animation-name: sk-demo-search-in2; }
+	.sk-demo.is-playing .sk-demo-search-g3,
+	.sk-demo.is-playing .sk-demo-search-r3 { animation-name: sk-demo-search-in3; }
+	.sk-demo.is-playing .sk-demo-search-cursor { animation-name: sk-demo-search-cursor; }
+	.sk-demo.is-playing .sk-demo-search-preview.is-note { animation-name: sk-demo-search-pnote; }
+	.sk-demo.is-playing .sk-demo-search-preview.is-task { animation-name: sk-demo-search-ptask; }
+}
+
+/* 8 s: "gar" typed (0.8-1.6 s), the results at once (1.7-2.2 s), the selection moves down to
+   the task (4.4 s), hold, then the scene fades out. */
+@keyframes sk-demo-search-loop {
+	0% { opacity: 0; }
+	3%, 94% { opacity: 1; }
+	99%, 100% { opacity: 0; }
+}
+@keyframes sk-demo-search-blink {
+	0% { opacity: 1; }
+	50% { opacity: 0; }
+}
+@keyframes sk-demo-search-k0 {
+	0% { max-width: 0; }
+	10%, 100% { max-width: 1em; }
+}
+@keyframes sk-demo-search-k1 {
+	0% { max-width: 0; }
+	15%, 100% { max-width: 1em; }
+}
+@keyframes sk-demo-search-k2 {
+	0% { max-width: 0; }
+	20%, 100% { max-width: 1em; }
+}
+@keyframes sk-demo-search-in0 {
+	0%, 21% { opacity: 0; transform: translateY(0.4em); }
+	25%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-search-in1 {
+	0%, 22% { opacity: 0; transform: translateY(0.4em); }
+	26%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-search-in2 {
+	0%, 23% { opacity: 0; transform: translateY(0.4em); }
+	27%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-search-in3 {
+	0%, 24% { opacity: 0; transform: translateY(0.4em); }
+	28%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-search-cursor {
+	0%, 22% { opacity: 0; transform: translateY(calc(-3.05 * var(--skd-u))); }
+	26%, 53% { opacity: 1; transform: translateY(calc(-3.05 * var(--skd-u))); }
+	58%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-search-pnote {
+	0%, 24% { opacity: 0; }
+	28%, 54% { opacity: 1; }
+	56%, 100% { opacity: 0; }
+}
+@keyframes sk-demo-search-ptask {
+	0%, 55% { opacity: 0; transform: translateY(0.3em); }
+	59%, 100% { opacity: 1; transform: none; }
+}

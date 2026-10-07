@@ -3,6 +3,8 @@ import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
 	"module.name": "Diapositivas a PowerPoint",
+	"module.pitch": "Tus marcos de Excalidraw, listos para PowerPoint.",
+	"demo.export": "Exportar presentación a PowerPoint",
 	"module.description": "Exporta los marcos de Excalidraw como imágenes en una presentación de PowerPoint.",
 	"reason.missing": "Excalidraw no está instalado.",
 	"reason.disabled": "Excalidraw está desactivado.",

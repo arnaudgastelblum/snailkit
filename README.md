@@ -1,65 +1,81 @@
-# Snailkit
+<p align="center"><img src="assets/mascot.png" width="96" alt="The Snailkit snail"></p>
 
-Small, calm tools for your notes. Turn on only the ones you want.
+<h1 align="center">Snailkit</h1>
 
-Snailkit is one plugin that holds several small tools. Every tool starts **off**: open the
-settings, switch on the ones you need, and each one gets its own short settings page. Turned
-off, a tool leaves nothing behind: no command, no button, no background work.
+<p align="center"><b>Everything your notes need, in one shell.</b><br>
+A free suite for Obsidian, built around one way of working:<br>
+catch your ideas, write tasks anywhere, find everything in one place.</p>
 
-## Tools
+---
 
-**Writing**
+## 1. Catch your ideas, then sort them
 
-| Tool | What it does |
-| --- | --- |
-| [Brainstorm](docs/sessions.md) | Write your ideas freely in one note, then catch the tasks in it and close with a short summary. |
-| [Column select](docs/column-select.md) | Select a column of text and edit several rows at once (Alt+Shift+arrows, Alt+drag). |
-| [Move text](docs/move-text.md) | Extract a passage to a sub-note, archive it, or send it to the end of another note, without losing a line. |
-| [Slash menu](docs/slash-menu.md) | Type `/` to insert blocks, callouts, snippets or run any command from a menu at your cursor. |
-| [Tables](docs/tables.md) | Insert, sort, resize and style Markdown tables with a small toolbar, like in a word processor. |
+![Brainstorm](assets/scenes/sessions.webp)
 
-**Organize**
+Ideas come in bursts. Open a **brainstorm** and pour everything out, in plain sentences, without
+choosing a place or a format. Then go through it once:
 
-| Tool | What it does |
-| --- | --- |
-| [Home](docs/home.md) | The first tab of the [Workbench](docs/workbench.md): today, your pins, your domains, a map of your notes and what you opened lately, filled in from your notes. |
-| [Note rail](docs/note-rail.md) | A quiet row of icons on every note: search, where the note belongs, contents, bookmarks, open tasks and a calendar of daily notes. |
-| [Search](docs/search.md) | One search for everything: notes, sections, tasks, brainstorms, domains, tags and the text of your notes. |
-| [Tag colors](docs/tag-colors.md) | Recognize tag families at a glance with stable colors and compact capsules. |
-| [Tasks](docs/tasks.md) | Every task with a `#tag`, from all your notes, in one list grouped by tag: check, prioritize, schedule and move them without opening the notes. |
+**Write** freely · **Sort** each line: a task, a question, or just an idea · **Finish** with a one-line summary · **Archive** when it is done.
 
-**Export**
+Nothing gets lost, and nothing is left floating. [How brainstorms work →](docs/sessions.md)
 
-| Tool | What it does |
-| --- | --- |
-| [PDF export](docs/pdf-export.md) | Export a note to PDF exactly as it looks in Obsidian: your theme, images and drawings, selectable text and clickable links. Desktop only. |
-| [Slides to PowerPoint](docs/slides-export.md) | Export the frames of an Excalidraw drawing, in slideshow order, to a PowerPoint file. Needs the Excalidraw plugin. |
+## 2. Write tasks anywhere, find them in one list
 
-## Install
+![Tasks](assets/scenes/tasks.webp)
 
-1. In Obsidian, open **Settings → Community plugins → Browse**, search for **Snailkit** and
-   install it.
-2. Enable Snailkit, then open **Settings → Snailkit** and switch on the tools you want.
+A task belongs where it was born: in a meeting note, a project, today's daily note. Write
+`- [ ] Call Paul #client` and move on.
 
-Manual install: copy `main.js`, `manifest.json` and `styles.css` from the latest release into
-`<your vault>/.obsidian/plugins/snailkit/`, then enable the plugin.
+**Tasks** gathers every tagged task of your vault into one calm list, grouped by tag. Check,
+schedule or move them from there: the note follows. **Tags** suggests the right tag as you type
+and gives each family its color. [More on tasks →](docs/tasks.md)
 
-Requires Obsidian 1.8.7 or later. Works on desktop and mobile (a tool that needs the desktop
-app says so on its card).
+## 3. One home for your notes
 
-## Languages
+![Home](assets/scenes/home.webp)
 
-The interface is available in English, French, Dutch and Spanish. Snailkit follows Obsidian's
-language, or the one you pick at the top of its settings. Other languages fall back to English.
+**Home** is the front page of your vault, filled in from your notes: today, your pins, your
+domains on a map, what you opened lately. **Search** finds a note, a task or a tag in a few
+letters. Home, Tasks and Brainstorm live side by side in the **Workbench**. [Tour of Home →](docs/home.md)
 
-## Privacy
+![Note menu](assets/scenes/note-rail.webp)
 
-Snailkit works inside your vault and sends nothing about you or your notes anywhere. The only network access is PDF export loading the web images that your note already displays.
+On every note, the **Note menu** keeps the contents, the open tasks and the calendar one click
+away. [Note menu →](docs/note-rail.md)
 
-## Feedback
+## And a few handy tools
 
-Found a problem, or a sentence that is not clear? [Open an issue](https://github.com/arnaudgastelblum/snailkit/issues).
+<table>
+<tr>
+<td width="50%"><img src="assets/scenes/tag-colors.webp" alt="Tags"><br><b><a href="docs/tag-colors.md">Tags</a></b><br>Tags in steady colors, grouped by family.</td>
+<td width="50%"><img src="assets/scenes/search.webp" alt="Search"><br><b><a href="docs/search.md">Search</a></b><br>Notes, tasks and tags, found in a few letters.</td>
+</tr>
+<tr>
+<td><img src="assets/scenes/tables.webp" alt="Tables"><br><b><a href="docs/tables.md">Tables</a></b><br>Shape and sort tables without wrestling with Markdown.</td>
+<td><img src="assets/scenes/slash-menu.webp" alt="Slash menu"><br><b><a href="docs/slash-menu.md">Slash menu</a></b><br>Type <code>/</code> and insert the right block.</td>
+</tr>
+<tr>
+<td><img src="assets/scenes/move-text.webp" alt="Move text"><br><b><a href="docs/move-text.md">Move text</a></b><br>Give a passage its own note. Keep the link.</td>
+<td><img src="assets/scenes/column-select.webp" alt="Column select"><br><b><a href="docs/column-select.md">Column select</a></b><br>One edit, several lines at once.</td>
+</tr>
+<tr>
+<td><img src="assets/scenes/pdf-export.webp" alt="PDF export"><br><b><a href="docs/pdf-export.md">PDF export</a></b><br>Your note, its look, its links. All in a PDF.</td>
+<td><img src="assets/scenes/slides-export.webp" alt="Slides to PowerPoint"><br><b><a href="docs/slides-export.md">Slides to PowerPoint</a></b><br>Your Excalidraw frames, ready for PowerPoint.</td>
+</tr>
+</table>
 
-## License
+## Get started
 
-[MIT](LICENSE)
+1. In Obsidian: **Settings → Community plugins → Browse**, search **Snailkit**, install and enable it.
+2. Open **Settings → Snailkit** and pick your tools, or **Get them all**. Each one starts off and leaves nothing behind when you turn it off.
+3. Write a task with a `#tag` in any note. It is already waiting in your Workbench.
+
+English, French, Dutch and Spanish. Desktop and mobile. Snailkit sends nothing about you or your
+notes anywhere. The only network access is PDF export loading the web images your note already
+shows. Two tools write outside your vault, only where you ask: PDF export (the PDF you save, and a
+temporary page in your system's temp folder while it prints) and Slides to PowerPoint (the .pptx you save).
+
+---
+
+<p align="center">Made slowly by Arnaud Gastelblum · <a href="https://lazysnail.net">lazysnail.net</a><br>
+<a href="https://github.com/arnaudgastelblum/snailkit/issues">Report a problem</a> · <a href="LICENSE">MIT license</a> · <a href="docs/developers.md">For developers</a></p>

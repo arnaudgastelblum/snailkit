@@ -2,6 +2,7 @@
 // in the side panel), plus a public API.
 import { Menu, TFile } from "obsidian";
 import { defineModule } from "../../core/module";
+import { buildDemo } from "./demo";
 import { createTasksApi } from "./api";
 import { TasksHub } from "./hub";
 import { parseFolderList, parseTagList } from "./parse";
@@ -14,8 +15,9 @@ import { es } from "./i18n/es";
 export const tasks = defineModule<TasksSettings>({
 	id: "tasks",
 	icon: "list-checks",
-	category: "organize",
+	category: "workbench",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: {
 		excludedFolders: "",
 		flagTags: "",
@@ -24,7 +26,11 @@ export const tasks = defineModule<TasksSettings>({
 		sortMode: "notes",
 		priorityFilter: [],
 		collapsed: [],
+		tagOrder: [],
+		taskOrder: [],
 	},
+	// The order of the tags is the user's arrangement: "Reset to defaults" keeps it.
+	keepOnReset: ["tagOrder", "taskOrder"],
 	activate(ctx) {
 		const hub = new TasksHub(ctx);
 		ctx.register(() => hub.dispose());

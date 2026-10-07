@@ -285,7 +285,7 @@ export class TagSuggest extends EditorSuggest<TagItem> {
 			all.set(key, { tag: best, count: all.get(key)!.count });
 		}
 		const note = file ? countTags(this.app, [file]) : new Map<string, number>();
-		const stats: TagStats = { all, note, area: file ? this.areaTags(file) : new Map() };
+		const stats: TagStats = { all, note, area: file ? this.areaTags(file) : new Map<string, number>() };
 		this.statsCache = { at: now, file: path, stats };
 		return stats;
 	}
@@ -293,9 +293,9 @@ export class TagSuggest extends EditorSuggest<TagItem> {
 	/** Tags used in the notes of the same area as `file` (empty without Note rail or without an area). */
 	private areaTags(file: TFile): Map<string, number> {
 		const places = this.ctx.service<PlacesService>("places");
-		if (!places || places.version !== 1) return new Map();
+		if (!places || places.version !== 1) return new Map<string, number>();
 		const area = places.placeOf(file).area;
-		if (!area) return new Map();
+		if (!area) return new Map<string, number>();
 		const now = Date.now();
 		if (!this.areaCache || now - this.areaCache.at > 60_000) {
 			const members = new Map<string, TFile[]>();
@@ -310,7 +310,7 @@ export class TagSuggest extends EditorSuggest<TagItem> {
 			for (const [path, files] of members) byArea.set(path, countTags(this.app, files));
 			this.areaCache = { at: now, byArea };
 		}
-		return this.areaCache.byArea.get(area.path) ?? new Map();
+		return this.areaCache.byArea.get(area.path) ?? new Map<string, number>();
 	}
 }
 

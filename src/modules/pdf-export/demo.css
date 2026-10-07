@@ -1,0 +1,27 @@
+.sk-demo-pdf-export-text, .sk-demo-pdf-export-small, .sk-demo-pdf-export-title, .sk-demo-pdf-export-mono, .sk-demo-pdf-export-link {
+	fill: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: 10px;
+}
+.sk-demo-pdf-export-title { font-size: 14px; font-weight: 600; }
+.sk-demo-pdf-export-small { font-size: 8px; fill: var(--text-muted); }
+.sk-demo-pdf-export-mono { font-family: var(--font-monospace); font-size: 10px; white-space: pre; }
+.sk-demo-pdf-export-link { fill: var(--text-accent); font-size: 9px; }
+.sk-demo-pdf-export-paper { fill: var(--background-primary); stroke: var(--background-modifier-border); stroke-width: 0.8; }
+.sk-demo-pdf-export-wash { fill: var(--sk-accent-wash); }
+.sk-demo-pdf-export-bar { fill: var(--text-faint); opacity: 0.25; }
+.sk-demo-pdf-export-line { fill: none; stroke: var(--text-muted); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.sk-demo-pdf-export-accent { fill: none; stroke: var(--sk-accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.sk-demo-pdf-export-before, .sk-demo-pdf-export-gesture { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-pdf-export-before { animation: sk-demo-pdf-export-before 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-pdf-export-after { animation: sk-demo-pdf-export-after 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-pdf-export-gesture { animation: sk-demo-pdf-export-gesture 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-pdf-export-before { 0%, 40% { opacity: 1; } 51%, 96% { opacity: 0; } 100% { opacity: 1; } }
+	@keyframes sk-demo-pdf-export-after { 0%, 40% { opacity: 0; transform: translateY(4px); } 55%, 94% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; } }
+	@keyframes sk-demo-pdf-export-gesture { 0%, 16% { opacity: 0; } 24%, 40% { opacity: 1; } 52%, 100% { opacity: 0; } }
+}
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-pdf-export-after { animation: sk-demo-pdf-export-page 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-pdf-export-page { 0%, 38% { opacity: 0; transform: translate(-145px, 9px) scale(0.96); } 64%, 94% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+}

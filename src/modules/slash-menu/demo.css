@@ -1,0 +1,30 @@
+.sk-demo-slash-menu-text, .sk-demo-slash-menu-small, .sk-demo-slash-menu-title, .sk-demo-slash-menu-mono, .sk-demo-slash-menu-link {
+	fill: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: 10px;
+}
+.sk-demo-slash-menu-title { font-size: 14px; font-weight: 600; }
+.sk-demo-slash-menu-small { font-size: 8px; fill: var(--text-muted); }
+.sk-demo-slash-menu-mono { font-family: var(--font-monospace); font-size: 10px; white-space: pre; }
+.sk-demo-slash-menu-link { fill: var(--text-accent); font-size: 9px; }
+.sk-demo-slash-menu-paper { fill: var(--background-primary); stroke: var(--background-modifier-border); stroke-width: 0.8; }
+.sk-demo-slash-menu-wash { fill: var(--sk-accent-wash); }
+.sk-demo-slash-menu-bar { fill: var(--text-faint); opacity: 0.25; }
+.sk-demo-slash-menu-line { fill: none; stroke: var(--text-muted); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.sk-demo-slash-menu-accent { fill: none; stroke: var(--sk-accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.sk-demo-slash-menu-before, .sk-demo-slash-menu-gesture { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-slash-menu-unfiltered { animation: sk-demo-slash-menu-filter 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-slash-menu-filter { 0%, 27% { opacity: 1; } 33%, 100% { opacity: 0; } }
+	.sk-demo.is-playing .sk-demo-slash-menu-before { animation: sk-demo-slash-menu-before 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-slash-menu-after { animation: sk-demo-slash-menu-after 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-slash-menu-gesture { animation: sk-demo-slash-menu-gesture 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-slash-menu-before { 0%, 40% { opacity: 1; } 51%, 96% { opacity: 0; } 100% { opacity: 1; } }
+	@keyframes sk-demo-slash-menu-after { 0%, 40% { opacity: 0; transform: translateY(4px); } 55%, 94% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; } }
+	@keyframes sk-demo-slash-menu-gesture { 0%, 16% { opacity: 0; } 24%, 40% { opacity: 1; } 52%, 100% { opacity: 0; } }
+}
+.sk-demo-slash-menu-query { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-slash-menu-query { animation: sk-demo-slash-menu-query 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-slash-menu-query { 0%, 25% { opacity: 0; } 33%, 100% { opacity: 1; } }
+}

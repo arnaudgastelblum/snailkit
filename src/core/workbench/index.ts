@@ -21,7 +21,7 @@ export const TICK_MS = 60_000;
 export class WorkbenchCore {
 	private readonly tabs = new Map<string, { tab: WorkbenchTab; seq: number }>();
 	private seq = 0;
-	private autoOpen: { mode: AutoOpenMode; tabId: string } = { mode: "never", tabId: "home" };
+	private autoOpen: AutoOpenMode = "never";
 	private readonly views = new Set<WorkbenchView>();
 	private plugin: SnailkitPlugin | null = null;
 	private refreshTimer = 0;
@@ -173,16 +173,19 @@ export class WorkbenchCore {
 
 	// ----- automatic opening -----
 
-	setAutoOpen(mode: AutoOpenMode, tabId: string): void {
-		this.autoOpen = { mode, tabId };
+	/** The Workbench's own setting (data.workbench.autoOpen), set by the plugin when it loads or changes. */
+	setAutoOpen(mode: AutoOpenMode): void {
+		this.autoOpen = mode;
 	}
 
+	/** The setting, or "never" while no tool has a tab: an empty Workbench never opens by itself. */
 	get autoOpenMode(): AutoOpenMode {
-		return this.autoOpen.mode;
+		return this.tabs.size ? this.autoOpen : "never";
 	}
 
+	/** Home when it is on, else the first tab. */
 	get autoOpenTab(): string {
-		return this.autoOpen.tabId;
+		return this.tabs.has("home") ? "home" : (this.ids()[0] ?? "home");
 	}
 
 	/** The modules started and the workspace is ready: the startup Workbench, when asked for. */
@@ -196,8 +199,9 @@ export class WorkbenchCore {
 		return this.plugin ? this.plugin.t(key) : key;
 	}
 
+	/** Snailkit's settings, on the Workbench's page. */
 	openSettings(): void {
-		this.plugin?.openSettings();
+		this.plugin?.openSettings("workbench");
 	}
 
 	hintSeen(): boolean {
@@ -229,7 +233,6 @@ export class WorkbenchCore {
  * nothing behind (a companion plugin may add and remove tabs many times while Tasks runs).
  */
 export function moduleWorkbench(core: WorkbenchCore, register: (cleanup: () => unknown) => void): ModuleWorkbench {
-	let ownsAutoOpen = false;
 	const added = new Set<() => void>();
 	let ownsTabs = false;
 	let stopped = false;
@@ -257,11 +260,5 @@ export function moduleWorkbench(core: WorkbenchCore, register: (cleanup: () => u
 		open: (options) => core.open(options),
 		refresh: () => core.refresh(),
 		instances: (tabId) => core.instances(tabId),
-		setAutoOpen: (mode, tabId) => {
-			core.setAutoOpen(mode, tabId);
-			if (ownsAutoOpen) return;
-			ownsAutoOpen = true;
-			register(() => core.setAutoOpen("never", tabId));
-		},
 	};
 }

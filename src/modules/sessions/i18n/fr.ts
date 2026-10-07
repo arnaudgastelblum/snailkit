@@ -4,6 +4,8 @@ import type { en } from "./en";
 export const fr: StringsOf<typeof en> = {
 	"module.name": "Brainstorm",
 	"module.description": "Écrivez vos idées d'une traite dans une note, puis pêchez-y les tâches et terminez par un petit bilan.",
+	"module.pitch": "Videz votre tête, puis pêchez-y les tâches.",
+	"demo.date": "5 oct.",
 
 	"command.new": "Nouveau brainstorm",
 	"command.adopt": "Traiter cette note comme un brainstorm",

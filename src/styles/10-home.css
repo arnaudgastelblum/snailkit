@@ -1,4 +1,5 @@
-/* Settings home: hero, search, tool cards grouped by category. */
+/* Settings home, a showcase: hero with the mascot, search, tool cards grouped by
+   category (scene, name, pitch, Get button). The scene's frame is in 15-showcase.css. */
 .sk-settings {
 	container-type: inline-size;
 }
@@ -14,42 +15,44 @@
 /* Hero */
 .sk-hero {
 	display: flex;
-	align-items: flex-start;
-	gap: 16px;
-	padding: 6px 0 22px;
+	align-items: center;
+	gap: 18px;
+	padding: 4px 0 24px;
 	animation: sk-rise var(--sk-slow) var(--sk-ease) both;
 }
-.sk-logo {
+/* The mascot: a signature, small, the only colorful thing of the page. */
+.sk-mascot {
 	flex: none;
-	width: 52px;
-	height: 52px;
-	display: grid;
-	place-items: center;
-	border-radius: 15px;
-	color: var(--sk-accent-text);
-	background: linear-gradient(145deg, var(--sk-accent-wash), var(--sk-accent-soft));
-	box-shadow: inset 0 0 0 1px var(--sk-accent-line);
-	--icon-size: 28px;
-	--icon-stroke: 1.75px;
+	width: 68px;
+	height: auto;
+	align-self: flex-start;
+	filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.12));
+	transform-origin: 40% 95%;
 }
-.sk-logo svg {
-	width: 28px;
-	height: 28px;
+@media (prefers-reduced-motion: no-preference) {
+	.sk-mascot {
+		animation: sk-mascot-sway 7s ease-in-out infinite;
+	}
+}
+@keyframes sk-mascot-sway {
+	0%, 100% { transform: rotate(0deg); }
+	50% { transform: rotate(-2.5deg) translateY(-1px); }
 }
 .sk-hero-text {
 	flex: 1;
 	min-width: 0;
 }
 .sk-hero-title {
-	font-size: 22px;
+	font-size: 21px;
+	text-wrap: balance;
 	font-weight: 700;
 	letter-spacing: -0.02em;
 	line-height: 1.2;
 	color: var(--text-normal);
 }
 .sk-hero-tagline {
-	margin-top: 3px;
-	font-size: 13.5px;
+	margin-top: 2px;
+	font-size: 15px;
 	color: var(--text-muted);
 	line-height: 1.45;
 }
@@ -64,6 +67,23 @@
 	font-size: 12px;
 	color: var(--text-muted);
 	font-variant-numeric: tabular-nums;
+}
+.sk-hero-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+}
+.sk-hero-meta .sk-hero-count {
+	margin-top: 0;
+}
+.sk-hero-meta button.sk-all-on.is-hidden {
+	display: none;
+}
+.sk-all-on-icon {
+	display: flex;
+	--icon-size: 13px;
 }
 .sk-live-dot {
 	width: 7px;
@@ -118,29 +138,83 @@
 
 /* Groups */
 .sk-group + .sk-group {
-	margin-top: 22px;
+	margin-top: 30px;
+}
+.sk-group-head {
+	display: flex;
+	align-items: flex-end;
+	gap: 12px;
+	margin: 0 2px 10px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--sk-line);
+}
+.sk-group-text {
+	flex: 1;
+	min-width: 0;
 }
 .sk-group-title {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	margin: 0 2px 10px;
 	font-size: 11px;
 	font-weight: 600;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
+	color: var(--text-muted);
+}
+.sk-group-desc {
+	margin-top: 2px;
+	font-size: 12.5px;
+	line-height: 1.4;
 	color: var(--text-faint);
 }
-.sk-group-title::after {
-	content: "";
-	flex: 1;
-	height: 1px;
-	background: var(--sk-line);
+/* The Workbench's own settings, at the end of its group's header. */
+.sk-group button.sk-group-link {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 6px 0 10px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-s);
+	background: var(--sk-surface);
+	box-shadow: none;
+	font-size: 12.5px;
+	color: var(--text-muted);
+	cursor: var(--cursor);
+	transition:
+		color var(--sk-fast) ease,
+		border-color var(--sk-fast) ease,
+		background-color var(--sk-fast) ease;
+}
+.sk-group button.sk-group-link:hover {
+	color: var(--text-normal);
+	border-color: var(--background-modifier-border-hover);
+	background: var(--sk-hover);
+}
+.sk-group-link-icon,
+.sk-group-link .sk-chevron {
+	display: flex;
+	--icon-size: 14px;
+}
+.sk-group-link .sk-chevron {
+	color: var(--text-faint);
+	transition: transform 260ms var(--sk-spring);
+}
+.sk-group-link:hover .sk-chevron {
+	transform: translateX(2px);
+}
+@container (max-width: 480px) {
+	.sk-group-head {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.sk-group button.sk-group-link {
+		align-self: flex-start;
+	}
 }
 .sk-grid {
 	display: grid;
 	grid-template-columns: 1fr;
-	gap: 10px;
+	gap: 22px 18px;
 }
 @container (min-width: 560px) {
 	.sk-grid {
@@ -148,56 +222,49 @@
 	}
 }
 
-/* Card */
+/* Card: the scene first, then the name, the Get button and the pitch, on the page itself (no box). */
 .sk-card {
 	position: relative;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
-	padding: 14px 14px 12px;
-	border: 1px solid var(--sk-line);
-	border-radius: var(--sk-radius-l);
-	background: var(--sk-surface);
+	gap: 7px;
+	min-width: 0;
+	border-radius: var(--sk-radius);
 	cursor: var(--cursor);
 	outline: none;
-	transition:
-		border-color var(--sk-fast) ease,
-		box-shadow 260ms var(--sk-ease),
-		transform 260ms var(--sk-ease),
-		background-color var(--sk-fast) ease;
 	animation: sk-rise var(--sk-slow) var(--sk-ease) both;
 	animation-delay: calc(var(--i, 0) * 35ms + 60ms);
 }
-.sk-card:hover {
-	border-color: var(--background-modifier-border-hover);
-	box-shadow: var(--sk-shadow);
-	transform: translateY(-1px);
+.sk-card-media {
+	margin-bottom: 5px;
+	border-radius: var(--sk-radius);
+	transition:
+		box-shadow 260ms var(--sk-ease),
+		transform 260ms var(--sk-ease);
 }
-.sk-card:focus-visible {
+.sk-card:hover .sk-card-media {
+	box-shadow: var(--sk-shadow);
+	transform: translateY(-2px);
+}
+.sk-card:focus-visible .sk-card-media {
 	box-shadow: 0 0 0 2px var(--sk-accent);
 }
-.sk-card:active {
+.sk-card:active .sk-card-media {
 	transform: translateY(0) scale(0.995);
 }
-.sk-card.is-on {
-	border-color: var(--sk-accent-line);
-	background: linear-gradient(180deg, var(--sk-accent-soft), transparent 70%), var(--sk-surface);
-}
-.sk-card.is-unavailable {
-	background: var(--sk-surface-sunken);
+.sk-card.is-unavailable .sk-card-media {
+	opacity: 0.55;
+	filter: grayscale(0.6);
 }
 .sk-card.is-unavailable .sk-card-name,
 .sk-card.is-unavailable .sk-card-desc {
 	opacity: 0.6;
 }
-.sk-card.is-error {
-	border-color: color-mix(in srgb, var(--sk-danger) 45%, var(--sk-line));
-}
 
 .sk-card-top {
 	display: flex;
 	align-items: center;
-	gap: 11px;
+	gap: 9px;
 }
 .sk-tile {
 	flex: none;
@@ -214,21 +281,27 @@
 		background-color 220ms ease,
 		box-shadow 220ms ease;
 }
+.sk-card .sk-tile {
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	background: none;
+	--icon-size: 16px;
+}
 .sk-card.is-on .sk-tile,
 .sk-page-head.is-on .sk-tile {
 	color: var(--sk-accent-text);
+}
+.sk-page-head.is-on .sk-tile {
 	background: var(--sk-accent-wash);
 	box-shadow: inset 0 0 0 1px var(--sk-accent-line);
-}
-.sk-card.is-on .sk-tile svg {
-	animation: sk-pop 380ms var(--sk-spring);
 }
 .sk-card-name {
 	flex: 1;
 	min-width: 0;
-	font-size: 14.5px;
+	font-size: 15px;
 	font-weight: 600;
-	letter-spacing: -0.005em;
+	letter-spacing: -0.01em;
 	color: var(--text-normal);
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -240,22 +313,106 @@
 	display: flex;
 }
 .sk-card-desc {
-	font-size: 12.5px;
+	font-size: 13px;
 	line-height: 1.45;
 	color: var(--text-muted);
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden;
-	min-height: calc(2 * 1.45em);
 }
 .sk-card-foot {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	min-height: 22px;
-	margin-top: auto;
+	min-height: 20px;
 }
+
+/* The store button: "Get" while off, "On" with a check while on ("Turn off" on hover). */
+button.sk-get {
+	flex: none;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	min-width: 72px;
+	height: 26px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 999px;
+	box-shadow: none;
+	font-size: 12.5px;
+	font-weight: 650;
+	letter-spacing: 0.01em;
+	color: var(--sk-accent-text);
+	background: var(--sk-accent-wash);
+	cursor: var(--cursor);
+	transition:
+		background-color var(--sk-fast) ease,
+		color var(--sk-fast) ease,
+		transform 200ms var(--sk-spring);
+}
+button.sk-get:hover {
+	background: color-mix(in srgb, var(--interactive-accent) 22%, transparent);
+}
+button.sk-get:active {
+	transform: scale(0.96);
+}
+button.sk-get:disabled {
+	color: var(--text-faint);
+	background: var(--sk-surface-sunken);
+	cursor: default;
+}
+button.sk-get.is-on {
+	color: var(--text-muted);
+	background: var(--sk-surface-sunken);
+	font-weight: 550;
+}
+.sk-get-icon {
+	display: flex;
+	color: var(--sk-accent-text);
+	--icon-size: 13px;
+	--icon-stroke: 2.5px;
+}
+.sk-get .is-hover {
+	display: none;
+}
+button.sk-get.is-on:hover .is-rest,
+button.sk-get.is-on:focus-visible .is-rest,
+button.sk-get.is-on:hover .sk-get-icon,
+button.sk-get.is-on:focus-visible .sk-get-icon {
+	display: none;
+}
+button.sk-get.is-on:hover .is-hover,
+button.sk-get.is-on:focus-visible .is-hover {
+	display: inline;
+}
+button.sk-get.is-on:hover {
+	color: var(--text-normal);
+	background: var(--sk-hover);
+}
+button.sk-get.is-error,
+button.sk-get.is-error .sk-get-icon {
+	color: var(--sk-danger);
+	background: var(--sk-danger-wash);
+}
+.sk-card.is-error .sk-card-media {
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--sk-danger) 45%, var(--sk-line));
+}
+button.sk-get.is-fresh .sk-get-icon svg {
+	animation: sk-pop 380ms var(--sk-spring);
+}
+
+/* A tool's page: its scene above the header. */
+.sk-page-media {
+	max-width: 520px;
+	margin: 0 auto 22px;
+}
+.sk-page-media .sk-demo {
+	border-radius: var(--sk-radius-l);
+}
+
 .sk-badges {
 	flex: 1;
 	display: flex;
@@ -287,10 +444,6 @@
 	display: block;
 	line-height: 20px;
 }
-.sk-card.is-unavailable .sk-badge,
-.sk-card.is-unavailable .sk-tile {
-	background: var(--sk-surface);
-}
 .sk-card-link {
 	display: inline-flex;
 	align-items: center;
@@ -321,12 +474,26 @@
 
 .sk-footer {
 	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	margin-top: 40px;
+	padding-top: 18px;
+	border-top: 1px solid var(--sk-line);
+	font-size: 12px;
+	color: var(--text-faint);
+}
+.sk-credit,
+.sk-footer-meta {
+	display: flex;
+	flex-wrap: wrap;
 	justify-content: center;
 	align-items: center;
 	gap: 8px;
-	margin-top: 26px;
-	font-size: 12px;
-	color: var(--text-faint);
+}
+.sk-credit {
+	font-size: 12.5px;
+	color: var(--text-muted);
 }
 .sk-footer a {
 	color: var(--text-muted);

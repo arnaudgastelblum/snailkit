@@ -4,6 +4,10 @@ import type { en } from "./en";
 export const fr: StringsOf<typeof en> = {
 	"module.name": "Accueil",
 	"module.description": "Un onglet Accueil dans l'Atelier : aujourd'hui, vos épingles, vos domaines, une carte de vos notes et ce que vous avez ouvert récemment. Il se remplit tout seul à partir de vos notes.",
+	"module.pitch": "La page d'accueil de votre coffre, tirée de vos notes.",
+	"demo.tasks": "Tâches",
+	"demo.brainstorms": "Brainstorms",
+	"demo.daily": "Note du jour",
 
 	"tab.label": "Accueil",
 	"ribbon": "Ouvrir l'Accueil",
@@ -27,7 +31,7 @@ export const fr: StringsOf<typeof en> = {
 	"today.new-brainstorm": "Nouveau brainstorm",
 
 	"pins.title": "Épingles",
-	"pins.need-rail": "Activez le Rail de note pour épingler des notes.",
+	"pins.need-rail": "Activez le Menu de note pour épingler des notes.",
 	"pins.pinned": "« {name} » épinglée",
 	"pins.unpinned": "« {name} » retirée des épingles",
 	"pins.only-notes": "Seules les notes s'épinglent.",
@@ -243,13 +247,6 @@ export const fr: StringsOf<typeof en> = {
 	"help.s-close": "Vider, puis fermer",
 	"help.read": "Lire",
 
-	"settings.opening": "Ouverture",
-	"settings.open-workbench": "Ouvrir l'Atelier",
-	"settings.open-desc": "Au démarrage : l'Atelier passe en premier onglet, épinglé, sur l'Accueil, jamais en double ; les onglets restaurés restent. Dans les nouveaux onglets aussi : Ctrl/Cmd+T et la fermeture du dernier onglet montrent l'Accueil, curseur dans la recherche. S'applique aussi sur téléphone.",
-	"settings.mode.startup-and-new-tabs": "Au démarrage et dans les nouveaux onglets",
-	"settings.mode.startup": "Au démarrage",
-	"settings.mode.never": "Jamais",
-	"settings.open-warn": "Si une note s'ouvre déjà au démarrage (réglage d'Obsidian ou autre extension), désactivez ce réglage-là.",
 	"settings.domains": "Domaines et carte",
 	"settings.home-page": "Page d'accueil",
 	"settings.home-page-desc": "La racine de la carte et des domaines : le chemin d'une note. Vide : trouvée toute seule, {found}.",

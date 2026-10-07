@@ -4,7 +4,7 @@ export const FENCE_RE = /^\s*(`{3,}|~{3,})(.*)$/;
 const ZONE_LINK_RE = /^- \[\[([^\]]+)\]\]\s*$/;
 // Beyond the OS-forbidden characters, # ^ [ ] would break the [[wikilink]]
 // syntax of the links this plugin writes.
-const FORBIDDEN_CHARS_RE = /[\\/:*?"<>|#^\[\]]/g;
+const FORBIDDEN_CHARS_RE = /[\\/:*?"<>|#^[\]]/g;
 
 // ---------------------------------------------------------------- utilities
 
@@ -19,7 +19,7 @@ export function sanitizeFilename(name: string) {
 // line. state has lines.length + 1 entries: the last one is the state right
 // after the final line, so a selection ending on a fence opener is caught.
 export function fenceStates(lines: readonly string[]) {
-	const state = new Array(lines.length + 1).fill(false);
+	const state = new Array<boolean>(lines.length + 1).fill(false);
 	let inside = false;
 	let marker = "";
 	for (let i = 0; i < lines.length; i++) {
@@ -92,7 +92,7 @@ export function proposeTitle(lines: readonly string[]) {
 	}
 	if (!firstText) return "";
 	return firstText
-		.replace(/[#>*`\[\]]/g, "")
+		.replace(/[#>*`[\]]/g, "")
 		.replace(/^\s*(?:[-+]|\d+\.)\s+/, "")
 		.trim()
 		.split(/\s+/)

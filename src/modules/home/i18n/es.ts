@@ -4,6 +4,10 @@ import type { en } from "./en";
 export const es: StringsOf<typeof en> = {
 	"module.name": "Inicio",
 	"module.description": "Una pestaña Inicio en el Taller: hoy, tus notas fijadas, tus dominios, un mapa de tus notas y lo que abriste hace poco. Se llena sola a partir de tus notas.",
+	"module.pitch": "La portada de tu bóveda, hecha a partir de tus notas.",
+	"demo.tasks": "Tareas",
+	"demo.brainstorms": "Lluvias de ideas",
+	"demo.daily": "Nota de hoy",
 
 	"tab.label": "Inicio",
 	"ribbon": "Abrir Inicio",
@@ -27,7 +31,7 @@ export const es: StringsOf<typeof en> = {
 	"today.new-brainstorm": "Nueva lluvia de ideas",
 
 	"pins.title": "Fijadas",
-	"pins.need-rail": "Activa Barra de nota para fijar notas.",
+	"pins.need-rail": "Activa Menú de nota para fijar notas.",
 	"pins.pinned": "“{name}” fijada",
 	"pins.unpinned": "“{name}” ya no está fijada",
 	"pins.only-notes": "Solo se pueden fijar notas.",
@@ -243,13 +247,6 @@ export const es: StringsOf<typeof en> = {
 	"help.s-close": "Vaciar, luego cerrar",
 	"help.read": "Leer",
 
-	"settings.opening": "Apertura",
-	"settings.open-workbench": "Abrir el Taller",
-	"settings.open-desc": "Al iniciar: el Taller va como primera pestaña, fijada, en Inicio, nunca dos veces; las pestañas restauradas se quedan. También en las pestañas nuevas: Ctrl/Cmd+T y cerrar la última pestaña muestran Inicio, con el cursor en la búsqueda. También se aplica en el teléfono.",
-	"settings.mode.startup-and-new-tabs": "Al iniciar y en las pestañas nuevas",
-	"settings.mode.startup": "Al iniciar",
-	"settings.mode.never": "Nunca",
-	"settings.open-warn": "Si ya se abre una nota al iniciar (ajuste de Obsidian u otro plugin), desactiva ese ajuste.",
 	"settings.domains": "Dominios y mapa",
 	"settings.home-page": "Página de inicio",
 	"settings.home-page-desc": "La raíz del mapa y de los dominios: la ruta de una nota. Vacío: se encuentra sola, {found}.",

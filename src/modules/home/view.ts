@@ -375,7 +375,7 @@ export class HomeView implements WorkbenchTabInstance {
 		if (o.arg !== undefined) el.dataset.arg = o.arg;
 		if (o.pin) el.dataset.pin = o.pin;
 		if (o.flip) el.dataset.flip = o.key;
-		if (o.hue !== undefined && o.hue !== null) el.style.setProperty("--sk-hue", String(o.hue));
+		if (o.hue !== undefined && o.hue !== null) el.setCssProps({ "--sk-hue": String(o.hue) });
 		else el.addClass("is-gray");
 		if (o.label) el.setAttr("aria-label", o.label);
 		el.tabIndex = -1;
@@ -431,7 +431,7 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 		if (want && !this.inline) {
 			try {
-				this.inline = search!.attach({
+				this.inline = search.attach({
 					input: this.input,
 					results: this.results,
 					tokens: this.tokens,
@@ -482,7 +482,7 @@ export class HomeView implements WorkbenchTabInstance {
 		if (this.doc.activeElement !== input) return;
 		const end = input.value.length;
 		input.setRangeText(text, input.selectionStart ?? end, input.selectionEnd ?? end, "end");
-		const win = (this.doc.defaultView ?? window) as Window & typeof globalThis;
+		const win = (this.doc.defaultView ?? window);
 		input.dispatchEvent(new win.Event("input", { bubbles: true }));
 	}
 
@@ -543,9 +543,11 @@ export class HomeView implements WorkbenchTabInstance {
 			const on = segm.querySelector<HTMLElement>('[aria-pressed="true"]');
 			if (!thumb) return;
 			if (!on || !on.offsetWidth) {
-				thumb.style.width = "0px";
+				thumb.style.removeProperty("width");
+				thumb.addClass("sk-home-empty-thumb");
 				return;
 			}
+			thumb.removeClass("sk-home-empty-thumb");
 			thumb.style.width = `${on.offsetWidth}px`;
 			thumb.style.transform = `translateX(${on.offsetLeft}px)`;
 		});
@@ -602,7 +604,7 @@ export class HomeView implements WorkbenchTabInstance {
 
 	/** The Brainstorm service's start(), or null without it. */
 	private startBrainstorm(): (() => Promise<void>) | null {
-		const sessions = this.rt.sessions() as (ReturnType<HomeRuntime["sessions"]> & { start?: () => Promise<void> }) | undefined;
+		const sessions = this.rt.sessions() as unknown as { start?(): Promise<void> } | null;
 		return sessions && typeof sessions.start === "function" ? () => sessions.start!() : null;
 	}
 
@@ -1312,7 +1314,7 @@ export class HomeView implements WorkbenchTabInstance {
 
 		const head = this.body.createDiv({ cls: "sk-home-ph" });
 		const pa = head.createSpan({ cls: "sk-home-pa is-l", text: initialOf(title) });
-		pa.style.setProperty("--sk-hue", String(hue));
+		pa.setCssProps({ "--sk-hue": String(hue) });
 		head.createEl("h1", { text: title });
 		head.createSpan({ cls: "sk-home-sp" });
 		const openBtn = head.createEl("button", { cls: "sk-btn is-s", attr: { type: "button" } });
@@ -1681,12 +1683,12 @@ export class HomeView implements WorkbenchTabInstance {
 		const ghost = this.doc.createElement("div");
 		ghost.className = "sk-home-chip sk-home-fly-chip";
 		const hue = this.hueOf(path);
-		if (hue !== null) ghost.style.setProperty("--sk-hue", String(hue));
+		if (hue !== null) ghost.setCssProps({ "--sk-hue": String(hue) });
 		else ghost.addClass("is-gray");
 		ghost.createSpan({ cls: "sk-home-dot" });
 		ghost.createSpan({ cls: "sk-home-chip-text", text: name });
 		winOf(this.root).requestAnimationFrame(() =>
-			fly(rect!, landing, ghost, () => {
+			fly(rect, landing, ghost, () => {
 				landing.removeClass("is-landing");
 				landing.addClass("is-landed");
 				this.later(560, () => {

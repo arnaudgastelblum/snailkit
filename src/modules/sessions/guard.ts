@@ -61,7 +61,7 @@ class SpacerWidget extends WidgetType {
 		return other.height === this.height;
 	}
 	toDOM(): HTMLElement {
-		const el = document.createElement("div");
+		const el = createDiv();
 		el.className = "sk-sessions-spacer";
 		el.style.height = `${this.height}px`;
 		return el;

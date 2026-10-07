@@ -1,3 +1,4 @@
+import { buildDemo } from "./demo";
 // Move text: three editor actions and their live module settings.
 import { moment, normalizePath } from "obsidian";
 import { defineModule } from "../../core/module";
@@ -14,6 +15,7 @@ export const moveText = defineModule<MoveTextSettings>({
 	icon: "scissors",
 	category: "write",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: {
 		archiveFolder: "Archives",
 		prefixSubnoteName: true,
@@ -56,7 +58,7 @@ export const moveText = defineModule<MoveTextSettings>({
 			desc: description(),
 			placeholder: "YYYY-MM-DD",
 			normalize: (value) => value.trim() || "YYYY-MM-DD",
-			onChange: () => dateRow.setDesc(richText(description())),
+			onChange: () => { void dateRow.setDesc(richText(description())); },
 		});
 	},
 });

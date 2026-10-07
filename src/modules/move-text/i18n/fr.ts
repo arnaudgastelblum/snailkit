@@ -4,6 +4,8 @@ import type { en } from "./en";
 
 export const fr: StringsOf<typeof en> = {
 	"module.name": "Déplacer du texte",
+	"module.pitch": "Offrez une note à un passage. Gardez le lien.",
+	"demo.extract": "Extraire vers une sous-note",
 	"module.description": "Extrayez, archivez ou envoyez un passage vers une autre note, sans perdre une ligne.",
 	"command.extract": "Extraire vers une sous-note",
 	"command.archive": "Archiver ce passage",

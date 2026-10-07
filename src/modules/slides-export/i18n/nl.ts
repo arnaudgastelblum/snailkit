@@ -3,6 +3,8 @@ import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
 	"module.name": "Dia's naar PowerPoint",
+	"module.pitch": "Je Excalidraw-frames, klaar voor PowerPoint.",
+	"demo.export": "Diavoorstelling naar PowerPoint exporteren",
 	"module.description": "Exporteer Excalidraw-kaders als afbeeldingen in een PowerPoint-presentatie.",
 	"reason.missing": "Excalidraw is niet geïnstalleerd.",
 	"reason.disabled": "Excalidraw is uitgeschakeld.",

@@ -1,10 +1,12 @@
-// Traductions françaises du module Rail de note.
+// Traductions françaises du module Menu de note.
 import type { StringsOf } from "../../../i18n";
 import type { en } from "./en";
 
 export const fr: StringsOf<typeof en> = {
-	"module.name": "Rail de note",
+	"module.name": "Menu de note",
 	"module.description": "Une discrète rangée d'icônes sur chaque note : sommaire, favoris, tâches ouvertes et calendrier des notes quotidiennes.",
+	"module.pitch": "Sommaire, tâches et calendrier à côté de chaque note.",
+	"demo.month": "Octobre 2026",
 
 	"command.open-contents": "Ouvrir le sommaire",
 	"command.open-bookmarks": "Ouvrir les favoris",

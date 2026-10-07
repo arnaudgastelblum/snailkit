@@ -4,6 +4,8 @@ import type { en } from "./en";
 export const es: StringsOf<typeof en> = {
 	"module.name": "Lluvia de ideas",
 	"module.description": "Escribe tus ideas de un tirón en una nota, luego pesca las tareas que contiene y termina con un breve resumen.",
+	"module.pitch": "Vuelca tus ideas y luego pesca las tareas.",
+	"demo.date": "5 oct",
 
 	"command.new": "Nueva lluvia de ideas",
 	"command.adopt": "Tratar esta nota como una lluvia de ideas",

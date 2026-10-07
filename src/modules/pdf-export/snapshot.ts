@@ -14,7 +14,6 @@ import {
 	safeStyleText,
 	slugify,
 	type LinkContext,
-	type RuleLike,
 } from "./logic";
 import { PRINT_CSS } from "./print-css";
 
@@ -125,7 +124,7 @@ export function collectCss(doc: Document): string {
 				if (!PRINT_MEDIA_RE.test(imported.media?.mediaText || "")) walk(imported.styleSheet);
 				continue;
 			}
-			const css = filterCssRule(rule as unknown as RuleLike);
+			const css = filterCssRule(rule);
 			if (css) out.push(css);
 		}
 	};
@@ -228,10 +227,9 @@ function fixEmbeds(root: HTMLElement, ctx: SnapshotContext): void {
 		const p = doc.createElement("p");
 		p.className = CLS.placeholder;
 		if (href) {
-			const a = doc.createElement("a");
+			const a = p.createEl("a");
 			a.setAttribute("href", href);
 			a.textContent = label;
-			p.appendChild(a);
 		} else {
 			p.textContent = label;
 		}

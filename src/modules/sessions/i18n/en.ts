@@ -1,6 +1,8 @@
 export const en = {
 	"module.name": "Brainstorm",
 	"module.description": "Write your ideas freely in one note, then catch the tasks in it and close with a short summary.",
+	"module.pitch": "Pour out your ideas, then catch the tasks in them.",
+	"demo.date": "Oct 5",
 
 	"command.new": "New brainstorm",
 	"command.adopt": "Treat this note as a brainstorm",

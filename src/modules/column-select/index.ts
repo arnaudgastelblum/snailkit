@@ -1,3 +1,4 @@
+import { buildDemo } from "./demo";
 import { defineModule } from "../../core/module";
 import { ColumnSelectEditor } from "./editor";
 import type { ColumnSelectSettings } from "./types";
@@ -11,6 +12,7 @@ export const columnSelect = defineModule<ColumnSelectSettings>({
 	icon: "text-cursor-input",
 	category: "write",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: { keyboard: true, mouse: true, distributePaste: true },
 	activate(ctx) {
 		new ColumnSelectEditor(ctx);

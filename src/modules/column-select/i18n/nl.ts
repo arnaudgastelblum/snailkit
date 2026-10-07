@@ -3,6 +3,8 @@ import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
 	"module.name": "Kolomselectie",
+	"module.pitch": "Eén bewerking op meerdere regels, ook de korte.",
+	"demo.gesture": "Alt + slepen · Typ op elke regel",
 	"module.description": "Selecteer een tekstkolom en bewerk meerdere regels tegelijk.",
 	"command.up": "Kolomselectie naar boven uitbreiden",
 	"command.down": "Kolomselectie naar beneden uitbreiden",

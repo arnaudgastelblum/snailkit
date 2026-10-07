@@ -1,0 +1,32 @@
+.sk-demo-tables-text, .sk-demo-tables-small, .sk-demo-tables-title, .sk-demo-tables-mono, .sk-demo-tables-link {
+	fill: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: 10px;
+}
+.sk-demo-tables-title { font-size: 14px; font-weight: 600; }
+.sk-demo-tables-small { font-size: 8px; fill: var(--text-muted); }
+.sk-demo-tables-mono { font-family: var(--font-monospace); font-size: 10px; white-space: pre; }
+.sk-demo-tables-link { fill: var(--text-accent); font-size: 9px; }
+.sk-demo-tables-paper { fill: var(--background-primary); stroke: var(--background-modifier-border); stroke-width: 0.8; }
+.sk-demo-tables-wash { fill: var(--sk-accent-wash); }
+.sk-demo-tables-bar { fill: var(--text-faint); opacity: 0.25; }
+.sk-demo-tables-line { fill: none; stroke: var(--text-muted); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.sk-demo-tables-accent { fill: none; stroke: var(--sk-accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.sk-demo-tables-before, .sk-demo-tables-gesture { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-tables-sort-gesture { animation: sk-demo-tables-sort-gesture 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-tables-sort-gesture { 0%, 54% { opacity: 0; } 58%, 66% { opacity: 1; } 74%, 100% { opacity: 0; } }
+	.sk-demo.is-playing .sk-demo-tables-before { animation: sk-demo-tables-before 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-tables-after { animation: sk-demo-tables-after 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-tables-gesture { animation: sk-demo-tables-gesture 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-tables-before { 0%, 40% { opacity: 1; } 51%, 96% { opacity: 0; } 100% { opacity: 1; } }
+	@keyframes sk-demo-tables-after { 0%, 40% { opacity: 0; transform: translateY(4px); } 55%, 94% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; } }
+	@keyframes sk-demo-tables-gesture { 0%, 16% { opacity: 0; } 24%, 40% { opacity: 1; } 52%, 100% { opacity: 0; } }
+}
+.sk-demo-tables-sort-gesture { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-tables-row-0 { animation: sk-demo-tables-sort-first 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-tables-row-2 { animation: sk-demo-tables-sort-last 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-tables-sort-first { 0%, 61% { transform: translateY(46px); } 74%, 100% { transform: translateY(0); } }
+	@keyframes sk-demo-tables-sort-last { 0%, 61% { transform: translateY(-46px); } 74%, 100% { transform: translateY(0); } }
+}

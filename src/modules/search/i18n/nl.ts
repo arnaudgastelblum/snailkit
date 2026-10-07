@@ -8,6 +8,7 @@ export const nl: StringsOf<typeof en> = {
 	"empty.recent": "Recente notities",
 	"empty.pins": "Vastgezet",
 	"module.description": "Eén zoekveld voor alles: notities, secties, taken, brainstorms, domeinen, tags en de tekst van je notities.",
+	"module.pitch": "Notities, taken en tags, gevonden in een paar letters.",
 	"placeholder": "Zoek in je kluis…",
 	"close": "Sluiten",
 	"remove": "Verwijder {filter}",

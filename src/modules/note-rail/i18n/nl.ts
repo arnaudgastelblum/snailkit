@@ -1,10 +1,12 @@
-// Nederlandse vertaling van de module Notitierail.
+// Nederlandse vertaling van de module Notitiemenu.
 import type { StringsOf } from "../../../i18n";
 import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
-	"module.name": "Notitierail",
+	"module.name": "Notitiemenu",
 	"module.description": "Een rustige rij icoontjes op elke notitie: inhoud, bladwijzers, open taken en een kalender van dagnotities.",
+	"module.pitch": "Inhoud, taken en kalender naast elke notitie.",
+	"demo.month": "Oktober 2026",
 
 	"command.open-contents": "Inhoud openen",
 	"command.open-bookmarks": "Bladwijzers openen",

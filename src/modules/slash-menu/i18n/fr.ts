@@ -3,6 +3,12 @@ import type { en } from "./en";
 
 export const fr: StringsOf<typeof en> = {
 	"module.name": "Menu slash",
+	"module.pitch": "Insérez vos blocs sans quitter le clavier.",
+	"demo.query": "tâche",
+	"demo.heading": "Titre 1",
+	"demo.task": "Liste de tâches",
+	"demo.task-desc": "Suivez une chose à faire",
+	"demo.select": "↑↓ Naviguer    ↵ Choisir",
 	"module.description": "Insérez des blocs, des extraits et des commandes depuis un menu au curseur.",
 	"menu.empty": "Aucune entrée correspondante",
 	"menu.placeholder": "Tapez pour rechercher...",

@@ -1,5 +1,11 @@
 export const en = {
 	"module.name": "Slash menu",
+	"module.pitch": "Insert the right block without leaving your keyboard.",
+	"demo.query": "task",
+	"demo.heading": "Heading 1",
+	"demo.task": "Task list",
+	"demo.task-desc": "Track something to do",
+	"demo.select": "↑↓ Navigate    ↵ Select",
 	"module.description": "Insert blocks, snippets and commands from a menu at your cursor.",
 	"menu.empty": "No matching entry",
 	"menu.placeholder": "Type to search...",

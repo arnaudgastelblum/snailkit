@@ -24,11 +24,11 @@ export interface ColorHost {
 
 // Arrays survive the core's settings merge, which intentionally filters object keys.
 export function entries(value: unknown, slots: boolean): Array<[string, number]> {
-	const result: Registry = Object.create(null);
+	const result = Object.create(null) as Registry;
 	const pairs = Array.isArray(value) ? value : value && typeof value === "object" ? Object.entries(value) : [];
 	for (const pair of pairs) {
 		if (!Array.isArray(pair) || pair.length !== 2) continue;
-		const [key, number] = pair;
+		const [key, number] = pair as unknown[];
 		if (typeof key !== "string" || !tagKey(key) || typeof number !== "number" || !Number.isFinite(number)) continue;
 		if (number < 0 || number >= (slots ? 14 : 360) || (slots && !Number.isInteger(number))) continue;
 		result[tagKey(key)] = number;

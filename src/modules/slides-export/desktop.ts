@@ -1,3 +1,5 @@
+import { Platform } from "obsidian";
+
 interface DialogOptions {
 	title: string;
 	defaultPath: string;
@@ -13,12 +15,13 @@ interface Remote {
 }
 export interface Desktop {
 	remote: Remote;
-	fs: typeof import("fs");
-	path: typeof import("path");
+	fs: { promises: { writeFile(path: string, data: Uint8Array): Promise<void> } };
+	path: { join(...paths: string[]): string; dirname(path: string): string };
 }
 
 // Called only for a desktop export. Importing this file never loads Node or Electron.
 export function loadDesktop(): Desktop | null {
+	if (!Platform.isDesktopApp) return null;
 	try {
 		const load = (window as unknown as { require?: (id: string) => unknown }).require;
 		if (!load) return null;

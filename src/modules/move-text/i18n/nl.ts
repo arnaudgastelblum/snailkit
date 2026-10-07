@@ -4,6 +4,8 @@ import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
 	"module.name": "Tekst verplaatsen",
+	"module.pitch": "Geef een passage een eigen notitie. Behoud de link.",
+	"demo.extract": "Uitpakken naar een subnotitie",
 	"module.description": "Splits tekst af, archiveer een passage of stuur die naar een andere notitie, zonder een regel te verliezen.",
 	"command.extract": "Afsplitsen naar een subnotitie",
 	"command.archive": "Deze passage archiveren",

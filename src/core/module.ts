@@ -5,12 +5,19 @@ import type { Strings, Translations } from "../i18n";
 import type { SettingsPage } from "../ui/settings-page";
 import type { ModuleContext } from "./context";
 
-/** Where the module is listed in the settings. Add a category here (and its strings) when needed. */
-export type ModuleCategory = "write" | "organize" | "export";
-export const CATEGORY_ORDER: ModuleCategory[] = ["write", "organize", "export"];
+/**
+ * Where the module is listed in the settings, as users see the tools: in the Workbench, around
+ * every note, while writing, to export. Add a category here (and its strings: `category.<id>`
+ * and `category.<id>.desc`) when needed.
+ */
+export type ModuleCategory = "workbench" | "notes" | "write" | "export";
+export const CATEGORY_ORDER: ModuleCategory[] = ["workbench", "notes", "write", "export"];
 
-/** Every module's strings must at least name and describe it. */
-export type ModuleStrings = Strings & { "module.name": string; "module.description": string };
+/**
+ * Every module's strings must at least name and describe it. `module.pitch` is the short line of
+ * its card in the settings showcase (a promise, under 70 characters); the description says more.
+ */
+export type ModuleStrings = Strings & { "module.name": string; "module.description": string; "module.pitch"?: string };
 
 export interface ModuleDefinition<S extends object = object> {
 	/** Stable id: settings key, command prefix, CSS prefix and docs page name. Never change it once published. */
@@ -21,6 +28,12 @@ export interface ModuleDefinition<S extends object = object> {
 	strings: Translations<ModuleStrings>;
 	/** Default settings. Stored settings are merged over a copy of it, so new keys get their default. */
 	defaults: S;
+	/**
+	 * A small looping scene of the tool at work, for its card in the settings showcase, whether
+	 * the tool is on or off. Builds inside `el`: empty, 16:10, class "sk-demo", which gets
+	 * "is-playing" while the card is on screen (see docs/showcase.md). `t` reads the module's strings.
+	 */
+	demo?(el: HTMLElement, t: (key: string) => string): void;
 	/** Needs Node or Electron: the module is shown but cannot be turned on on mobile. */
 	desktopOnly?: boolean;
 	/** Returns why the module cannot run right now (already translated), or null when it can. */
@@ -41,8 +54,7 @@ export interface ModuleDefinition<S extends object = object> {
 	migrate?(stored: Record<string, unknown>): Record<string, unknown>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyModule = ModuleDefinition<any>;
+export type AnyModule = ModuleDefinition<object>;
 
 export function defineModule<S extends object>(definition: ModuleDefinition<S>): ModuleDefinition<S> {
 	return definition;

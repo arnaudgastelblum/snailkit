@@ -26,7 +26,7 @@ export class RoomController {
 		// Reset the sizer of the other mode (mode switched while open).
 		for (const s of this.sizers) {
 			if (s !== sizer) {
-				s.style.transform = "";
+				s.style.removeProperty("transform");
 				s.removeClass("sk-note-rail-room");
 				s.parentElement?.removeClass("sk-note-rail-room-clip");
 				this.sizers.delete(s);
@@ -47,7 +47,7 @@ export class RoomController {
 
 	destroy(): void {
 		for (const s of this.sizers) {
-			s.style.transform = "";
+			s.style.removeProperty("transform");
 			s.removeClass("sk-note-rail-room");
 			s.parentElement?.removeClass("sk-note-rail-room-clip");
 		}

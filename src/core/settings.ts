@@ -1,5 +1,6 @@
 // Shape of data.json and how stored values are merged over defaults. Pure functions, tested in test/.
 import { isLang, type LanguageSetting } from "../i18n";
+import type { AutoOpenMode } from "./workbench/types";
 
 export interface ModuleRecord {
 	enabled: boolean;
@@ -14,14 +15,24 @@ export interface SnailkitData {
 	welcomed: boolean;
 	/** One-time hints of the core already shown (for example "workbench-tabs"). */
 	hints: string[];
+	/** Settings of the Workbench, a part of the core (not a module). */
+	workbench: WorkbenchSettings;
 	modules: Record<string, ModuleRecord>;
 }
+
+export interface WorkbenchSettings {
+	/** When the Workbench opens by itself, on Home (else its first tab). Phones follow the same setting. */
+	autoOpen: AutoOpenMode;
+}
+
+export const AUTO_OPEN_MODES: AutoOpenMode[] = ["startup-and-new-tabs", "startup", "never"];
+const isAutoOpen = (value: unknown): value is AutoOpenMode => AUTO_OPEN_MODES.includes(value as AutoOpenMode);
 
 /** The hint bubble of the Workbench's tabs (shown once). */
 export const HINT_WORKBENCH_TABS = "workbench-tabs";
 
 export function defaultData(): SnailkitData {
-	return { version: 1, language: "auto", welcomed: false, hints: [], modules: {} };
+	return { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs" }, modules: {} };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -49,6 +60,11 @@ export function normalizeData(raw: unknown): SnailkitData {
 	// The Workbench's hint was a setting of the Tasks module before the Workbench moved to the core.
 	const tasks = data.modules.tasks?.settings;
 	if (tasks?.workbenchTabsHintSeen === true && !data.hints.includes(HINT_WORKBENCH_TABS)) data.hints.push(HINT_WORKBENCH_TABS);
+	// When the Workbench opens by itself was a setting of the Home module before it moved to the core.
+	const workbench = isObject(raw.workbench) ? raw.workbench : {};
+	const formerAutoOpen = data.modules.home?.settings.openWorkbench;
+	if (isAutoOpen(workbench.autoOpen)) data.workbench.autoOpen = workbench.autoOpen;
+	else if (isAutoOpen(formerAutoOpen)) data.workbench.autoOpen = formerAutoOpen;
 	return data;
 }
 

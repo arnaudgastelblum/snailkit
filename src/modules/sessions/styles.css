@@ -397,6 +397,11 @@
 	text-align: left;
 	cursor: var(--cursor);
 }
+/* The capsule keeps its full width: the reason next to it gives way first. */
+.sk-sessions-tag-summary .sk-tag-capsule {
+	flex: none;
+	max-width: 70%;
+}
 .sk-sessions-tag-summary .sk-tag-capsule.is-proposed {
 	border-style: dashed;
 	opacity: 0.8;
@@ -2560,9 +2565,9 @@ button.sk-sessions-pill:hover,
 	opacity: 0.85;
 }
 .sk-sessions-stamp.is-land {
-	animation: sk-sessions-land 700ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+	animation: sk-sessions-stamp-land 700ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
 }
-@keyframes sk-sessions-land {
+@keyframes sk-sessions-stamp-land {
 	from {
 		opacity: 0;
 		transform: rotate(-20deg) scale(1.6);
@@ -2579,9 +2584,9 @@ button.sk-sessions-pill:hover,
 	pointer-events: none;
 	background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--sk-accent) 9%, transparent) 50%, transparent 70%);
 	background-size: 250% 100%;
-	animation: sk-sessions-sweep 900ms var(--sk-ease) both;
+	animation: sk-sessions-seal-sweep 900ms var(--sk-ease) both;
 }
-@keyframes sk-sessions-sweep {
+@keyframes sk-sessions-seal-sweep {
 	from {
 		background-position: 120% 0;
 	}
@@ -2833,9 +2838,9 @@ button.sk-sessions-tri-choice.is-press {
 	display: none;
 }
 .sk-sessions-tri-count.is-bump {
-	animation: sk-sessions-bump 460ms var(--sk-spring);
+	animation: sk-sessions-tri-bump 460ms var(--sk-spring);
 }
-@keyframes sk-sessions-bump {
+@keyframes sk-sessions-tri-bump {
 	40% {
 		transform: scale(1.35);
 	}
@@ -3262,3 +3267,5 @@ button.sk-sessions-row-invite:hover {
 .sk-sessions-tl-legend-mark.is-closed {
 	border: 1.5px solid var(--text-faint);
 }
+.sk-sessions-tagslot.is-flying { opacity: 0; }
+.sk-sessions-overflow-hidden { display: none !important; }

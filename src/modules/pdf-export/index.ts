@@ -1,3 +1,4 @@
+import { buildDemo } from "./demo";
 // PDF export: one command and two menu entries that print a note to PDF with the look it has
 // in Obsidian. Desktop only (Electron prints the page).
 import { TFile, type Menu } from "obsidian";
@@ -15,6 +16,7 @@ export const pdfExport = defineModule<PdfExportSettings>({
 	icon: "file-down",
 	category: "export",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	desktopOnly: true,
 	defaults: {
 		pageSize: "A4",

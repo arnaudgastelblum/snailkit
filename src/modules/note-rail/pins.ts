@@ -11,7 +11,7 @@ import type { NoteRailSettings } from "./types";
 export function pinLinkpath(value: unknown): string | null {
 	if (typeof value !== "string") return null;
 	let v = value.trim();
-	const wiki = /^\[\[([^\[\]\r\n]+)\]\]$/.exec(v);
+	const wiki = /^\[\[([^[\]\r\n]+)\]\]$/.exec(v);
 	if (wiki) v = wiki[1];
 	else if (v.startsWith("[[")) return null;
 	v = v.split(/[|#^]/, 1)[0].trim();

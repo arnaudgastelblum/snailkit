@@ -1,4 +1,4 @@
-import { getAllTags, MarkdownView, Platform, type TFile } from "obsidian";
+import { getAllTags, MarkdownView, Platform, TFile } from "obsidian";
 import type { ModuleContext } from "../../core/context";
 import type { TasksReader, SessionsReader, NoteRailService } from "../../core/services";
 import { accepts, capText, fold, foldedTokens, parseQuery, search, excerpt, readableText, compactText, rankBonus, LIMITS, type Entry, type Query } from "./engine";
@@ -56,10 +56,10 @@ export class Sources {
 			if (this.loaded) this.rebuild(); this.changed();
 		}));
 		ctx.registerEvent(ctx.app.vault.on("modify", file => { if ("extension" in file) this.queue(file.path); }));
-		ctx.registerEvent(ctx.app.vault.on("create", file => { if ("extension" in file && this.loaded) this.update(file as TFile); this.queue(file.path); }));
+		ctx.registerEvent(ctx.app.vault.on("create", file => { if (file instanceof TFile && this.loaded) this.update(file); this.queue(file.path); }));
 		ctx.registerEvent(ctx.app.vault.on("rename", (file, old) => {
 			for (const path of this.catalog.keys()) if (path === old || path.startsWith(old + "/")) this.remove(path);
-			if ("extension" in file) { if (this.loaded) this.update(file as TFile); this.queue(file.path); }
+			if (file instanceof TFile) { if (this.loaded) this.update(file); this.queue(file.path); }
 			else for (const note of ctx.app.vault.getMarkdownFiles()) if (note.path.startsWith(file.path + "/")) { if (this.loaded) this.update(note); this.queue(note.path); }
 			this.changed();
 		}));
@@ -279,7 +279,7 @@ export class Sources {
 					}
 					folded = chunks.join("");
 				}
-				if (query.words.every(word => folded!.includes(word))) {
+				if (query.words.every(word => folded.includes(word))) {
 					found++;
 					const candidate = { base, text, offset: folded.indexOf(query.words[0]), score: rankBonus(base, now, domain) };
 					const index = candidates.findIndex(other => other.score < candidate.score || other.score === candidate.score && other.base.title.localeCompare(base.title) > 0);

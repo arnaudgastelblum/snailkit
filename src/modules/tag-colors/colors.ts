@@ -158,3 +158,21 @@ export function capsule(doc: Document, tag: string, classes: string) {
 	return el;
 }
 
+/**
+ * Colors kept per tag after `from` was renamed `to` in the vault (its sub-tags too). A tag that
+ * already had its own entry under the new name keeps it (the merged tag keeps its color).
+ */
+export function renameKeys(pairs: ReadonlyArray<[string, number]>, from: string, to: string): Array<[string, number]> {
+	const f = tagKey(from), t = tagKey(to);
+	const moved = (key: string) => key === f ? t : key.startsWith(f + "/") ? t + key.slice(f.length) : null;
+	const kept = pairs.filter(([key]) => moved(key) === null);
+	const taken = new Set(kept.map(([key]) => key));
+	const renamed: Array<[string, number]> = [];
+	for (const [key, value] of pairs) {
+		const next = moved(key);
+		if (next === null || taken.has(next)) continue;
+		taken.add(next);
+		renamed.push([next, value]);
+	}
+	return [...kept, ...renamed];
+}

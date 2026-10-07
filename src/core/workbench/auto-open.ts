@@ -1,4 +1,5 @@
-// Opening the Workbench by itself, as the Home module's setting asks (WorkbenchCore.setAutoOpen):
+// Opening the Workbench by itself, as its setting asks (data.workbench.autoOpen, on Home, else on
+// the first tab; never while no tool has a tab):
 // - at Obsidian's startup only (not when the plugin is updated or turned on again): the first tab
 //   of the main area, pinned, on the asked tab, active. Never two: a Workbench restored in the main
 //   area of the main window is reused and moved to the front of its tab group (one in a pop-out
@@ -9,7 +10,7 @@
 //   tab; when it is still empty and active a frame later (a tab opened to show a note is not), it
 //   becomes a transient Workbench: opening a note from it takes its place.
 // Phones follow the same setting; the focus is not put in a field there (no keyboard popping up).
-import { Platform, type WorkspaceLeaf, type WorkspaceParent } from "obsidian";
+import { Platform, View, type WorkspaceLeaf, type WorkspaceParent } from "obsidian";
 import type SnailkitPlugin from "../../main";
 import type { WorkbenchCore } from "./index";
 import { isSideLeaf, readViewState, startupPlan } from "./state";
@@ -131,7 +132,7 @@ export class AutoOpener {
 			if (main.length === 1 && main[0].view.getViewType() === EMPTY_VIEW) leaf = main[0];
 			else {
 				const group = this.firstGroup();
-				leaf = group ? workspace.createLeafInParent(group as never, 0) : workspace.getLeaf("tab");
+				leaf = group ? workspace.createLeafInParent(group, 0) : workspace.getLeaf("tab");
 			}
 			await leaf.setViewState({ type: WORKBENCH_VIEW_TYPE, state: { activeTab: tabId, tabs: {} } });
 		}
@@ -194,7 +195,8 @@ export class AutoOpener {
 	}
 
 	private activeLeaf(): WorkspaceLeaf | null {
-		return (this.app.workspace as unknown as { activeLeaf?: WorkspaceLeaf | null }).activeLeaf ?? null;
+		const leaf = this.app.workspace.getActiveViewOfType(View)?.leaf;
+		return leaf && !isSideLeaf(this.app, leaf) ? leaf : null;
 	}
 
 	private isNewTab(leaf: WorkspaceLeaf): boolean {

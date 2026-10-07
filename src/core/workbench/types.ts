@@ -17,7 +17,7 @@ export const TAB_ORDER = { home: 10, tasks: 20, sessions: 30, other: 100 } as co
 /** "page" when the view is at least 760 px wide (main area), "side" when narrower (side panel). */
 export type WorkbenchLayout = "page" | "side";
 
-/** When the Workbench opens by itself (setting of the Home module). */
+/** When the Workbench opens by itself (its own setting, in data.json under "workbench"). */
 export type AutoOpenMode = "never" | "startup" | "startup-and-new-tabs";
 
 /** What a tab keeps in the saved workspace: small, JSON only. */
@@ -109,9 +109,4 @@ export interface ModuleWorkbench {
 	refresh(): void;
 	/** Instances of a tab shown right now (one per Workbench that shows it). */
 	instances(tabId: string): WorkbenchTabInstance[];
-	/**
-	 * Opening by itself, owned by the Home module: at app startup (first tab, pinned, never twice),
-	 * and in new empty tabs with "startup-and-new-tabs". Back to "never" when the module stops.
-	 */
-	setAutoOpen(mode: AutoOpenMode, tabId: string): void;
 }

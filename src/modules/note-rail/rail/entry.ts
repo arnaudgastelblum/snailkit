@@ -26,7 +26,7 @@ export function hotkeyText(hotkeys: readonly HotkeyLike[] | null | undefined, ma
  * else the command's defaults.
  */
 export function commandHotkeys(custom: readonly HotkeyLike[] | undefined, defaults: readonly HotkeyLike[] | undefined): readonly HotkeyLike[] {
-	return Array.isArray(custom) ? custom : Array.isArray(defaults) ? defaults : [];
+	return Array.isArray(custom) ? custom as readonly HotkeyLike[] : Array.isArray(defaults) ? defaults as readonly HotkeyLike[] : [];
 }
 
 /**

@@ -4,6 +4,11 @@ import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
 	"module.name": "Tablas",
+	"module.pitch": "Da forma y orden a tus tablas sin pelear con Markdown.",
+	"demo.rows": "Filas",
+	"demo.columns": "Columnas",
+	"demo.sort": "Ordenar",
+	"demo.style": "Estilo",
 	"module.description": "Inserta, ordena, ajusta y da estilo a tus tablas Markdown con una pequeña barra de herramientas, como en un procesador de textos.",
 
 	"command.insert": "Insertar tabla",

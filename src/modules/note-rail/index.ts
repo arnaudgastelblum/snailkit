@@ -3,6 +3,7 @@
 // on every note pane.
 import { moment } from "obsidian";
 import { defineModule } from "../../core/module";
+import { buildDemo } from "./demo";
 import { richText, type SettingsPage } from "../../ui/settings-page";
 import { NoteRailController } from "./controller";
 import { getDailyConfig } from "./panels/calendar/daily";
@@ -16,8 +17,9 @@ import { es } from "./i18n/es";
 export const noteRail = defineModule<NoteRailSettings>({
 	id: "note-rail",
 	icon: "panel-left",
-	category: "organize",
+	category: "notes",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: DEFAULT_SETTINGS,
 	keepOnReset: ["vaultPins", "vaultPinFolders", "bookmarksTips"],
 	activate(ctx) {
@@ -108,7 +110,7 @@ function calendarSection(page: SettingsPage<NoteRailSettings>): void {
 		desc: formatDesc(),
 		placeholder: core.format,
 		normalize: (value) => value.trim(),
-		onChange: () => formatRow.setDesc(richText(formatDesc())),
+		onChange: () => { void formatRow.setDesc(richText(formatDesc())); },
 	});
 	daily.text("calendarTemplate", page.t("settings.template"), {
 		desc: page.t("settings.template-desc"),

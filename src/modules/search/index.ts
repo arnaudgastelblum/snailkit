@@ -1,6 +1,7 @@
 // Search: one search for everything Snailkit knows (notes, sections, tasks, brainstorms,
 // domains, tags, note content), from the rail's magnifier, the Home tab's field and a command.
 import { defineModule } from "../../core/module";
+import { buildDemo } from "./demo";
 import { DEFAULTS, type SearchSettings } from "./types";
 import { en } from "./i18n/en";
 import { fr } from "./i18n/fr";
@@ -14,8 +15,9 @@ import type { SearchService } from "./types";
 export const search = defineModule<SearchSettings>({
 	id: "search",
 	icon: "search",
-	category: "organize",
+	category: "workbench",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: DEFAULTS,
 	activate(ctx) {
 		const sources = new Sources(ctx), views = new Set<SearchView>(), queries = new Set<AbortController>();

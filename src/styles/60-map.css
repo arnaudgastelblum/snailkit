@@ -72,7 +72,7 @@
 .sk-map-node.is-path:not(.is-gray), .sk-map-node.is-hi:not(.is-gray) { color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l)); }
 .sk-map-node.is-pressed { transform: scale(0.97); }
 .sk-map-node:focus-visible { outline: 1px solid var(--sk-accent-line); outline-offset: 1px; }
-.sk-map-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sk-map-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; line-height: 1.5; }
 .sk-map-head { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; color: var(--text-faint); }
 .sk-map-head svg { width: 13px; height: 13px; stroke-width: 1.75px; }
 .sk-map-node.is-home .sk-map-head { width: 22px; height: 22px; border-radius: 50%; background: var(--sk-surface-sunken); color: var(--text-muted); }

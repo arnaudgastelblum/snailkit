@@ -1,6 +1,8 @@
 // English reference for the Move text module.
 export const en = {
 	"module.name": "Move text",
+	"module.pitch": "Give a passage its own note. Keep the connection.",
+	"demo.extract": "Extract to a sub-note",
 	"module.description": "Extract, archive or send a passage to another note, without losing a line.",
 	"command.extract": "Extract to a sub-note",
 	"command.archive": "Archive this passage",

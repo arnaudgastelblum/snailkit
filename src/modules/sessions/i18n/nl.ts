@@ -4,6 +4,8 @@ import type { en } from "./en";
 export const nl: StringsOf<typeof en> = {
 	"module.name": "Brainstorm",
 	"module.description": "Schrijf je ideeën in één notitie in één ruk op, vis er daarna de taken uit en sluit af met een korte samenvatting.",
+	"module.pitch": "Schrijf je ideeën op en vis er de taken uit.",
+	"demo.date": "5 okt",
 
 	"command.new": "Nieuwe brainstorm",
 	"command.adopt": "Deze notitie als brainstorm behandelen",

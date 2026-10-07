@@ -1,6 +1,6 @@
 // Contents: the headings of the note, the current section, a reading progress bar, and a hover
 // preview that scrolls the note to a heading and glides back to the exact spot when you leave.
-import { Platform, type EventRef, type MarkdownView, type TFile } from "obsidian";
+import { Platform, type EventRef, type TFile } from "obsidian";
 import { asElement } from "../../rail/motion";
 import { clamp } from "../../settings";
 import type { HideReason, PanelContext, PanelDefinition, PanelInstance } from "../../types";
@@ -163,7 +163,7 @@ class TocController implements PanelInstance {
 				cls: "sk-note-rail-row",
 				attr: { "data-index": String(i), "data-depth": String(entry.depth), role: "button", tabindex: "0" },
 			});
-			row.style.setProperty("--depth", String(entry.depth));
+			row.setCssProps({ "--depth": String(entry.depth) });
 			for (let g = 0; g < entry.depth; g++) {
 				row.createSpan({ cls: "sk-note-rail-guide" }).style.left = `${INDENT + g * INDENT}px`;
 			}
@@ -268,8 +268,8 @@ class TocController implements PanelInstance {
 		}
 		row.addClass("is-current");
 		if (instant) this.markerEl.addClass("is-instant");
-		this.markerEl.style.setProperty("--y", `${row.offsetTop}px`);
-		this.markerEl.style.setProperty("--h", `${row.offsetHeight}px`);
+		this.markerEl.setCssProps({ "--y": `${row.offsetTop}px` });
+		this.markerEl.setCssProps({ "--h": `${row.offsetHeight}px` });
 		this.markerEl.addClass("is-on");
 		if (instant) {
 			void this.markerEl.offsetWidth;
@@ -422,7 +422,7 @@ class TocController implements PanelInstance {
 	private scrollToLine(s: NoteSurface, line: number, file: TFile | null): void {
 		if (s.lineTop(line) === null) {
 			// No geometry available (unknown renderer): fall back to Obsidian's own line scroll.
-			const mode = (this.ctx.view as MarkdownView).currentMode as unknown as { applyScroll?(n: number): void };
+			const mode = (this.ctx.view).currentMode as unknown as { applyScroll?(n: number): void };
 			mode.applyScroll?.(line);
 			return;
 		}

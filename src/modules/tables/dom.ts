@@ -15,7 +15,7 @@ export function applyWidths(tableEl: HTMLElement, widths: number[]): void {
 	for (let c = 0; c < MAX_WIDTH_COLUMNS; c++) {
 		const w = widths[c];
 		const name = "--sk-tables-w" + (c + 1);
-		if (w > 0) tableEl.style.setProperty(name, w + "px");
+		if (w > 0) tableEl.setCssProps({ [name]: w + "px" });
 		else if (tableEl.style.getPropertyValue(name)) tableEl.style.removeProperty(name);
 	}
 	tableEl.toggleAttribute("data-sk-widths", widths.some((w) => w > 0));
@@ -55,7 +55,7 @@ export function applyMeta(tableEl: HTMLElement, meta: Meta | null): void {
 		if (tableEl.getAttribute(name) !== values[i]) tableEl.setAttribute(name, values[i]);
 	});
 	const accent = accentCss(meta.accent);
-	if (accent) tableEl.style.setProperty("--sk-tables-accent", accent);
+	if (accent) tableEl.setCssProps({ "--sk-tables-accent": accent });
 	else tableEl.style.removeProperty("--sk-tables-accent");
 }
 

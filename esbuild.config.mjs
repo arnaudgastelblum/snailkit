@@ -1,8 +1,9 @@
 // Bundles src/main.ts into main.js, and builds styles.css from the shared styles
-// (src/styles/*.css) followed by each module's own styles (src/modules/<id>/styles.css).
+// (src/styles/*.css) followed by each module's own styles (src/modules/<id>/styles.css, then
+// demo.css, the scene of its card in the settings).
 // `node esbuild.config.mjs` watches, `node esbuild.config.mjs production` builds once.
 import esbuild from "esbuild";
-import builtins from "builtin-modules";
+import { builtinModules as builtins } from "node:module";
 import fs from "fs";
 import path from "path";
 
@@ -19,7 +20,7 @@ function cssFiles() {
 	const modules = fs
 		.readdirSync(MODULE_DIR, { withFileTypes: true })
 		.filter((d) => d.isDirectory())
-		.map((d) => path.join(MODULE_DIR, d.name, "styles.css"))
+		.flatMap((d) => [path.join(MODULE_DIR, d.name, "styles.css"), path.join(MODULE_DIR, d.name, "demo.css")])
 		.filter((f) => fs.existsSync(f))
 		.sort();
 	return [...shared, ...modules];

@@ -1,0 +1,29 @@
+.sk-demo-column-select-text, .sk-demo-column-select-small, .sk-demo-column-select-title, .sk-demo-column-select-mono, .sk-demo-column-select-link {
+	fill: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: 10px;
+}
+.sk-demo-column-select-title { font-size: 14px; font-weight: 600; }
+.sk-demo-column-select-small { font-size: 8px; fill: var(--text-muted); }
+.sk-demo-column-select-mono { font-family: var(--font-monospace); font-size: 10px; white-space: pre; }
+.sk-demo-column-select-link { fill: var(--text-accent); font-size: 9px; }
+.sk-demo-column-select-paper { fill: var(--background-primary); stroke: var(--background-modifier-border); stroke-width: 0.8; }
+.sk-demo-column-select-wash { fill: var(--sk-accent-wash); }
+.sk-demo-column-select-bar { fill: var(--text-faint); opacity: 0.25; }
+.sk-demo-column-select-line { fill: none; stroke: var(--text-muted); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.sk-demo-column-select-accent { fill: none; stroke: var(--sk-accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.sk-demo-column-select-before, .sk-demo-column-select-gesture { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-column-select-before { animation: sk-demo-column-select-before 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-column-select-after { animation: sk-demo-column-select-after 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-column-select-gesture { animation: sk-demo-column-select-gesture 8s var(--sk-ease) infinite; }
+	@keyframes sk-demo-column-select-before { 0%, 40% { opacity: 1; } 51%, 96% { opacity: 0; } 100% { opacity: 1; } }
+	@keyframes sk-demo-column-select-after { 0%, 40% { opacity: 0; transform: translateY(4px); } 55%, 94% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; } }
+	@keyframes sk-demo-column-select-gesture { 0%, 16% { opacity: 0; } 24%, 40% { opacity: 1; } 52%, 100% { opacity: 0; } }
+}
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-column-select-carets { animation: sk-demo-column-select-carets 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-column-select-after { animation: sk-demo-column-select-type 8s steps(5, end) infinite; }
+	@keyframes sk-demo-column-select-carets { 0%, 20% { transform: translateX(-35px); clip-path: inset(0 0 58% 0); } 35%, 40% { transform: translateX(-35px); clip-path: inset(0); } 62%, 94% { transform: translateX(0); clip-path: inset(0); } 100% { transform: translateX(-35px); } }
+	@keyframes sk-demo-column-select-type { 0%, 40% { clip-path: inset(0 60% 0 0); } 62%, 94% { clip-path: inset(0); } 100% { clip-path: inset(0 60% 0 0); } }
+}

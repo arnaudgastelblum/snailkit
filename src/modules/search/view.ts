@@ -13,7 +13,7 @@ export function sourceOf(sources: Sources): SearchSource | null {
 	return view?.file ? { file: view.file, editor: null } : sources.lastSource;
 }
 export function element<K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-	const el = parent.ownerDocument.createElement(tag); el.className = cls; if (text) el.textContent = text; parent.append(el); return el;
+	return parent.createEl(tag, { cls, text });
 }
 function highlight(parent: HTMLElement, text: string, words: string[]): void {
 	let at = 0;
@@ -166,7 +166,7 @@ export class SearchView implements InlineSearch {
 		const append = (row: Row) => {
 			const index = this.rows.push(row) - 1, result = row.result;
 			const el = element(this.list, "div", "sk-search-row sk-surface-item"); el.dataset.nav = ""; el.dataset.index = String(index); el.id = `${this.list.id}-${index}`; el.tabIndex = -1; el.setAttribute("role", "option"); el.setAttribute("aria-selected", "false");
-			if (result?.hue !== null && result?.hue !== undefined) el.style.setProperty("--sk-hue", String(result.hue));
+			if (result?.hue !== null && result?.hue !== undefined) el.setCssProps({ "--sk-hue": String(result.hue) });
 			else el.classList.add("is-gray");
 			const icon = element(el, "span", "sk-search-row-icon"); setIcon(icon, result ? ({ note: "file", section: "heading", task: "square-check", brainstorm: "zap", domain: "circle", tag: "hash", content: "text" }[result.kind]) : "plus");
 			const body = element(el, "span", "sk-search-row-body"), title = element(body, "span", "sk-search-title");
@@ -191,7 +191,7 @@ export class SearchView implements InlineSearch {
 		for (const row of extras) { if (row.group && row.group !== previousGroup) { element(this.list, "div", "sk-search-group", this.t(row.group)); previousGroup = row.group; } append(row); }
 		const title = allowCreate && this.active ? creationTitle(parseQuery(this.raw(), this.sources.tags()), groups) : null;
 		if (title) append({ label: this.t("create", { title }), run: async event => {
-			const safe = title.replace(/[\\/:*?"<>|\[\]#^]/g, " ").trim(); if (!safe || safe === "." || safe === "..") return;
+			const safe = title.replace(/[\\/:*?"<>|[\]#^]/g, " ").trim(); if (!safe || safe === "." || safe === "..") return;
 			const app = this.sources.ctx.app, folder = app.fileManager.getNewFileParent(this.host.source?.()?.file.path ?? "");
 			const parent = folder.path.replace(/^\/+|\/+$/g, "");
 			const path = (parent ? parent + "/" : "") + safe + ".md";
@@ -352,7 +352,7 @@ export function openFloating(sources: Sources, options: SearchOpenOptions, onClo
 		const mobile = Platform.isMobile || win.innerWidth < 600; box.classList.toggle("is-phone", mobile);
 		box.style.maxHeight = `${(viewport?.height ?? win.innerHeight) - (mobile ? 0 : 48)}px`;
 		if (mobile) { box.style.top = `${viewport?.offsetTop ?? 0}px`; box.style.left = `${viewport?.offsetLeft ?? 0}px`; box.style.height = `${viewport?.height ?? win.innerHeight}px`; }
-		else { box.style.top = "48px"; box.style.left = ""; box.style.height = ""; }
+		else { box.style.removeProperty("top"); box.style.removeProperty("left"); box.style.removeProperty("height"); }
 		view.layout();
 	};
 	viewport?.addEventListener("resize", layout); viewport?.addEventListener("scroll", layout); win.addEventListener("resize", layout); layout();

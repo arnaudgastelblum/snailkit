@@ -32,7 +32,7 @@ export function replayClass(el: HTMLElement, cls: string): void {
 export function stagger(items: HTMLElement[], win: Window = window): void {
 	if (reducedMotion(win)) return;
 	items.forEach((el, i) => {
-		el.style.setProperty("--i", String(Math.min(i, 24)));
+		el.setCssProps({ "--i": String(Math.min(i, 24)) });
 		el.classList.add("sk-note-rail-in");
 		el.addEventListener("animationend", () => el.classList.remove("sk-note-rail-in"), { once: true });
 	});

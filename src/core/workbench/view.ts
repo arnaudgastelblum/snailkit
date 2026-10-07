@@ -348,12 +348,12 @@ export class WorkbenchView extends ItemView {
 		const mountId = ++this.mountId;
 		const live = () => mountId === this.mountId && !this.closed;
 		const id = tab.id;
-		const view = this;
+		const isTransient = () => this.transientFlag;
 		const host: WorkbenchTabHost = {
 			layout,
 			leaf: this.leaf,
 			get transient() {
-				return view.transientFlag;
+				return isTransient();
 			},
 			state: { ...(this.tabStates[id] ?? {}) },
 			open: (path, line, event) => {

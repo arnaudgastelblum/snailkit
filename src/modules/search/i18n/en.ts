@@ -5,6 +5,7 @@ export const en = {
 	"empty.recent": "Recent notes",
 	"empty.pins": "Pins",
 	"module.description": "One search for everything: notes, sections, tasks, brainstorms, domains, tags and the text of your notes.",
+	"module.pitch": "Notes, tasks and tags, found in a few letters.",
 	"placeholder": "Search your vault…",
 	"close": "Close",
 	"remove": "Remove {filter}",

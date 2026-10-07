@@ -4,9 +4,11 @@ import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
 	"module.name": "Exportar a PDF",
+	"module.pitch": "Tu nota, su estilo y sus enlaces en un PDF.",
+	"demo.export": "Exportar a PDF",
 	"module.description": "Exporta una nota a PDF tal como se ve en Obsidian: tu tema, imágenes y dibujos, texto seleccionable y enlaces en los que se puede hacer clic.",
 	"command.export": "Exportar la nota actual a PDF",
-	"menu.export": "Exportar a PDF",
+	"menu.export": "Snailkit: Exportar a PDF",
 	"dialog.title": "Exportar a PDF",
 	"notice.busy": "Ya hay una exportación en curso.",
 	"notice.exporting": "Exportando {name}...",

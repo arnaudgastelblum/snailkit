@@ -114,11 +114,10 @@ export class HomeRuntime {
 		this.views.clear();
 	}
 
-	/** The places options and the automatic opening follow the settings. */
+	/** The places options follow the settings. */
 	private applySettings(): void {
 		const settings = cleanSettings(this.settings);
 		this.ctx.configurePlaces({ home: settings.homePage, ignoredFolders: splitFolders(settings.ignoredFolders) });
-		this.ctx.workbench.setAutoOpen(settings.openWorkbench, "home");
 	}
 
 	/** Listens to the services that are on now (they come and go with their modules). */

@@ -164,7 +164,7 @@ export class Rail {
 		covered = Math.max(covered, safeTop - host.top);
 		this.railTop = covered > 0 ? `${Math.round(covered)}px` : "";
 		for (const el of [this.railEl, this.shell?.el]) {
-			if (el && el.style.getPropertyValue("--sk-note-rail-top") !== this.railTop) el.style.setProperty("--sk-note-rail-top", this.railTop);
+			if (el && el.style.getPropertyValue("--sk-note-rail-top") !== this.railTop) el.setCssProps({ "--sk-note-rail-top": this.railTop });
 		}
 	}
 
@@ -336,7 +336,7 @@ export class Rail {
 
 	private applySettings(): void {
 		this.hostEl.toggleClass("sk-note-rail-right", this.position === "right");
-		this.railEl.style.setProperty("--sk-note-rail-rest", String(clamp(this.env.settings.restOpacity, 0.2, 1, 0.5)));
+		this.railEl.setCssProps({ "--sk-note-rail-rest": String(clamp(this.env.settings.restOpacity, 0.2, 1, 0.5)) });
 		this.renderActions();
 		this.renderButtons();
 	}
@@ -353,7 +353,7 @@ export class Rail {
 		if (area && file && place) {
 			const initial = (/[\p{L}\p{N}]/u.exec(area.basename)?.[0] ?? "?").toUpperCase();
 			this.placeEl.querySelector(".sk-note-rail-place-initial")?.setText(initial);
-			this.placeEl.style.setProperty("--sk-place-hue", String(hueOf(area.path)));
+			this.placeEl.setCssProps({ "--sk-place-hue": String(hueOf(area.path)) });
 			this.placeTip = this.placeSteps(file).map((f) => f.basename).join(" › ");
 			this.placeEl.querySelector(".sk-note-rail-sr-only")?.setText(this.placeTip);
 		}
@@ -744,7 +744,7 @@ export class Rail {
 			this.puckEl.removeClass("is-on");
 			return;
 		}
-		this.puckEl.style.setProperty("--y", `${b.offsetTop}px`);
+		this.puckEl.setCssProps({ "--y": `${b.offsetTop}px` });
 		this.puckEl.addClass("is-on");
 	}
 
@@ -780,10 +780,10 @@ export class Rail {
 			const rail = this.railEl.getBoundingClientRect();
 			this.tooltipEl.style.top = `${r.top - host.top + r.height / 2}px`;
 			if (this.position === "right") {
-				this.tooltipEl.style.left = "auto";
+				this.tooltipEl.style.removeProperty("left");
 				this.tooltipEl.style.right = `${host.right - rail.left + 8}px`;
 			} else {
-				this.tooltipEl.style.right = "auto";
+				this.tooltipEl.style.removeProperty("right");
 				this.tooltipEl.style.left = `${rail.right - host.left + 8}px`;
 			}
 			this.tooltipEl.addClass("is-on");
@@ -902,7 +902,7 @@ export class Rail {
 	private updateRoom(): void {
 		if (this.destroyed) return;
 		// On a phone there is no room to make: the text would slide off the screen.
-		if (this.shell && this.railTop) this.shell.el.style.setProperty("--sk-note-rail-top", this.railTop);
+		if (this.shell && this.railTop) this.shell.el.setCssProps({ "--sk-note-rail-top": this.railTop });
 		if (this.shell) this.placeShell(this.shell);
 		this.room.update(this.shell?.el ?? null, this.position, this.env.settings.makeRoom !== false && !Platform.isPhone);
 	}

@@ -201,6 +201,8 @@ body.theme-dark {
 }
 
 .sk-note-rail-tooltip {
+	left: auto;
+	right: auto;
 	position: absolute;
 	z-index: 40;
 	pointer-events: none;
@@ -1430,3 +1432,4 @@ button.sk-btn.sk-note-rail-session-action {
 .sk-note-rail-workbench-icon {
 	display: inline-flex;
 }
+.sk-note-rail-bm-row.sk-note-rail-no-transition { transition: none; }

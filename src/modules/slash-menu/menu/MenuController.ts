@@ -51,24 +51,19 @@ export class MenuController {
 
 	/** Editor extensions to register with registerEditorExtension. */
 	extensions(): Extension[] {
-		const controller = this;
-		const plugin = ViewPlugin.fromClass(
-			class {
-				private onScroll = () => controller.reanchor(this.view);
-				constructor(private view: EditorView) {
-					controller.views.add(view);
-					view.scrollDOM.addEventListener("scroll", this.onScroll, { passive: true });
-				}
-				update(update: ViewUpdate) {
-					controller.onUpdate(update);
-				}
-				destroy() {
-					controller.views.delete(this.view);
-					this.view.scrollDOM.removeEventListener("scroll", this.onScroll);
-					if (controller.session?.view === this.view) controller.close(false);
-				}
-			},
-		);
+		const plugin = ViewPlugin.define((view) => {
+			const onScroll = () => this.reanchor(view);
+			this.views.add(view);
+			view.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
+			return {
+				update: (update: ViewUpdate) => this.onUpdate(update),
+				destroy: () => {
+					this.views.delete(view);
+					view.scrollDOM.removeEventListener("scroll", onScroll);
+					if (this.session?.view === view) this.close(false);
+				},
+			};
+		});
 
 		const whenOpen = (fn: (s: Session) => boolean) => (view: EditorView) => {
 			const s = this.session;

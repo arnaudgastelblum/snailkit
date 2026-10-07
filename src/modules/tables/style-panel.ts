@@ -108,7 +108,7 @@ export class StylePanel {
 				cls: "sk-tables-swatch",
 				attr: { type: "button", "data-accent": accent, "aria-pressed": String(meta.accent === accent), "aria-label": this.t("accent." + accent) },
 			});
-			button.style.setProperty("--sk-tables-swatch", accentCss(accent) ?? "var(--interactive-accent)");
+			button.setCssProps({ "--sk-tables-swatch": accentCss(accent) ?? "var(--interactive-accent)" });
 			button.addEventListener("click", () => this.commit({ accent }));
 		}
 		const custom = HEX_RE.test(meta.accent);
@@ -116,7 +116,7 @@ export class StylePanel {
 			cls: "sk-tables-swatch sk-tables-swatch-custom",
 			attr: { type: "button", "aria-pressed": String(custom), "aria-label": this.t("style.custom") },
 		});
-		if (custom) customButton.style.setProperty("--sk-tables-swatch", meta.accent);
+		if (custom) customButton.setCssProps({ "--sk-tables-swatch": meta.accent });
 		setIcon(customButton, "pipette");
 		const picker = customButton.createEl("input", { attr: { type: "color", tabindex: "-1", "aria-hidden": "true" } });
 		picker.value = custom && meta.accent.length === 7 ? meta.accent : "#3b82f6";
@@ -148,10 +148,10 @@ export class StylePanel {
 		});
 		const asDefault = footer.createEl("button", { cls: "sk-tables-link-btn", text: this.t("style.as-default"), attr: { type: "button" } });
 		asDefault.disabled = !this.meta || this.meta.style === "none";
-		asDefault.addEventListener("click", async () => {
+		asDefault.addEventListener("click", () => { void (async () => {
 			await this.controller.setNewTableLook(this.current());
 			this.controller.ctx.toast(this.t("style.default-done"));
-		});
+		})(); });
 	}
 
 	private sample(): string[][] {

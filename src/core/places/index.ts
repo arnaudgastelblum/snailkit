@@ -161,7 +161,7 @@ export function createPlaces(app: App): PlacesCore {
 
 	const fileOf = (path: string): TFile | null => {
 		const file = app.vault.getFileByPath?.(path) ?? (app.vault.getAbstractFileByPath(path) as TFile | null);
-		return file && (file as TFile).extension === "md" ? file : null;
+		return file && (file).extension === "md" ? file : null;
 	};
 	const filesOf = (paths: Iterable<string>): TFile[] => {
 		const out: TFile[] = [];
@@ -185,12 +185,12 @@ export function createPlaces(app: App): PlacesCore {
 			version++;
 			notifySoon();
 		}
-	}) as never);
+	}));
 	for (const name of ["create", "rename", "delete"]) {
 		listen(vault, name, (() => {
 			if (built) markDirty();
 			else notifySoon();
-		}) as never);
+		}));
 	}
 	// The first full resolution of the vault (startup): links may now point to notes they did not find yet.
 	listen(cache, "resolved", (() => {
@@ -202,7 +202,7 @@ export function createPlaces(app: App): PlacesCore {
 		domainCache = null;
 		if (built) markDirty();
 		else notifySoon();
-	}) as never);
+	}));
 
 	const service: PlacesService = {
 		version: 1,

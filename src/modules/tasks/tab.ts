@@ -7,17 +7,20 @@ import type { TabState, WorkbenchTabHost, WorkbenchTabInstance } from "../../cor
 import { richText } from "../../ui/settings-page";
 import { capsule, checkbox, colorFor, descriptionPreview, icon, kbd, renderInline, tagDot, TagSuggestModal } from "./components";
 import {
-	addDays, buildTree, countTasks, dueState, findNode, inScope, matchesQuery, nextWeek, passesPriority,
+	addDays, buildTree, countTasks, dueState, findNode, inScope, matchesQuery, moveInOrder, nextWeek, passesPriority,
 	sortTasks, todayGroups, upcomingGroups, type TagNode,
 } from "./group";
 import type { ViewAction } from "./api";
 import type { TasksHub } from "./hub";
 import { TaskNotePreview } from "./note-preview";
+import { RenameTagModal } from "./rename-tag";
+import { TAG_RENAMED_EVENT } from "../../core/services";
+import type { TagRenameResult } from "../../core/tags/rename";
 import { PRIORITIES } from "./parse";
 import { parseQuickAdd } from "./quick-add";
 import type { Priority, Task } from "./types";
 
-const SORT_MODES = ["notes", "priority", "due"] as const;
+const SORT_MODES = ["notes", "priority", "due", "manual"] as const;
 
 type Layout = "page" | "side";
 
@@ -68,6 +71,8 @@ export class TasksTab implements WorkbenchTabInstance {
 	private readonly keyScope: Scope;
 	private scoped = false;
 	private navEl: HTMLElement | null = null;
+	/** The tag being dragged in the navigator to reorder it (a task drag uses dragKey). */
+	private dragTag: string | null = null;
 	private headEl: HTMLElement | null = null;
 	private listEl: HTMLElement | null = null;
 	private footEl: HTMLElement | null = null;
@@ -221,7 +226,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	}
 
 	private sorted(tasks: readonly Task[]): Task[] {
-		return sortTasks(tasks, this.settings.sortMode);
+		return sortTasks(tasks, this.settings.sortMode, this.settings.taskOrder);
 	}
 
 	private visibleKeys(): string[] {
@@ -392,7 +397,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				console.error("[Snailkit] tasks: a view action failed", error);
 			}
 			if (!action) continue;
-			const run = action.onClick;
+			const run = action.onClick.bind(action);
 			const state = action.state ? " is-" + action.state : "";
 			const button =
 				this.layout === "page"
@@ -555,7 +560,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		nav.createDiv({ cls: "sk-tasks-nav-sec", text: this.t("nav.tags") });
 		const walk = (node: TagNode) => {
 			const it = nav.createDiv({ cls: "sk-tasks-nav-item sk-tasks-nav-tag" + (this.st.scope === "tag:" + node.tag ? " is-on" : "") });
-			it.style.setProperty("--sk-tasks-depth", String(node.depth));
+			it.setCssProps({ "--sk-tasks-depth": String(node.depth) });
 			if (node.depth === 0) capsule(it, node.tag, this.hub, "sk-tasks-cap-nav");
 			else {
 				const chip = it.createSpan({ cls: "sk-tasks-nav-chip sk-tasks-sec" + (node.depth > 1 ? " is-deep" : ""), text: node.name });
@@ -563,11 +568,141 @@ export class TasksTab implements WorkbenchTabInstance {
 			}
 			it.createSpan({ cls: "sk-tasks-n", text: String(node.count) });
 			it.addEventListener("click", () => this.setScope("tag:" + node.tag));
+			it.addEventListener("contextmenu", (event) => this.tagMenu(event, node.tag));
 			this.dropTarget(it, { tag: node.tag });
+			this.tagDrag(it, node.tag);
 			node.children.forEach(walk);
 		};
-		buildTree(this.hub.index.open()).forEach(walk);
+		this.tagTree(this.hub.index.open()).forEach(walk);
 		nav.createDiv({ cls: "sk-tasks-nav-foot", text: this.t("nav.hint") });
+	}
+
+	/** The tag tree of these tasks, in the order the user gave the tags. */
+	private tagTree(tasks: readonly Task[]): TagNode[] {
+		return buildTree(tasks, this.settings.tagOrder);
+	}
+
+	/** The tags shown next to `tag` in the navigator (same parent), in their current order. */
+	private siblingsOf(tag: string): string[] {
+		const parent = tag.includes("/") ? tag.slice(0, tag.lastIndexOf("/")) : null;
+		const tree = this.tagTree(this.hub.index.open());
+		const level = parent ? (findNode(tree, parent)?.children ?? []) : tree;
+		return level.map((n) => n.tag);
+	}
+
+	/** Puts `tag` before or after `target` (siblings only), saved in the settings. */
+	private async placeTag(tag: string, target: string, after: boolean): Promise<void> {
+		const siblings = this.siblingsOf(tag);
+		if (!siblings.includes(target)) return;
+		this.settings.tagOrder = moveInOrder(this.settings.tagOrder, siblings, tag, target, after);
+		await this.hub.ctx.saveSettings();
+	}
+
+	/** Dragging a tag in the navigator reorders it among its siblings: the line shows where it lands. */
+	private tagDrag(it: HTMLElement, tag: string): void {
+		it.draggable = true;
+		it.addEventListener("dragstart", (e) => {
+			if (this.dragKey) return;
+			this.dragTag = tag;
+			e.dataTransfer?.setData("text/plain", "#" + tag);
+			if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+			window.setTimeout(() => it.addClass("is-dragging"), 0);
+		});
+		it.addEventListener("dragend", () => {
+			it.removeClass("is-dragging");
+			this.dragTag = null;
+			this.clearTagDrop();
+		});
+		const side = (e: DragEvent) => e.clientY > it.getBoundingClientRect().top + it.getBoundingClientRect().height / 2;
+		it.addEventListener("dragover", (e) => {
+			const from = this.dragTag;
+			if (!from || from === tag || !this.siblingsOf(from).includes(tag)) return;
+			e.preventDefault();
+			const after = side(e);
+			if (it.hasClass(after ? "is-drop-after" : "is-drop-before")) return;
+			this.clearTagDrop();
+			it.addClass(after ? "is-drop-after" : "is-drop-before");
+		});
+		it.addEventListener("dragleave", (e) => {
+			if (!it.contains(e.relatedTarget as Node | null)) it.removeClass("is-drop-before", "is-drop-after");
+		});
+		it.addEventListener("drop", (e) => {
+			const from = this.dragTag;
+			if (!from) return;
+			e.preventDefault();
+			e.stopPropagation();
+			this.clearTagDrop();
+			if (from !== tag) void this.placeTag(from, tag, side(e));
+		});
+	}
+
+	private clearTagDrop(): void {
+		this.rootEl.querySelectorAll(".is-drop-before, .is-drop-after").forEach((el) => el.removeClass("is-drop-before", "is-drop-after"));
+	}
+
+	/** Right click on a tag of the navigator: move it up or down, rename it in the whole vault. */
+	private tagMenu(event: MouseEvent, tag: string): void {
+		event.preventDefault();
+		const siblings = this.siblingsOf(tag);
+		const i = siblings.indexOf(tag);
+		const menu = new Menu();
+		menu.addItem((item) => item.setTitle(this.t("menu.focus")).setIcon("crosshair").onClick(() => this.setScope("tag:" + tag)));
+		menu.addSeparator();
+		menu.addItem((item) =>
+			item.setTitle(this.t("menu.tag-up")).setIcon("arrow-up").setDisabled(i <= 0).onClick(() => void this.placeTag(tag, siblings[i - 1], false)),
+		);
+		menu.addItem((item) =>
+			item
+				.setTitle(this.t("menu.tag-down"))
+				.setIcon("arrow-down")
+				.setDisabled(i < 0 || i >= siblings.length - 1)
+				.onClick(() => void this.placeTag(tag, siblings[i + 1], true)),
+		);
+		menu.addSeparator();
+		menu.addItem((item) =>
+			item
+				.setTitle(this.t("menu.tag-rename"))
+				.setIcon("pencil")
+				.onClick(() => new RenameTagModal(this.hub, tag, (to, result, merges) => void this.tagRenamed(tag, to, result, merges)).open()),
+		);
+		menu.showAtMouseEvent(event);
+	}
+
+	/**
+	 * The vault was renamed from `from` to `to`: what the list keeps about tags follows (order,
+	 * folded groups, flag tags, the tag shown), other tools hear it (Tags moves its colors), and a
+	 * toast offers Undo.
+	 */
+	private async tagRenamed(from: string, to: string, result: TagRenameResult, merges: boolean): Promise<void> {
+		const before = { tagOrder: [...this.settings.tagOrder], collapsed: [...this.settings.collapsed], flagTags: this.settings.flagTags };
+		const scope = this.st.scope;
+		const map = (tag: string) => (tag === from ? to : tag.startsWith(from + "/") ? to + tag.slice(from.length) : tag);
+		const unique = (tags: string[]) => tags.filter((tag, i) => tags.indexOf(tag) === i);
+		this.settings.tagOrder = unique(this.settings.tagOrder.map(map));
+		this.settings.collapsed = unique(this.settings.collapsed.map(map));
+		this.settings.flagTags = this.settings.flagTags
+			.split(",")
+			.map((part) => part.trim())
+			.filter(Boolean)
+			.map((part) => (part.startsWith("#") ? "#" + map(part.slice(1).toLowerCase()) : map(part.toLowerCase())))
+			.join(", ");
+		if (scope.startsWith("tag:")) this.setScope("tag:" + map(scope.slice(4)));
+		await this.hub.ctx.saveSettings();
+		this.hub.ctx.app.workspace.trigger(TAG_RENAMED_EVENT, { from, to });
+		this.hub.ctx.toast(this.hub.ctx.tn("rename-tag.done", result.files, { from, to }), {
+			action: {
+				label: this.t("rename-tag.undo"),
+				run: () => {
+					void (async () => {
+						await result.undo();
+						Object.assign(this.settings, before);
+						if (this.st.scope === "tag:" + to) this.setScope(scope);
+						await this.hub.ctx.saveSettings();
+						if (!merges) this.hub.ctx.app.workspace.trigger(TAG_RENAMED_EVENT, { from: to, to: from });
+					})();
+				},
+			},
+		});
 	}
 
 	// ----- list -----
@@ -594,7 +729,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		let pool = tasks;
 		if (scope.startsWith("tag:")) pool = tasks.filter((t) => inScope(t.primary, scope.slice(4)));
-		const tree = buildTree(pool);
+		const tree = this.tagTree(pool);
 		if (scope.startsWith("tag:")) {
 			const root = scope.slice(4);
 			const node = findNode(tree, root);
@@ -684,7 +819,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				.setTitle(this.t("menu.fold-all"))
 				.setIcon("chevrons-down-up")
 				.onClick(async () => {
-					this.settings.collapsed = buildTree(this.hub.index.open()).map((n) => n.tag);
+					this.settings.collapsed = this.tagTree(this.hub.index.open()).map((n) => n.tag);
 					await this.hub.ctx.saveSettings();
 				}),
 		);
@@ -764,6 +899,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.taskMenu(e, t);
 		});
 		this.dragSource(row, t);
+		this.taskDrop(row, t);
 		if (this.layout === "side" && this.st.open === t.key) this.inlineDetail(parent, t);
 		return row;
 	}
@@ -827,6 +963,11 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (sel) this.st.sel = expected;
 		if (open) this.st.open = expected;
 		const key = (await this.hub.rename(t, title)) ?? t.key;
+		// The task keeps its place in "My order" under its new key.
+		if (key !== t.key && this.settings.taskOrder.includes(t.key)) {
+			this.settings.taskOrder = this.settings.taskOrder.map((k) => (k === t.key ? key : k));
+			await this.hub.ctx.saveSettings();
+		}
 		if (sel) this.st.sel = key;
 		if (open) this.st.open = key;
 		if (this.st.propsFor === t.key || this.st.propsFor === expected) this.st.propsFor = key;
@@ -839,9 +980,17 @@ export class TasksTab implements WorkbenchTabInstance {
 		const text = row?.querySelector(".sk-tasks-row-title .sk-tasks-txt");
 		if (!row || !text) return;
 		row.draggable = false;
-		const input = createEl("input", { type: "text", cls: "sk-tasks-rename" });
+		// A text area that grows with the title, so a long one is read whole while editing. The
+		// task stays one line in the note: Enter saves, line breaks become spaces.
+		const input = createEl("textarea", { cls: "sk-tasks-rename", attr: { rows: "1", spellcheck: "false" } });
 		input.value = t.title;
 		text.replaceWith(input);
+		const fit = () => {
+			input.setCssProps({ "--sk-tasks-rename-h": "auto" });
+			input.setCssProps({ "--sk-tasks-rename-h": `${input.scrollHeight + 2}px` });
+		};
+		input.addEventListener("input", fit);
+		fit();
 		input.focus();
 		input.select();
 		let finished = false;
@@ -896,8 +1045,8 @@ export class TasksTab implements WorkbenchTabInstance {
 			const burst = box.createSpan({ cls: "sk-tasks-burst" });
 			for (let i = 0; i < 10; i++) {
 				const dot = burst.createEl("i");
-				dot.style.setProperty("--a", `${i * 36 + (i % 2) * 12}deg`);
-				dot.style.setProperty("--d", `${i % 2 ? 19 : 26}px`);
+				dot.setCssProps({ "--a": `${i * 36 + (i % 2) * 12}deg` });
+				dot.setCssProps({ "--d": `${i % 2 ? 19 : 26}px` });
 			}
 		}
 		const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -906,7 +1055,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		row.style.height = row.offsetHeight + "px";
 		row.addClass("is-leaving");
 		window.requestAnimationFrame(() => {
-			row.style.height = "0px";
+			row.style.removeProperty("height");
+			row.addClass("is-collapsed");
 		});
 		await sleep(320);
 	}
@@ -1259,6 +1409,67 @@ export class TasksTab implements WorkbenchTabInstance {
 		});
 	}
 
+	/** The tasks of `t`'s tag as the list shows them now. */
+	private groupKeys(t: Task): string[] {
+		return this.sorted(this.hub.index.open().filter((x) => x.primary === t.primary)).map((x) => x.key);
+	}
+
+	/**
+	 * Puts the task `key` before or after `target` (same tag). The list switches to "My order"
+	 * (said once in a toast); keys of tasks no longer open are dropped from the saved order.
+	 */
+	private async placeTask(key: string, target: string, after: boolean): Promise<void> {
+		const t = this.hub.index.get(key);
+		if (!t) return;
+		const live = new Set(this.hub.index.open().map((x) => x.key));
+		const order = this.settings.taskOrder.filter((k) => live.has(k));
+		this.settings.taskOrder = moveInOrder(order, this.groupKeys(t), key, target, after);
+		const switched = this.sortMode() !== "manual";
+		if (switched) this.settings.sortMode = "manual";
+		await this.hub.ctx.saveSettings();
+		if (switched) this.hub.ctx.toast(this.t("sort.now-manual"));
+	}
+
+	/** Alt+Up / Alt+Down: one place up or down within its tag. */
+	private async nudgeTask(t: Task, step: -1 | 1): Promise<void> {
+		const keys = this.groupKeys(t);
+		const i = keys.indexOf(t.key);
+		const target = keys[i + step];
+		if (i < 0 || !target) return;
+		await this.placeTask(t.key, target, step > 0);
+	}
+
+	/** A task row accepts another task of the same tag dragged onto it: a line shows where it lands. */
+	private taskDrop(row: HTMLElement, t: Task): void {
+		const accepts = () => {
+			const dragged = this.hub.index.get(this.dragKey);
+			return !!dragged && dragged.key !== t.key && dragged.primary === t.primary;
+		};
+		const side = (e: DragEvent) => {
+			const box = row.getBoundingClientRect();
+			return e.clientY > box.top + box.height / 2;
+		};
+		row.addEventListener("dragover", (e) => {
+			if (!this.dragKey || !accepts()) return;
+			e.preventDefault();
+			e.stopPropagation();
+			const after = side(e);
+			if (row.hasClass(after ? "is-drop-after" : "is-drop-before")) return;
+			this.clearTagDrop();
+			row.addClass(after ? "is-drop-after" : "is-drop-before");
+		});
+		row.addEventListener("dragleave", (e) => {
+			if (!row.contains(e.relatedTarget as Node | null)) row.removeClass("is-drop-before", "is-drop-after");
+		});
+		row.addEventListener("drop", (e) => {
+			if (!this.dragKey || !accepts()) return;
+			e.preventDefault();
+			e.stopPropagation();
+			this.clearTagDrop();
+			void this.placeTask(this.dragKey, t.key, side(e));
+		});
+	}
+
 	private clearDrop(): void {
 		this.rootEl.querySelectorAll(".is-drop-into").forEach((el) => el.removeClass("is-drop-into"));
 	}
@@ -1279,6 +1490,15 @@ export class TasksTab implements WorkbenchTabInstance {
 		if ((e.ctrlKey || e.metaKey) && !e.altKey && key.toLowerCase() === "z" && this.hub.canUndo()) {
 			e.preventDefault();
 			await this.hub.undo();
+			return;
+		}
+		// Alt+Up / Alt+Down: the selected task moves within its tag ("My order").
+		if (e.altKey && !e.ctrlKey && !e.metaKey && (key === "ArrowUp" || key === "ArrowDown")) {
+			const t = this.hub.index.get(this.st.sel);
+			if (!t) return;
+			e.preventDefault();
+			e.stopPropagation();
+			await this.nudgeTask(t, key === "ArrowUp" ? -1 : 1);
 			return;
 		}
 		if (e.ctrlKey || e.metaKey || e.altKey) return;

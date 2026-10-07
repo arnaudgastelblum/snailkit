@@ -8,6 +8,7 @@ export const es: StringsOf<typeof en> = {
 	"empty.recent": "Notas recientes",
 	"empty.pins": "Notas fijadas",
 	"module.description": "Una sola búsqueda para todo: notas, secciones, tareas, lluvias de ideas, dominios, etiquetas y el texto de tus notas.",
+	"module.pitch": "Notas, tareas y etiquetas, en unas pocas letras.",
 	"placeholder": "Busca en tu bóveda…",
 	"close": "Cerrar",
 	"remove": "Quitar {filter}",

@@ -79,7 +79,7 @@ export function folderPath(value: string): string {
 }
 
 export function validFolder(value: string): boolean {
-	return !value.split("/").some((part) => part === ".." || /[:*?"<>|\u0000-\u001f]/.test(part));
+	return !value.split("/").some((part) => part === ".." || /[:*?"<>|]/.test(part) || Array.from(part).some(char => char.charCodeAt(0) < 32));
 }
 
 export function vaultPptxPath(folder: string, basename: string): string {

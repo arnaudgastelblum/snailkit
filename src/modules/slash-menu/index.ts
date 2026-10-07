@@ -1,3 +1,4 @@
+import { buildDemo } from "./demo";
 import { defineModule } from "../../core/module";
 import { en } from "./i18n/en";
 import { fr } from "./i18n/fr";
@@ -15,6 +16,7 @@ export const slashMenu = defineModule({
 	icon: "square-slash",
 	category: "write",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: defaultSettings(),
 	migrate: (stored) => ({ ...migrateSettings(stored) }),
 	settings: renderSettings,

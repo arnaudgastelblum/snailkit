@@ -15,18 +15,17 @@ let mapId = 0;
 export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents): MapHandle {
 	const doc = el.ownerDocument, win = doc.defaultView!;
 	const life = new MapLifetime(win), source = options.source;
-	const shell = doc.createElement("div"); shell.className = "sk-map";
-	const crumbs = doc.createElement("nav"); crumbs.className = "sk-map-crumbs";
-	const viewport = doc.createElement("div"); viewport.className = "sk-map-viewport";
-	const box = doc.createElement("div"); box.className = "sk-map-stage"; box.setAttribute("role", "tree");
+	const shell = el.createDiv(); shell.className = "sk-map";
+	const crumbs = shell.createEl("nav"); crumbs.className = "sk-map-crumbs";
+	const viewport = shell.createDiv(); viewport.className = "sk-map-viewport";
+	const box = viewport.createDiv(); box.className = "sk-map-stage"; box.setAttribute("role", "tree");
 	// Named by hidden text, not by aria-label: Obsidian shows an aria-label as a tooltip on hover.
-	const names = doc.createElement("span"); names.className = "sk-map-sr";
-	const crumbsName = doc.createElement("span"), treeName = doc.createElement("span");
+	const names = shell.createSpan({ prepend: true }); names.className = "sk-map-sr";
+	const crumbsName = names.createSpan(), treeName = names.createSpan();
 	crumbsName.id = `sk-map-names-${++mapId}-crumbs`; treeName.id = `sk-map-names-${mapId}-tree`;
-	crumbsName.textContent = options.strings.breadcrumbs; treeName.textContent = options.strings.tree; names.append(crumbsName, treeName);
+	crumbsName.textContent = options.strings.breadcrumbs; treeName.textContent = options.strings.tree;
 	crumbs.setAttribute("aria-labelledby", crumbsName.id); box.setAttribute("aria-labelledby", treeName.id);
-	const tip = doc.createElement("div"); tip.className = "sk-map-tooltip"; tip.setAttribute("role", "tooltip"); tip.hidden = true;
-	viewport.append(box); shell.append(names, crumbs, viewport, tip); el.append(shell);
+	const tip = shell.createDiv(); tip.className = "sk-map-tooltip"; tip.setAttribute("role", "tooltip"); tip.hidden = true;
 	const coarse = win.matchMedia("(pointer: coarse)");
 	const phone = () => doc.body.classList.contains("is-phone") || doc.body.classList.contains("is-mobile") || coarse.matches;
 	let width = el.clientWidth;
@@ -180,19 +179,18 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 		let id: string | null = state.root;
 		while (id && !seen.has(id)) { seen.add(id); ancestors.unshift(id); if (id === options.home) break; id = source.parent(id); }
 		if (mode === "tree" && ancestors.length > 1) {
-			const back = doc.createElement("button"); back.type = "button"; back.tabIndex = -1;
-			back.className = "sk-btn is-ghost is-s"; back.dataset.mapRoot = ancestors[ancestors.length - 2]; back.textContent = options.strings.back; crumbs.append(back);
+			const back = crumbs.createEl("button"); back.type = "button"; back.tabIndex = -1;
+			back.className = "sk-btn is-ghost is-s"; back.dataset.mapRoot = ancestors[ancestors.length - 2]; back.textContent = options.strings.back;
 		}
 		ancestors.forEach((ancestor, i) => {
-			if (i) { const separator = doc.createElement("span"); separator.className = "sk-map-crumb-separator"; separator.setAttribute("aria-hidden", "true"); options.icon(separator, "chevron-right"); crumbs.append(separator); }
+			if (i) { const separator = crumbs.createSpan(); separator.className = "sk-map-crumb-separator"; separator.setAttribute("aria-hidden", "true"); options.icon(separator, "chevron-right"); }
 			// Folded: the root's name moves up here, as a button that unfolds it.
 			const last = i === ancestors.length - 1, button = !last || folded;
-			const item = doc.createElement(button ? "button" : "span"); item.textContent = source.node(ancestor)?.label ?? "";
+			const item = crumbs.createEl(button ? "button" : "span"); item.textContent = source.node(ancestor)?.label ?? "";
 			if (button) {
 				(item as HTMLButtonElement).type = "button"; item.tabIndex = -1; item.className = "sk-btn is-ghost is-s";
 				if (last) item.dataset.mapUnfold = ""; else item.dataset.mapRoot = ancestor;
 			} else item.setAttribute("aria-current", "page");
-			crumbs.append(item);
 		});
 	};
 	function draw(animate = true): void {
@@ -309,7 +307,7 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 	let drag: { id: string; parent: string | null; depth: number; el: HTMLElement; ghost: HTMLElement | null;
 		x: number; y: number; offX: number; offY: number; px: number; py: number; pointer: number; moving: boolean;
 		found: Found | null; spring: { key: string; x: number; y: number } | null; scroller: HTMLElement | null } | null = null;
-	const line = doc.createElement("div"); line.className = "sk-map-drop"; line.hidden = true; box.append(line);
+	const line = box.createDiv(); line.className = "sk-map-drop"; line.hidden = true;
 	let lit: HTMLElement | null = null;
 	const light = (el: HTMLElement | null) => {
 		if (lit === el) return;

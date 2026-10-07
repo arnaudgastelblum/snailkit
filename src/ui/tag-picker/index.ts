@@ -321,7 +321,7 @@ export class TagPicker {
 
 	/** The tinted bar slides under the row at `hi`; `snap` moves it at once (the column was rebuilt). */
 	private placeCursor(snap: boolean): void {
-		const row = this.listEl.querySelector(".sk-tag-picker-it.is-hi") as HTMLElement | null;
+		const row = this.listEl.querySelector<HTMLElement>(".sk-tag-picker-it.is-hi");
 		if (!row) {
 			this.cursorEl.removeClass("is-shown");
 			return;
@@ -346,7 +346,7 @@ export class TagPicker {
 	private setHi(i: number): void {
 		if (!this.chips.length) return;
 		this.hi = Math.max(0, Math.min(this.chips.length - 1, i));
-		for (const el of Array.from(this.listEl.querySelectorAll(".sk-tag-picker-it")) as HTMLElement[]) {
+		for (const el of Array.from(this.listEl.querySelectorAll<HTMLElement>(".sk-tag-picker-it"))) {
 			const on = Number(el.dataset.i) === this.hi;
 			el.toggleClass("is-hi", on);
 			el.setAttr("aria-selected", String(on));
@@ -356,7 +356,7 @@ export class TagPicker {
 	}
 
 	private choose(item: Chip): void {
-		const from = this.listEl.querySelector(".sk-tag-picker-it.is-hi .sk-tag-picker-it-name") as HTMLElement | null;
+		const from = this.listEl.querySelector<HTMLElement>(".sk-tag-picker-it.is-hi .sk-tag-picker-it-name");
 		const start = from?.getBoundingClientRect() ?? null;
 		this.levelTag = null;
 		this.filterText = "";
@@ -475,7 +475,7 @@ export function openTagPicker(anchor: HTMLElement, options: OpenTagPickerOptions
 		const vv = win.visualViewport;
 		let bottom = vv ? Math.max(0, win.innerHeight - vv.height - vv.offsetTop) : 0;
 		if (keyboard > 0 && win.innerHeight > baseHeight - 40) bottom = Math.max(bottom, keyboard);
-		const bar = doc.querySelector(".mobile-toolbar") as HTMLElement | null;
+		const bar = doc.querySelector<HTMLElement>(".mobile-toolbar");
 		if (bar) {
 			const r = bar.getBoundingClientRect();
 			if (r.height && r.top < win.innerHeight) bottom = Math.max(bottom, win.innerHeight - r.top);
@@ -483,7 +483,7 @@ export function openTagPicker(anchor: HTMLElement, options: OpenTagPickerOptions
 		pop.style.bottom = `${bottom}px`;
 		const room = Math.max(160, win.innerHeight - bottom - (vv ? vv.offsetTop : 0) - 56);
 		const list = picker.listEl;
-		list.style.maxHeight = "";
+		list.style.removeProperty("max-height");
 		const rest = pop.offsetHeight - list.offsetHeight;
 		list.style.maxHeight = `${Math.max(80, Math.min(260, room - rest))}px`;
 		pop.style.maxHeight = `${room}px`;

@@ -827,9 +827,9 @@ export class SessionsRuntime {
 
 	private areaTags(file: TFile): Map<string, number> {
 		const places = this.ctx.service<PlacesService>("places");
-		if (!places || places.version !== 1) return new Map();
+		if (!places || places.version !== 1) return new Map<string, number>();
 		const area = places.placeOf(file).area;
-		if (!area) return new Map();
+		if (!area) return new Map<string, number>();
 		const now = Date.now();
 		if (!this.areaCache || now - this.areaCache.at > 60_000) {
 			const members = new Map<string, TFile[]>();
@@ -854,7 +854,7 @@ export class SessionsRuntime {
 			}
 			this.areaCache = { at: now, byArea };
 		}
-		return this.areaCache.byArea.get(area.path) ?? new Map();
+		return this.areaCache.byArea.get(area.path) ?? new Map<string, number>();
 	}
 
 	/** Remembers the words of a placed task and its tag, to suggest it next time. */

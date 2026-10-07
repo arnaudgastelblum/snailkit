@@ -65,7 +65,7 @@ export function lineOutsideTasks(cache: CachedMetadata, tag: string): number | n
 	for (const t of cache.tags ?? []) {
 		if (inTag(t.tag, tag) && !taskLines.has(t.position.start.line)) return t.position.start.line;
 	}
-	const fm = cache.frontmatter?.tags ?? cache.frontmatter?.tag;
+	const fm: unknown = cache.frontmatter?.tags ?? cache.frontmatter?.tag;
 	const fmTags = Array.isArray(fm) ? fm : typeof fm === "string" ? fm.split(/[,\s]+/) : [];
 	return fmTags.some((t) => typeof t === "string" && inTag(t, tag)) ? -1 : null;
 }
@@ -208,11 +208,11 @@ export class TagCard {
 				const late = task.due < today;
 				row.createSpan({ cls: "sk-tag-card-meta" + (late ? " is-late" : task.due === today ? " is-today" : ""), text: task.due === today ? this.t("card.today") : moment(task.due).format("ddd D MMM") });
 			}
-			box.addEventListener("click", async () => {
+			box.addEventListener("click", () => { void (async () => {
 				if (row.hasClass("is-done")) return;
 				row.addClass("is-done");
 				if (!(await api.setDone(task, true))) row.removeClass("is-done");
-			});
+			})(); });
 			title.addEventListener("click", (e) => void this.openAt(task.path, task.line, e));
 		}
 		if (api.openTag) {
@@ -245,7 +245,7 @@ export class TagCard {
 			const dot = row.createSpan("sk-tag-card-area");
 			const area = places?.version === 1 ? places.placeOf(hit.file).area : null;
 			if (area) {
-				dot.style.setProperty("--sk-tag-card-hue", String(places!.hueOf(area.path)));
+				dot.setCssProps({ "--sk-tag-card-hue": String(places!.hueOf(area.path)) });
 				dot.addClass("has-area");
 				dot.setAttribute("aria-label", area.basename);
 			}

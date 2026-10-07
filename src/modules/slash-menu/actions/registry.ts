@@ -16,5 +16,5 @@ const REGISTRY: { [K in ActionTypeId]: ActionType<Extract<ActionConfig, { type: 
 };
 
 export function getActionType(type: ActionTypeId): ActionType<ActionConfig> {
-	return REGISTRY[type] as unknown as ActionType<ActionConfig>;
+	return REGISTRY[type];
 }

@@ -34,15 +34,15 @@ test("language resolution", () => {
 test("format and plurals", () => {
 	assert.equal(format("{a} and {b}", { a: 1 }), "1 and {b}");
 	const fr = new Translator("fr", [CORE_STRINGS]);
-	assert.equal(fr.tn("home.count", 1, { total: 9 }), "1 outil activé sur 9");
-	assert.equal(fr.tn("home.count", 0, { total: 9 }), "0 outil activé sur 9");
-	assert.equal(fr.tn("home.count", 3, { total: 9 }), "3 outils activés sur 9");
+	assert.equal(fr.tn("home.count", 1, { total: 9 }), "1 outil sur 9 dans votre coquille");
+	assert.equal(fr.tn("home.count", 0, { total: 9 }), "0 outil sur 9 dans votre coquille");
+	assert.equal(fr.tn("home.count", 3, { total: 9 }), "3 outils sur 9 dans votre coquille");
 	const en = new Translator("en", [CORE_STRINGS]);
 	assert.equal(en.t("missing.key"), "missing.key");
 });
 
 test("stored data is normalized", () => {
-	assert.deepEqual(normalizeData(null), { version: 1, language: "auto", welcomed: false, hints: [], modules: {} });
+	assert.deepEqual(normalizeData(null), { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs" }, modules: {} });
 	const data = normalizeData({ language: "xx", welcomed: true, modules: { a: { enabled: true, settings: { x: 1 } }, b: "junk" } });
 	assert.equal(data.language, "auto");
 	assert.equal(data.welcomed, true);
@@ -59,6 +59,14 @@ test("one-time hints are normalized, and the Workbench hint comes over from the 
 	assert.deepEqual(normalizeData({ modules: { tasks: { settings: { workbenchTabsHintSeen: false } } } }).hints, []);
 });
 
+test("when the Workbench opens by itself is its own setting, taken over from the Home module once", () => {
+	assert.equal(normalizeData({ workbench: { autoOpen: "startup" } }).workbench.autoOpen, "startup");
+	assert.equal(normalizeData({ workbench: { autoOpen: "sometimes" } }).workbench.autoOpen, "startup-and-new-tabs", "a bad value falls back to the default");
+	const former = normalizeData({ modules: { home: { enabled: true, settings: { openWorkbench: "never" } } } });
+	assert.equal(former.workbench.autoOpen, "never", "the Home module's former setting comes over");
+	assert.equal(normalizeData({ workbench: { autoOpen: "startup" }, modules: { home: { settings: { openWorkbench: "never" } } } }).workbench.autoOpen, "startup", "once saved, the Workbench's own value wins");
+});
+
 test("settings merge keeps types and defaults", () => {
 	const defaults = { name: "a", count: 2, on: true, list: [1], nested: { x: 1, y: 2 } };
 	const merged = mergeSettings(defaults, { name: 5, count: 7, on: false, list: [3, 4], nested: { y: 9 }, unknown: 1 });
@@ -67,4 +75,29 @@ test("settings merge keeps types and defaults", () => {
 	assert.deepEqual(deep, { nested: { count: 2, inner: { on: false } } }, "nested values are checked too");
 	merged.list.push(9);
 	assert.deepEqual(defaults.list, [1], "defaults are never mutated");
+});
+
+// Every stylesheet ends up in one styles.css: two @keyframes with the same name, even in two
+// modules, and the last one silently replaces the other everywhere (a placed task once played the
+// stamp's tilted animation).
+test("animation names are unique across every stylesheet", async () => {
+	const fs = await import("node:fs");
+	const path = await import("node:path");
+	const files: string[] = [];
+	const walk = (dir: string) => {
+		for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+			const full = path.join(dir, entry.name);
+			if (entry.isDirectory()) walk(full);
+			else if (entry.name.endsWith(".css")) files.push(full);
+		}
+	};
+	walk("src");
+	const seen = new Map<string, string>();
+	for (const file of files) {
+		for (const match of fs.readFileSync(file, "utf8").matchAll(/@keyframes\s+([\w-]+)/g)) {
+			const name = match[1];
+			assert.ok(!seen.has(name), `@keyframes ${name} is defined in ${seen.get(name)} and again in ${file}`);
+			seen.set(name, file);
+		}
+	}
 });

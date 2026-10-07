@@ -42,10 +42,9 @@ export class Surface {
 		this.selector = options.itemSelector ?? "[data-nav]";
 		this.hadClass = box.classList.contains("sk-surface");
 		box.classList.add("sk-surface");
-		this.cursorEl = box.ownerDocument.createElement("div");
+		this.cursorEl = box.createDiv({ prepend: true });
 		this.cursorEl.className = "sk-surface-cursor";
 		this.cursorEl.setAttribute("aria-hidden", "true");
-		box.prepend(this.cursorEl);
 		this.listen(box, "pointerdown", (event) => {
 			this.touch = (event as PointerEvent).pointerType === "touch";
 			if (this.touch) this.clear();
@@ -122,7 +121,7 @@ export class Surface {
 		cursor.style.height = `${rect.height}px`;
 		const hue = el.ownerDocument.defaultView?.getComputedStyle(el).getPropertyValue("--sk-hue").trim() ?? "";
 		cursor.classList.toggle("is-gray", !hue || el.classList.contains("is-gray"));
-		if (hue) cursor.style.setProperty("--sk-hue", hue);
+		if (hue) cursor.setCssProps({ "--sk-hue": hue });
 		cursor.classList.add("is-shown");
 		if (cursor.classList.contains("is-snap")) {
 			void cursor.offsetWidth;

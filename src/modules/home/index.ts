@@ -1,12 +1,14 @@
 // Home: the first tab of the Workbench. Search, today, pins, domains (or a map, or tags) and
-// recent notes, filled in from the notes themselves; pages of a domain and of a tag. It also
-// sets when the Workbench opens by itself, and the home page and ignored folders of the places
-// rule (for all of Snailkit, while it runs). Nothing is ever written in the notes.
+// recent notes, filled in from the notes themselves; pages of a domain and of a tag. It also sets
+// the home page and ignored folders of the places rule (for all of Snailkit, while it runs).
+// When the Workbench opens by itself is the Workbench's own setting (core). Nothing is ever
+// written in the notes.
 import { Notice } from "obsidian";
 import { defineModule } from "../../core/module";
+import { buildDemo } from "./demo";
 import type { PlacesService } from "../../core/places/types";
 import { HomeRuntime } from "./runtime";
-import { cleanNotePath, migrateSettings, OPEN_MODES, splitFolders } from "./settings-logic";
+import { cleanNotePath, migrateSettings, splitFolders } from "./settings-logic";
 import { DEFAULTS, KEEP_ON_RESET, type HomeSettings } from "./types";
 import { en } from "./i18n/en";
 import { fr } from "./i18n/fr";
@@ -16,8 +18,9 @@ import { es } from "./i18n/es";
 export const home = defineModule<HomeSettings>({
 	id: "home",
 	icon: "house",
-	category: "organize",
+	category: "workbench",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: DEFAULTS,
 	keepOnReset: KEEP_ON_RESET,
 	migrate: migrateSettings,
@@ -25,12 +28,6 @@ export const home = defineModule<HomeSettings>({
 		new HomeRuntime(ctx).start();
 	},
 	settings(page) {
-		const opening = page.section(page.t("settings.opening"));
-		const choices: Record<string, string> = {};
-		for (const mode of OPEN_MODES) choices[mode] = page.t(`settings.mode.${mode}`);
-		opening.dropdown("openWorkbench", page.t("settings.open-workbench"), choices, { desc: page.t("settings.open-desc") });
-		opening.note(page.t("settings.open-warn"));
-
 		const domains = page.section(page.t("settings.domains"));
 		// The home page found now (with the options in force), through the shared "places" service.
 		const places = (page.app as unknown as { plugins?: { plugins?: Record<string, { api?: { service?(name: string): unknown } }> } }).plugins?.plugins?.snailkit?.api?.service?.("places") as PlacesService | undefined;

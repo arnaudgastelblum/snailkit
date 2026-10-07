@@ -3,6 +3,12 @@ import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
 	"module.name": "Menú de barra",
+	"module.pitch": "Inserta el bloque que necesitas sin dejar el teclado.",
+	"demo.query": "tarea",
+	"demo.heading": "Encabezado 1",
+	"demo.task": "Lista de tareas",
+	"demo.task-desc": "Lleva el control de una tarea",
+	"demo.select": "↑↓ Navegar    ↵ Elegir",
 	"module.description": "Inserta bloques, fragmentos y comandos desde un menú junto al cursor.",
 	"menu.empty": "No hay entradas coincidentes",
 	"menu.placeholder": "Escribe para buscar...",

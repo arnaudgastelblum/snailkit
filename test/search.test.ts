@@ -144,6 +144,10 @@ test("search readable excerpts hide metadata and multiline comments before slici
 	assert.ok(!hit.text.includes("hidden"));
 	assert.equal(compactText(readableText("Visible %% unfinished\ncomment")), "Visible");
 	assert.equal(compactText(readableText("---\n---\n![[Note]] **Bold**")), "Note Bold");
+	for (const markers of ["*_word", "*__word", "____word", "word__part", "word_part", "word_ part", "(_word_)"]) {
+		const expected = markers.replace(/[*`~]|_{1,3}(?=\W|$)|(?<=^|\W)_{1,3}/g, match => " ".repeat(match.length));
+		assert.equal(readableText(markers), expected, markers);
+	}
 });
 test("search highlights all visible words after cleaning, preserving accents and merging overlaps", () => {
 	const text = compactText(readableText("**Étude** and [[Note|route]]: étude route"));

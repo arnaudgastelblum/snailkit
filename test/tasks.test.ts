@@ -11,7 +11,7 @@ import {
 } from "../src/modules/tasks/edit";
 import {
 	addDays, buildTree, countTasks, daysBetween, dueLabel, dueState, fallbackHue, findNode, inScope, isIsoDate,
-	matchesQuery, nextWeek, passesPriority, sortTasks, todayGroups, upcomingGroups,
+	matchesQuery, moveInOrder, nextWeek, passesPriority, sortTasks, todayGroups, upcomingGroups,
 } from "../src/modules/tasks/group";
 import {
 	flagSet, inlineParts, isInFolder, parseFolderList, parseTagList, parseTaskText, plainTitle, scanTasks, taskKey,
@@ -614,4 +614,28 @@ test("the API opens the Workbench only while the module runs", async () => {
 	await api.openWorkbench({ tab: "tasks", scope: "all" });
 	assert.equal(shown.length, 2);
 	await createTasksApi({} as TaskIndex, {} as TaskWriter, () => true).openWorkbench();
+});
+
+test("the tags of the navigator follow the order the user gave them, the others by name", () => {
+	const tasks = ["work", "home", "reading", "home/car", "home/garden"].map((primary) => task({ primary }));
+	const names = (order: string[]) => buildTree(tasks, order).map((n) => n.tag);
+	assert.deepEqual(names([]), ["home", "reading", "work"]);
+	assert.deepEqual(names(["work"]), ["work", "home", "reading"]);
+	assert.deepEqual(buildTree(tasks, ["home/garden"])[0].children.map((n) => n.tag), ["home/garden", "home/car"]);
+	const roots = ["home", "reading", "work"];
+	assert.deepEqual(moveInOrder([], roots, "work", "home", false), ["work", "home", "reading"]);
+	assert.deepEqual(moveInOrder([], roots, "home", "work", true), ["reading", "work", "home"]);
+	assert.deepEqual(moveInOrder(["home/car", "work", "home"], ["work", "home", "reading"], "reading", "work", false), ["home/car", "reading", "work", "home"], "other levels keep their order");
+	assert.deepEqual(moveInOrder(["a"], roots, "work", "nope", false), ["a"], "an unknown target changes nothing");
+});
+
+test("tasks can be put in the user's own order within their tag", () => {
+	const a = task({ title: "a", line: 1 }), b = task({ title: "b", line: 2 }), c = task({ title: "c", line: 3 });
+	const keys = (list: Task[]) => list.map((t) => t.title);
+	assert.deepEqual(keys(sortTasks([a, b, c], "manual", [])), ["a", "b", "c"], "nothing placed: note order");
+	const order = moveInOrder([], [a.key, b.key, c.key], c.key, a.key, false);
+	assert.deepEqual(keys(sortTasks([a, b, c], "manual", order)), ["c", "a", "b"]);
+	const d = task({ title: "d", line: 0 });
+	assert.deepEqual(keys(sortTasks([a, b, c, d], "manual", order)), ["c", "a", "b", "d"], "a new task comes after the placed ones");
+	assert.deepEqual(keys(sortTasks([a, b, c], "notes", order)), ["a", "b", "c"], "other sorts ignore the order");
 });

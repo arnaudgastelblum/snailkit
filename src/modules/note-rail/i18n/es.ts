@@ -1,10 +1,12 @@
-// Traducción al español del módulo Barra de nota.
+// Traducción al español del módulo Menú de nota.
 import type { StringsOf } from "../../../i18n";
 import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
-	"module.name": "Barra de nota",
+	"module.name": "Menú de nota",
 	"module.description": "Una discreta fila de iconos en cada nota: índice, marcadores, tareas abiertas y un calendario de notas diarias.",
+	"module.pitch": "Índice, tareas y calendario junto a cada nota.",
+	"demo.month": "Octubre de 2026",
 
 	"command.open-contents": "Abrir el índice",
 	"command.open-bookmarks": "Abrir los marcadores",

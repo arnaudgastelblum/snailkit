@@ -342,3 +342,19 @@
 @media (prefers-reduced-motion: reduce) {
 	.sk-tag-colors-task-placeholder { transition: none; }
 }
+body.theme-light [class*="sk-tag-colors-r-"] {
+	--sk-tag-r-bg: var(--sk-tag-r-light-bg);
+	--sk-tag-r-fg: var(--sk-tag-r-light-fg);
+}
+body.theme-light [class*="sk-tag-colors-l-"] {
+	--sk-tag-l-bg: var(--sk-tag-l-light-bg);
+	--sk-tag-l-fg: var(--sk-tag-l-light-fg);
+}
+body.theme-dark [class*="sk-tag-colors-r-"] {
+	--sk-tag-r-bg: var(--sk-tag-r-dark-bg);
+	--sk-tag-r-fg: var(--sk-tag-r-dark-fg);
+}
+body.theme-dark [class*="sk-tag-colors-l-"] {
+	--sk-tag-l-bg: var(--sk-tag-l-dark-bg);
+	--sk-tag-l-fg: var(--sk-tag-l-dark-fg);
+}

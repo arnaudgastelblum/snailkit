@@ -4,6 +4,8 @@ import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
 	"module.name": "Mover texto",
+	"module.pitch": "Dale a un pasaje su propia nota. Conserva el enlace.",
+	"demo.extract": "Extraer a una subnota",
 	"module.description": "Extrae, archiva o envía un pasaje a otra nota sin perder una línea.",
 	"command.extract": "Extraer a una subnota",
 	"command.archive": "Archivar este pasaje",

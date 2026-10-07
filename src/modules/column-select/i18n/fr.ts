@@ -3,6 +3,8 @@ import type { en } from "./en";
 
 export const fr: StringsOf<typeof en> = {
 	"module.name": "Sélection en colonne",
+	"module.pitch": "Une seule saisie sur plusieurs lignes, même courtes.",
+	"demo.gesture": "Alt + glisser · Saisissez sur chaque ligne",
 	"module.description": "Sélectionnez une colonne de texte et modifiez plusieurs lignes à la fois.",
 	"command.up": "Étendre la sélection en colonne vers le haut",
 	"command.down": "Étendre la sélection en colonne vers le bas",

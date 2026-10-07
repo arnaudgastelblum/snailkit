@@ -22,7 +22,7 @@ export class TaskNotePreview extends Component {
 		this.currentLine = task.line;
 		// Bound: ctx.t reads this.handle.
 		const t = (key: string, vars?: Record<string, string | number>) => hub.ctx.t(key, vars);
-		this.el = document.createElement("details");
+		this.el = createEl("details");
 		this.el.className = "sk-tasks-note";
 		this.el.open = !side;
 		this.el.createEl("summary", { text: t("preview.note") });

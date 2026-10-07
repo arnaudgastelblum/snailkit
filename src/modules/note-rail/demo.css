@@ -1,0 +1,300 @@
+/* Note menu's scene in the settings showcase (demo.ts). --skd-u is 1/32 of the scene's width:
+   the scene is a 32 x 20 u canvas, and every box is placed in u. */
+.sk-demo-note-rail {
+	--skd-u: calc(100cqw / 32);
+	position: absolute;
+	inset: 0;
+	font-size: var(--skd-u);
+	font-family: var(--font-interface);
+	line-height: 1.2;
+	color: var(--text-normal);
+}
+.sk-demo-note-rail > * {
+	position: absolute;
+}
+.sk-demo-note-rail-pane {
+	inset: calc(0.9 * var(--skd-u)) calc(0.9 * var(--skd-u)) calc(-1 * var(--skd-u));
+	border-radius: calc(0.8 * var(--skd-u));
+	background: var(--background-primary);
+	box-shadow: 0 0 0 1px var(--background-modifier-border), var(--sk-shadow);
+}
+
+/* The note */
+.sk-demo-note-rail-view {
+	inset: calc(0.9 * var(--skd-u)) calc(0.9 * var(--skd-u)) 0 calc(4.2 * var(--skd-u));
+	overflow: hidden;
+}
+.sk-demo-note-rail-note {
+	position: absolute;
+	top: calc(1.3 * var(--skd-u));
+	left: calc(3.8 * var(--skd-u));
+	width: calc(19 * var(--skd-u));
+	transform: translateX(calc(9 * var(--skd-u)));
+}
+.sk-demo-note-rail-scroll {
+	display: flex;
+	flex-direction: column;
+	gap: calc(0.62 * var(--skd-u));
+}
+.sk-demo-note-rail-h1 {
+	font-size: 1.45em;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	margin-bottom: calc(0.2 * var(--skd-u));
+}
+.sk-demo-note-rail-h2,
+.sk-demo-note-rail-h3 {
+	align-self: flex-start;
+	margin: calc(0.35 * var(--skd-u)) 0 0 calc(-0.3 * var(--skd-u));
+	padding: 0 calc(0.3 * var(--skd-u));
+	border-radius: calc(0.3 * var(--skd-u));
+	font-size: 1.05em;
+	font-weight: 700;
+}
+.sk-demo-note-rail-h3 {
+	font-size: 0.95em;
+}
+.sk-demo-note-rail-bar {
+	height: calc(0.34 * var(--skd-u));
+	border-radius: 99px;
+	background: var(--background-modifier-border);
+}
+
+/* The rail */
+.sk-demo-note-rail-rail {
+	left: calc(1.5 * var(--skd-u));
+	top: calc(2 * var(--skd-u));
+	width: calc(2.3 * var(--skd-u));
+	padding: calc(0.3 * var(--skd-u)) 0;
+	border-radius: calc(0.7 * var(--skd-u));
+	background: var(--background-primary);
+	box-shadow: 0 0 0 1px var(--background-modifier-border), 0 2px 8px -4px rgba(0, 0, 0, 0.15);
+	color: var(--text-muted);
+}
+.sk-demo-note-rail-cell {
+	display: grid;
+	place-items: center;
+	height: calc(1.75 * var(--skd-u));
+	margin: 0 calc(0.25 * var(--skd-u));
+	border-radius: calc(0.4 * var(--skd-u));
+}
+.sk-demo-note-rail-cell svg.svg-icon {
+	width: calc(1.05 * var(--skd-u));
+	height: calc(1.05 * var(--skd-u));
+	stroke-width: 1.8;
+}
+.sk-demo-note-rail-cell.is-cal {
+	background: var(--sk-accent-wash);
+	color: var(--sk-accent);
+}
+.sk-demo-note-rail-area {
+	--sk-hue: 270;
+	display: grid;
+	place-items: center;
+	width: calc(1.25 * var(--skd-u));
+	height: calc(1.25 * var(--skd-u));
+	border-radius: calc(0.3 * var(--skd-u));
+	box-shadow: inset 0 0 0 1.5px hsl(var(--sk-hue) var(--sk-dot-s) var(--sk-dot-l));
+	background: hsl(var(--sk-hue) var(--sk-pill-s) var(--sk-pill-l));
+	color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l));
+	font-size: 0.75em;
+	font-weight: 700;
+}
+
+/* The panels */
+.sk-demo-note-rail-panel {
+	left: calc(4.4 * var(--skd-u));
+	top: calc(2 * var(--skd-u));
+	width: calc(12 * var(--skd-u));
+	height: calc(14.2 * var(--skd-u));
+	box-sizing: border-box;
+	padding: calc(0.8 * var(--skd-u)) calc(0.9 * var(--skd-u));
+	border-radius: calc(0.8 * var(--skd-u));
+	background: var(--background-primary);
+	box-shadow: 0 0 0 1px var(--background-modifier-border), var(--sk-shadow-pop);
+	transform-origin: 0 40%;
+}
+.sk-demo-note-rail-panel.is-toc {
+	opacity: 0;
+}
+.sk-demo-note-rail-head {
+	height: calc(2.4 * var(--skd-u));
+	white-space: nowrap;
+}
+.sk-demo-note-rail-title {
+	font-size: 0.9em;
+	font-weight: 700;
+}
+.sk-demo-note-rail-sub {
+	margin-top: 0.25em;
+	font-size: 0.72em;
+	color: var(--text-faint);
+}
+.sk-demo-note-rail-progress {
+	height: calc(0.18 * var(--skd-u));
+	margin-bottom: calc(0.7 * var(--skd-u));
+	border-radius: 99px;
+	background: linear-gradient(90deg, var(--sk-accent) 22%, var(--background-modifier-border) 22%);
+}
+.sk-demo-note-rail-row {
+	display: flex;
+	align-items: center;
+	height: calc(1.45 * var(--skd-u));
+	padding-left: calc(0.6 * var(--skd-u));
+	margin: 0 calc(-0.4 * var(--skd-u));
+	border-radius: calc(0.35 * var(--skd-u));
+	font-size: 0.85em;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+.sk-demo-note-rail-row.is-l3 {
+	padding-left: calc(1.6 * var(--skd-u));
+}
+.sk-demo-note-rail-row.is-current {
+	color: var(--sk-accent-text);
+	font-weight: 600;
+	box-shadow: inset calc(0.16 * var(--skd-u)) 0 0 var(--sk-accent);
+}
+.sk-demo-note-rail-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	row-gap: calc(0.25 * var(--skd-u));
+	margin-top: calc(0.3 * var(--skd-u));
+}
+.sk-demo-note-rail-day {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: calc(1.6 * var(--skd-u));
+	border-radius: calc(0.35 * var(--skd-u));
+	font-size: 0.68em;
+	color: var(--text-muted);
+}
+.sk-demo-note-rail-day.is-today {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: 700;
+}
+.sk-demo-note-rail-dots {
+	display: flex;
+	gap: 0.2em;
+	height: 0.35em;
+	margin-top: 0.1em;
+}
+.sk-demo-note-rail-dots span {
+	width: 0.35em;
+	height: 0.35em;
+	border-radius: 50%;
+	background: var(--sk-accent-line);
+}
+.sk-demo-note-rail-dots .is-task {
+	background: var(--color-orange);
+}
+.is-today .sk-demo-note-rail-dots span {
+	background: var(--text-on-accent);
+}
+
+/* The pointer, resting on the calendar button */
+.sk-demo-note-rail-pointer {
+	left: calc(2.9 * var(--skd-u));
+	top: calc(15.6 * var(--skd-u));
+	width: calc(1.1 * var(--skd-u));
+	opacity: 0;
+}
+.sk-demo-note-rail-pointer svg {
+	display: block;
+	width: 100%;
+	overflow: visible;
+}
+.sk-demo-note-rail-pointer path {
+	fill: var(--text-normal);
+	stroke: var(--background-primary);
+	stroke-width: 1.2;
+	stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-note-rail,
+	.sk-demo.is-playing .sk-demo-note-rail-rail,
+	.sk-demo.is-playing .sk-demo-note-rail-note,
+	.sk-demo.is-playing .sk-demo-note-rail-scroll,
+	.sk-demo.is-playing .sk-demo-note-rail-h3.is-target,
+	.sk-demo.is-playing .sk-demo-note-rail-cell.is-toc,
+	.sk-demo.is-playing .sk-demo-note-rail-cell.is-cal,
+	.sk-demo.is-playing .sk-demo-note-rail-panel,
+	.sk-demo.is-playing .sk-demo-note-rail-row.is-target,
+	.sk-demo.is-playing .sk-demo-note-rail-pointer {
+		animation: 9s var(--sk-ease) infinite both;
+	}
+	.sk-demo.is-playing .sk-demo-note-rail { animation-name: sk-demo-note-rail-loop; animation-timing-function: linear; }
+	.sk-demo.is-playing .sk-demo-note-rail-rail { animation-name: sk-demo-note-rail-wake; }
+	.sk-demo.is-playing .sk-demo-note-rail-note { animation-name: sk-demo-note-rail-room; }
+	.sk-demo.is-playing .sk-demo-note-rail-scroll { animation-name: sk-demo-note-rail-scroll; }
+	.sk-demo.is-playing .sk-demo-note-rail-h3.is-target { animation-name: sk-demo-note-rail-flash; }
+	.sk-demo.is-playing .sk-demo-note-rail-cell.is-toc { animation-name: sk-demo-note-rail-btn-toc; }
+	.sk-demo.is-playing .sk-demo-note-rail-cell.is-cal { animation-name: sk-demo-note-rail-btn-cal; }
+	.sk-demo.is-playing .sk-demo-note-rail-panel.is-toc { animation-name: sk-demo-note-rail-toc; }
+	.sk-demo.is-playing .sk-demo-note-rail-panel.is-cal { animation-name: sk-demo-note-rail-cal; }
+	.sk-demo.is-playing .sk-demo-note-rail-row.is-target { animation-name: sk-demo-note-rail-hover; }
+	.sk-demo.is-playing .sk-demo-note-rail-pointer { animation-name: sk-demo-note-rail-pointer; }
+}
+
+/* 9 s: the pointer enters the note and the rail wakes up (1-1.4 s), Contents slides out (2.2 s),
+   hovering "Review" scrolls the note to it (3.6-4.9 s), leaving glides it back while the
+   panel becomes the calendar (5.4 s); hold, then the scene fades out. */
+@keyframes sk-demo-note-rail-loop {
+	0% { opacity: 0; }
+	2%, 94% { opacity: 1; }
+	99%, 100% { opacity: 0; }
+}
+@keyframes sk-demo-note-rail-wake {
+	0%, 10% { opacity: 0.45; }
+	16%, 100% { opacity: 1; }
+}
+@keyframes sk-demo-note-rail-room {
+	0%, 23% { transform: none; }
+	30%, 100% { transform: translateX(calc(9 * var(--skd-u))); }
+}
+@keyframes sk-demo-note-rail-scroll {
+	0%, 41% { transform: none; }
+	47%, 56% { transform: translateY(calc(-20.5 * var(--skd-u))); }
+	63%, 100% { transform: none; }
+}
+@keyframes sk-demo-note-rail-flash {
+	0%, 44% { background: transparent; }
+	48%, 56% { background: var(--sk-accent-wash); }
+	61%, 100% { background: transparent; }
+}
+@keyframes sk-demo-note-rail-btn-toc {
+	0%, 22% { background: transparent; color: var(--text-muted); }
+	25%, 58% { background: var(--sk-accent-wash); color: var(--sk-accent); }
+	61%, 100% { background: transparent; color: var(--text-muted); }
+}
+@keyframes sk-demo-note-rail-btn-cal {
+	0%, 58% { background: transparent; color: var(--text-muted); }
+	61%, 100% { background: var(--sk-accent-wash); color: var(--sk-accent); }
+}
+@keyframes sk-demo-note-rail-toc {
+	0%, 23% { opacity: 0; transform: translateX(calc(-1 * var(--skd-u))) scale(0.97); }
+	29%, 58% { opacity: 1; transform: none; }
+	61%, 100% { opacity: 0; transform: none; }
+}
+@keyframes sk-demo-note-rail-cal {
+	0%, 58% { opacity: 0; transform: none; }
+	62%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-note-rail-hover {
+	0%, 39% { background: transparent; color: var(--text-muted); }
+	42%, 56% { background: var(--sk-accent-wash); color: var(--text-normal); }
+	59%, 100% { background: transparent; color: var(--text-muted); }
+}
+@keyframes sk-demo-note-rail-pointer {
+	0%, 5% { opacity: 0; transform: translate(calc(27 * var(--skd-u)), calc(3 * var(--skd-u))); }
+	8% { opacity: 1; transform: translate(calc(25 * var(--skd-u)), calc(1.5 * var(--skd-u))); }
+	13% { opacity: 1; transform: translate(calc(21 * var(--skd-u)), calc(-2 * var(--skd-u))); }
+	22%, 26% { opacity: 1; transform: translate(0, calc(-5.2 * var(--skd-u))); }
+	39%, 55% { opacity: 1; transform: translate(calc(6.6 * var(--skd-u)), calc(-3.1 * var(--skd-u))); }
+	61%, 76% { opacity: 1; transform: none; }
+	84%, 100% { opacity: 0; transform: translate(calc(1.5 * var(--skd-u)), calc(1.2 * var(--skd-u))); }
+}

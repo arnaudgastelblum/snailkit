@@ -213,12 +213,12 @@ export class Sorter {
 
 	private renderEnd(mid: HTMLElement): void {
 		const end = mid.createDiv({ cls: "sk-sessions-tri-end" });
-		const svg = end.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
+		const svg = end.createSvg("svg");
 		svg.setAttribute("viewBox", "0 0 76 76");
 		svg.setAttribute("class", "sk-sessions-tri-ok");
 		svg.setAttribute("aria-hidden", "true");
-		svg.innerHTML = '<circle cx="38" cy="38" r="34" transform="rotate(-90 38 38)"/><path d="M25 39l9 9 17-19"/>';
-		end.appendChild(svg);
+		svg.createSvg("circle", { attr: { cx: "38", cy: "38", r: "34", transform: "rotate(-90 38 38)" } });
+		svg.createSvg("path", { attr: { d: "M25 39l9 9 17-19" } });
 		end.createEl("h2", { text: this.t("tri.end-title") });
 		const t = this.tally;
 		const n = t.task + t.decide + t.idea + t.delete;

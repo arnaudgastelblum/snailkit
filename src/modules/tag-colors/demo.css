@@ -1,0 +1,245 @@
+/* Tags' scene in the settings showcase (demo.ts). --skd-u is 1/32 of the scene's width: the
+   scene is a 32 x 20 u canvas, and every box is placed in u. */
+.sk-demo-tag-colors {
+	--skd-u: calc(100cqw / 32);
+	position: absolute;
+	inset: 0;
+	font-size: var(--skd-u);
+	font-family: var(--font-interface);
+	line-height: 1.2;
+	color: var(--text-normal);
+}
+.sk-demo-tag-colors > * {
+	position: absolute;
+}
+.sk-demo-tag-colors-pane {
+	inset: calc(0.9 * var(--skd-u)) calc(0.9 * var(--skd-u)) calc(-1 * var(--skd-u));
+	border-radius: calc(0.8 * var(--skd-u));
+	background: var(--background-primary);
+	box-shadow: 0 0 0 1px var(--background-modifier-border), var(--sk-shadow);
+}
+.sk-demo-tag-colors-title {
+	top: calc(1.9 * var(--skd-u));
+	left: calc(2.6 * var(--skd-u));
+	font-size: 1.35em;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+}
+
+/* The task lines */
+.sk-demo-tag-colors-line {
+	left: calc(2.6 * var(--skd-u));
+	height: calc(1.8 * var(--skd-u));
+	display: flex;
+	align-items: center;
+	gap: 0.45em;
+	font-size: 1.05em;
+	white-space: nowrap;
+}
+.sk-demo-tag-colors-l0 { top: calc(4.5 * var(--skd-u)); }
+.sk-demo-tag-colors-l1 { top: calc(6.45 * var(--skd-u)); }
+.sk-demo-tag-colors-l2 { top: calc(8.4 * var(--skd-u)); }
+.sk-demo-tag-colors-l3 { top: calc(10.35 * var(--skd-u)); }
+.sk-demo-tag-colors-l4 { top: calc(12.3 * var(--skd-u)); }
+.sk-demo-tag-colors-box {
+	flex: none;
+	width: 0.95em;
+	height: 0.95em;
+	box-sizing: border-box;
+	border-radius: 0.25em;
+	border: 1.5px solid var(--text-faint);
+}
+.sk-demo-tag-colors-slot {
+	display: inline-grid;
+	align-items: center;
+	justify-items: start;
+	margin-left: 0.15em;
+}
+.sk-demo-tag-colors-slot > * {
+	grid-area: 1 / 1;
+}
+
+/* A tag as Obsidian draws it, before */
+.sk-demo-tag-colors-raw {
+	padding: 0.1em 0.45em;
+	border-radius: 99px;
+	background: var(--tag-background, var(--sk-accent-wash));
+	color: var(--tag-color, var(--text-accent));
+	font-size: 0.88em;
+	opacity: 0;
+}
+
+/* The capsule: the family in capitals, joined to its colored body */
+.sk-demo-tag-colors-capsule {
+	display: inline-flex;
+	align-items: stretch;
+	font-size: 0.88em;
+}
+.sk-demo-tag-colors-cap {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.32em 0.5em 0.18em;
+	border-radius: 0.35em;
+	font-size: 0.78em;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	background: hsl(var(--sk-hue) var(--sk-pill-s) calc(var(--sk-pill-l) - 7%));
+	color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l));
+}
+.is-nested > .sk-demo-tag-colors-cap {
+	border-radius: 0.35em 0 0 0.35em;
+}
+.sk-demo-tag-colors-body {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.05em 0.45em;
+	border-radius: 0 0.35em 0.35em 0;
+	font-weight: 600;
+	background: hsl(var(--sk-hue) var(--sk-pill-s) var(--sk-pill-l));
+	color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l));
+}
+
+/* The # menu */
+.sk-demo-tag-colors-menu {
+	top: calc(14.3 * var(--skd-u));
+	left: calc(9.5 * var(--skd-u));
+	width: calc(14.5 * var(--skd-u));
+	box-sizing: border-box;
+	padding: calc(0.4 * var(--skd-u));
+	border-radius: calc(0.6 * var(--skd-u));
+	background: var(--background-primary);
+	box-shadow: 0 0 0 1px var(--background-modifier-border), var(--sk-shadow-pop);
+	opacity: 0;
+}
+.sk-demo-tag-colors-option {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	height: calc(1.55 * var(--skd-u));
+	padding: 0 calc(0.4 * var(--skd-u));
+	border-radius: calc(0.35 * var(--skd-u));
+	font-size: 0.95em;
+	white-space: nowrap;
+}
+.sk-demo-tag-colors-option.is-on {
+	background: var(--background-modifier-hover);
+}
+.sk-demo-tag-colors-where {
+	margin-left: auto;
+	font-size: 0.72em;
+	color: var(--text-faint);
+}
+.sk-demo-tag-colors-enter {
+	display: inline-flex;
+	color: var(--text-muted);
+}
+.sk-demo-tag-colors-enter svg.svg-icon {
+	width: 0.85em;
+	height: 0.85em;
+}
+.sk-demo-tag-colors-keys {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	margin-top: calc(0.3 * var(--skd-u));
+	padding: calc(0.35 * var(--skd-u)) calc(0.4 * var(--skd-u)) calc(0.1 * var(--skd-u));
+	border-top: 1px solid var(--background-modifier-border);
+	font-size: 0.68em;
+	color: var(--text-faint);
+	white-space: nowrap;
+}
+.sk-demo-tag-colors-kbd {
+	padding: 0.05em 0.35em;
+	border-radius: 0.25em;
+	box-shadow: inset 0 0 0 1px var(--background-modifier-border);
+	color: var(--text-muted);
+}
+.sk-demo-tag-colors-kbd:nth-child(3) {
+	margin-left: 0.5em;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-tag-colors,
+	.sk-demo.is-playing .sk-demo-tag-colors-raw,
+	.sk-demo.is-playing .sk-demo-tag-colors-line > .sk-demo-tag-colors-slot > .sk-demo-tag-colors-capsule,
+	.sk-demo.is-playing .sk-demo-tag-colors-l4,
+	.sk-demo.is-playing .sk-demo-tag-colors-menu {
+		animation: 8s var(--sk-ease) infinite both;
+	}
+	.sk-demo.is-playing .sk-demo-tag-colors { animation-name: sk-demo-tag-colors-loop; animation-timing-function: linear; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l0 .sk-demo-tag-colors-raw { animation-name: sk-demo-tag-colors-raw0; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l1 .sk-demo-tag-colors-raw { animation-name: sk-demo-tag-colors-raw1; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l2 .sk-demo-tag-colors-raw { animation-name: sk-demo-tag-colors-raw2; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l3 .sk-demo-tag-colors-raw { animation-name: sk-demo-tag-colors-raw3; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l4 .sk-demo-tag-colors-raw { animation-name: sk-demo-tag-colors-raw4; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l0 .sk-demo-tag-colors-slot > .sk-demo-tag-colors-capsule { animation-name: sk-demo-tag-colors-cap0; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l1 .sk-demo-tag-colors-slot > .sk-demo-tag-colors-capsule { animation-name: sk-demo-tag-colors-cap1; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l2 .sk-demo-tag-colors-slot > .sk-demo-tag-colors-capsule { animation-name: sk-demo-tag-colors-cap2; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l3 .sk-demo-tag-colors-slot > .sk-demo-tag-colors-capsule { animation-name: sk-demo-tag-colors-cap3; }
+	.sk-demo.is-playing .sk-demo-tag-colors-l4 .sk-demo-tag-colors-slot > .sk-demo-tag-colors-capsule { animation-name: sk-demo-tag-colors-cap4; animation-timing-function: var(--sk-spring); }
+	.sk-demo.is-playing .sk-demo-tag-colors-l4 { animation-name: sk-demo-tag-colors-newline; }
+	.sk-demo.is-playing .sk-demo-tag-colors-menu { animation-name: sk-demo-tag-colors-menu; }
+}
+
+/* 8 s: the four plain tags become capsules one after the other (0.9-2.4 s), a new task is
+   written and # opens the menu (3.5 s), Enter inserts the suggested tag (5.1 s); hold, then
+   the scene fades out. */
+@keyframes sk-demo-tag-colors-loop {
+	0% { opacity: 0; }
+	3%, 94% { opacity: 1; }
+	99%, 100% { opacity: 0; }
+}
+@keyframes sk-demo-tag-colors-raw0 {
+	0%, 11% { opacity: 1; transform: none; }
+	15%, 100% { opacity: 0; transform: scale(0.92); }
+}
+@keyframes sk-demo-tag-colors-raw1 {
+	0%, 16% { opacity: 1; transform: none; }
+	20%, 100% { opacity: 0; transform: scale(0.92); }
+}
+@keyframes sk-demo-tag-colors-raw2 {
+	0%, 21% { opacity: 1; transform: none; }
+	25%, 100% { opacity: 0; transform: scale(0.92); }
+}
+@keyframes sk-demo-tag-colors-raw3 {
+	0%, 26% { opacity: 1; transform: none; }
+	30%, 100% { opacity: 0; transform: scale(0.92); }
+}
+@keyframes sk-demo-tag-colors-raw4 {
+	0%, 41% { opacity: 0; }
+	42%, 63% { opacity: 1; }
+	64%, 100% { opacity: 0; }
+}
+@keyframes sk-demo-tag-colors-cap0 {
+	0%, 12% { opacity: 0; transform: scale(0.9); }
+	17%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-tag-colors-cap1 {
+	0%, 17% { opacity: 0; transform: scale(0.9); }
+	22%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-tag-colors-cap2 {
+	0%, 22% { opacity: 0; transform: scale(0.9); }
+	27%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-tag-colors-cap3 {
+	0%, 27% { opacity: 0; transform: scale(0.9); }
+	32%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-tag-colors-cap4 {
+	0%, 63% { opacity: 0; transform: translateY(1.2em) scale(0.85); }
+	69%, 100% { opacity: 1; transform: none; }
+}
+@keyframes sk-demo-tag-colors-newline {
+	0%, 33% { opacity: 0; clip-path: inset(0 100% 0 0); }
+	34% { opacity: 1; clip-path: inset(0 100% 0 0); }
+	41%, 100% { opacity: 1; clip-path: inset(0 -10% 0 0); }
+}
+@keyframes sk-demo-tag-colors-menu {
+	0%, 44% { opacity: 0; transform: translateY(-0.4em); }
+	48%, 61% { opacity: 1; transform: none; }
+	62% { opacity: 1; transform: scale(0.99); }
+	65%, 100% { opacity: 0; transform: none; }
+}

@@ -1,6 +1,10 @@
 export const en = {
 	"module.name": "Home",
 	"module.description": "A Home tab in the Workbench: today, your pins, your domains, a map of your notes and what you opened lately. It fills itself in from your notes.",
+	"module.pitch": "Your vault's front page, filled in from your notes.",
+	"demo.tasks": "Tasks",
+	"demo.brainstorms": "Brainstorms",
+	"demo.daily": "Today's note",
 
 	"tab.label": "Home",
 	"ribbon": "Open Home",
@@ -24,7 +28,7 @@ export const en = {
 	"today.new-brainstorm": "New brainstorm",
 
 	"pins.title": "Pins",
-	"pins.need-rail": "Turn on Note rail to pin notes.",
+	"pins.need-rail": "Turn on Note menu to pin notes.",
 	"pins.pinned": "“{name}” pinned",
 	"pins.unpinned": "“{name}” unpinned",
 	"pins.only-notes": "Only notes can be pinned.",
@@ -240,13 +244,6 @@ export const en = {
 	"help.s-close": "Clear, then close",
 	"help.read": "Read",
 
-	"settings.opening": "Opening",
-	"settings.open-workbench": "Open the Workbench",
-	"settings.open-desc": "At startup: the Workbench comes first, pinned, on Home, never twice; restored tabs stay. In new tabs too: Ctrl/Cmd+T and closing the last tab show Home, the cursor in the search. Also applies on phones.",
-	"settings.mode.startup-and-new-tabs": "At startup and in new tabs",
-	"settings.mode.startup": "At startup",
-	"settings.mode.never": "Never",
-	"settings.open-warn": "If a note already opens at startup (Obsidian's own setting or another plugin), turn that one off.",
 	"settings.domains": "Domains and map",
 	"settings.home-page": "Home page",
 	"settings.home-page-desc": "The root of the map and of the domains: a note path. Empty: found by itself, {found}.",

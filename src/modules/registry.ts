@@ -14,4 +14,5 @@ import { sessions } from "./sessions";
 import { home } from "./home";
 import { search } from "./search";
 
-export const MODULES: AnyModule[] = [moveText, pdfExport, noteRail, tagColors, tables, tasks, slashMenu, columnSelect, slidesExport, sessions, home, search];
+// Erase each module's settings shape at the registry boundary; the host pairs it with its own defaults.
+export const MODULES = [moveText, pdfExport, noteRail, tagColors, tables, tasks, slashMenu, columnSelect, slidesExport, sessions, home, search] as unknown as AnyModule[];

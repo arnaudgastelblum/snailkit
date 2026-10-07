@@ -21,11 +21,10 @@ export class MapScene {
 	private root: string | null = null;
 	private canvas: CanvasRenderingContext2D | null;
 	constructor(readonly box: HTMLElement, private options: MapOptions, private life: MapLifetime) {
-		this.svg = box.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
+		this.svg = box.createSvg("svg");
 		this.svg.classList.add("sk-map-branches");
 		this.svg.setAttribute("aria-hidden", "true");
 		this.canvas = box.ownerDocument.createElement("canvas").getContext("2d");
-		box.append(this.svg);
 	}
 
 	private measure = (text: string): number => {
@@ -53,7 +52,7 @@ export class MapScene {
 			let entry = this.entries.get(row.key);
 			const fresh = !entry;
 			if (!entry) {
-				const el = this.box.ownerDocument.createElement("div");
+				const el = container.createDiv();
 				el.id = this.prefix + ++this.serial;
 				el.dataset.mapKey = row.key;
 				el.dataset.nav = "";
@@ -72,7 +71,7 @@ export class MapScene {
 			usedGroups.add(id);
 			let el = this.groups.get(id);
 			if (!el) {
-				el = this.box.ownerDocument.createElement("div");
+				el = parent.createDiv();
 				el.id = this.prefix + "g" + ++this.serial;
 				el.setAttribute("role", "group");
 				el.className = "sk-map-group";
@@ -83,7 +82,7 @@ export class MapScene {
 			return el;
 		};
 		if (mode === "columns") {
-			const geometry = columnLayout(this.options.source, state, width, this.options.home, this.measure, this.options.strings.more, keepFolded, grown);
+			const geometry = columnLayout(this.options.source, state, width, this.options.home, this.measure, this.options.strings.more.bind(this.options.strings), keepFolded, grown);
 			this.folded = geometry.folded;
 			this.box.style.minWidth = `${geometry.width}px`;
 			this.box.style.height = `${geometry.height}px`;
@@ -105,15 +104,15 @@ export class MapScene {
 					el.classList.toggle("is-dim", !!state.chain[row.depth - 1] && row.node?.id !== state.chain[row.depth - 1]);
 				}
 				for (const label of col.labels) {
-					const el = this.box.ownerDocument.createElement("div");
+					const el = container.createDiv();
 					el.className = "sk-map-group-label"; el.textContent = label.text; el.style.top = `${label.y - col.top}px`;
 					el.setAttribute("aria-hidden", "true"); container.append(el); this.labels.push(el);
 				}
 			}
 		} else {
 			this.folded = false;
-			this.box.style.minWidth = "";
-			this.box.style.height = "";
+			this.box.style.removeProperty("min-width");
+			this.box.style.removeProperty("height");
 			const root = this.options.source.node(state.root);
 			if (root) {
 				const rootRow: MapRow = { key: nodeKey(root.id), node: root, parent: null, depth: 0, position: 1, size: 1, more: 0 };
@@ -123,7 +122,7 @@ export class MapScene {
 					const container = group(id, parent);
 					container.classList.add("is-open");
 					let inner = container.firstElementChild as HTMLElement | null;
-					if (!inner) { inner = this.box.ownerDocument.createElement("div"); inner.className = "sk-map-tree-inner"; container.append(inner); }
+					if (!inner) { inner = container.createDiv(); inner.className = "sk-map-tree-inner"; }
 					for (const row of childRows(this.options.source, id, depth, ancestors, grown.has(id))) {
 						const expanded = !!row.node?.hasChildren && depth < L.depth && open.has(row.node.id);
 						const el = attach(row, inner, expanded);
@@ -181,39 +180,37 @@ export class MapScene {
 		if (signature !== entry.signature) {
 			entry.signature = signature; el.replaceChildren();
 			el.className = `sk-map-node sk-surface-item${node ? ` is-${node.kind === "root" ? "home" : node.kind}` : " is-more"}`;
-			const head = this.box.ownerDocument.createElement("span"); head.className = "sk-map-head"; head.setAttribute("aria-hidden", "true");
+			const head = el.createSpan(); head.className = "sk-map-head"; head.setAttribute("aria-hidden", "true");
 			if (!node) this.options.icon(head, "arrow-right");
 			else if (node.kind === "domain") head.textContent = Array.from(node.label)[0] ?? "";
 			else if (node.kind === "root" || node.kind === "sub" || node.kind === "brainstorm")
 				this.options.icon(head, node.kind === "root" ? "house" : node.kind === "sub" ? "git-fork" : "zap");
-			el.append(head);
-			const label = this.box.ownerDocument.createElement("span"); label.className = "sk-map-label";
+			const label = el.createSpan(); label.className = "sk-map-label";
 			// Give clipped inline text enough vertical room for descenders in every theme.
-			label.style.lineHeight = "1.5";
-			label.textContent = node?.label ?? this.options.strings.more(row.more); el.append(label);
+			label.textContent = node?.label ?? this.options.strings.more(row.more);
 			if (node?.hasChildren) {
-				const chevron = this.box.ownerDocument.createElement("span"); chevron.className = "sk-map-chevron"; chevron.setAttribute("aria-hidden", "true");
-				this.options.icon(chevron, "chevron-right"); el.append(chevron);
-				const button = this.box.ownerDocument.createElement("button"); button.type = "button"; button.tabIndex = -1;
+				const chevron = el.createSpan(); chevron.className = "sk-map-chevron"; chevron.setAttribute("aria-hidden", "true");
+				this.options.icon(chevron, "chevron-right");
+				const button = el.createEl("button"); button.type = "button"; button.tabIndex = -1;
 				button.className = "sk-btn is-ghost is-icon is-s sk-map-action";
 				button.dataset.mapAction = this.mode === "tree" ? "open" : "recenter";
 				// One tooltip only: Obsidian's, from the aria-label (a title would add the system's on top).
 				button.setAttribute("aria-label", this.mode === "tree" ? this.options.strings.open : this.options.strings.recenterTip);
-				this.options.icon(button, this.mode === "tree" ? "arrow-up-right" : "focus"); el.append(button);
+				this.options.icon(button, this.mode === "tree" ? "arrow-up-right" : "focus");
 			}
 		}
 		const hue = node ? node.hue : row.parent ? this.options.source.node(row.parent)?.hue : null;
 		el.classList.toggle("is-gray", hue == null);
-		if (hue == null) el.style.removeProperty("--sk-hue"); else el.style.setProperty("--sk-hue", String(hue));
+		if (hue == null) el.style.removeProperty("--sk-hue"); else el.setCssProps({ "--sk-hue": String(hue) });
 		el.classList.toggle("is-current", !!node && node.id === this.options.current);
 		el.classList.toggle("is-expanded", expanded);
 		el.classList.toggle("is-root", row.depth === 0);
-		el.style.setProperty("--sk-map-level", String(row.depth));
+		el.setCssProps({ "--sk-map-level": String(row.depth) });
 		el.setAttribute("role", "treeitem");
 		// Named by hidden text, not by aria-label: Obsidian shows an aria-label as a tooltip on hover.
 		const name = node?.title || node?.label || this.options.strings.moreLabel(row.more, this.options.source.node(row.parent!)?.label ?? "");
 		let sr = el.querySelector<HTMLElement>(":scope > .sk-map-sr");
-		if (!sr) { sr = this.box.ownerDocument.createElement("span"); sr.className = "sk-map-sr"; el.append(sr); }
+		if (!sr) { sr = el.createSpan(); sr.className = "sk-map-sr"; }
 		sr.id = el.id + "-name";
 		if (sr.textContent !== name) sr.textContent = name;
 		el.setAttribute("aria-labelledby", sr.id);
@@ -244,7 +241,7 @@ export class MapScene {
 			const p = position(label), r = position(entry.el);
 			let edge = this.edges.get(key); const fresh = !edge;
 			if (!edge) {
-				edge = this.box.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "path");
+				edge = this.svg.createSvg("path");
 				edge.setAttribute("pathLength", "1"); this.svg.append(edge); this.edges.set(key, edge);
 			}
 			// The right edge of the parent's column (or of the root): the branch runs straight to it.
@@ -256,7 +253,7 @@ export class MapScene {
 			const clip = entry.el.closest<HTMLElement>(".is-overflow");
 			edge.style.visibility = clip && (entry.el.offsetTop < clip.scrollTop || entry.el.offsetTop + L.nodeHeight > clip.scrollTop + clip.clientHeight) ? "hidden" : "";
 			const hue = entry.el.style.getPropertyValue("--sk-hue");
-			if (hue) edge.style.setProperty("--sk-hue", hue); else edge.style.removeProperty("--sk-hue");
+			if (hue) edge.setCssProps({ "--sk-hue": hue }); else edge.style.removeProperty("--sk-hue");
 			used.add(key);
 			if (fresh && animate && !this.life.reduced) this.life.animate(edge, [{ strokeDasharray: "1", strokeDashoffset: "1" }, { strokeDasharray: "1", strokeDashoffset: "0" }], 260, (entry.row.position - 1) * 14 + 60);
 		}
@@ -276,7 +273,7 @@ export class MapScene {
 			const entry = this.entries.get(nodeKey(id));
 			const hue = entry?.el.style.getPropertyValue("--sk-hue");
 			group.classList.toggle("is-active", path.has(nodeKey(id)) && !!hue);
-			if (hue) group.style.setProperty("--sk-hue", hue); else group.style.removeProperty("--sk-hue");
+			if (hue) group.setCssProps({ "--sk-hue": hue }); else group.style.removeProperty("--sk-hue");
 		}
 	}
 

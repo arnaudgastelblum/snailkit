@@ -43,9 +43,9 @@ export class ExtractTargetModal extends SuggestModal<ExtractTarget> {
 
 	renderSuggestion(item: ExtractTarget, el: HTMLElement) {
 		if (item.type === "create") {
-			el.createEl("div", { text: this.ctx.t("modal.create", { name: item.name }) });
+			el.createDiv({ text: this.ctx.t("modal.create", { name: item.name }) });
 		} else {
-			el.createEl("div", { text: this.ctx.t("modal.append", { name: item.file.basename }) });
+			el.createDiv({ text: this.ctx.t("modal.append", { name: item.file.basename }) });
 		}
 	}
 
@@ -89,7 +89,7 @@ export class AppendTargetModal extends SuggestModal<AppendTarget> {
 	}
 
 	onOpen() {
-		super.onOpen();
+		void super.onOpen();
 		const row = createEl("label", { cls: "sk-move-text-keep-row" });
 		this.keepBox = row.createEl("input", { type: "checkbox" });
 		row.createSpan({ text: this.ctx.t("modal.keep") });
@@ -130,7 +130,7 @@ export class AppendTargetModal extends SuggestModal<AppendTarget> {
 	renderSuggestion(item: AppendTarget, el: HTMLElement) {
 		if (item.type === "create") {
 			const name = item.path.split("/").pop()!.replace(/\.md$/, "");
-			el.createEl("div", { text: this.ctx.t("modal.create", { name }) });
+			el.createDiv({ text: this.ctx.t("modal.create", { name }) });
 			const folder = item.path.includes("/")
 				? item.path.slice(0, item.path.lastIndexOf("/"))
 				: "";
@@ -141,7 +141,7 @@ export class AppendTargetModal extends SuggestModal<AppendTarget> {
 			return;
 		}
 		const file = item.file;
-		el.createEl("div", { text: file.basename });
+		el.createDiv({ text: file.basename });
 		const folder = file.parent && file.parent.path !== "/" ? file.parent.path : "";
 		if (folder) el.createEl("small", { text: folder, cls: "sk-move-text-suggest-path" });
 	}
@@ -179,7 +179,7 @@ export class ArchiveTitleModal extends Modal {
 				submit();
 			}
 		});
-		const row = contentEl.createEl("div", { cls: "sk-move-text-btn-row" });
+		const row = contentEl.createDiv({ cls: "sk-move-text-btn-row" });
 		const btn = row.createEl("button", { text: this.ctx.t("modal.archive"), cls: "mod-cta" });
 		btn.addEventListener("click", submit);
 		window.setTimeout(() => input.focus(), 0);
@@ -189,4 +189,3 @@ export class ArchiveTitleModal extends Modal {
 		this.contentEl.empty();
 	}
 }
-

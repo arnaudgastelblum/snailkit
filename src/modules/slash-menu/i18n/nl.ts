@@ -3,6 +3,12 @@ import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
 	"module.name": "Slash-menu",
+	"module.pitch": "Voeg het juiste blok toe zonder je toetsenbord te verlaten.",
+	"demo.query": "taak",
+	"demo.heading": "Kop 1",
+	"demo.task": "Takenlijst",
+	"demo.task-desc": "Houd bij wat je moet doen",
+	"demo.select": "↑↓ Navigeren    ↵ Kiezen",
 	"module.description": "Voeg blokken, fragmenten en opdrachten in via een menu bij je cursor.",
 	"menu.empty": "Geen overeenkomend item",
 	"menu.placeholder": "Typ om te zoeken...",

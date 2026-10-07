@@ -1,0 +1,34 @@
+/* The frame of a tool's scene in the settings showcase (docs/showcase.md). The scene itself is
+   drawn by the module (src/modules/<id>/demo.ts and demo.css). */
+.sk-demo {
+	position: relative;
+	width: 100%;
+	aspect-ratio: 16 / 10;
+	overflow: hidden;
+	container-type: size;
+	border-radius: var(--sk-radius);
+	background:
+		radial-gradient(120% 90% at 0% 0%, var(--sk-accent-soft), transparent 60%),
+		var(--background-secondary);
+	box-shadow: inset 0 0 0 1px var(--sk-line);
+	color: var(--text-normal);
+	user-select: none;
+	pointer-events: none;
+}
+.sk-demo > svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+/* No scene (yet): the tool's icon, large and quiet. */
+.sk-demo.is-empty {
+	display: grid;
+	place-items: center;
+}
+.sk-demo-icon {
+	display: flex;
+	color: var(--text-faint);
+	--icon-size: 34px;
+	--icon-stroke: 1.5px;
+}

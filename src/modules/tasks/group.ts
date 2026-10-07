@@ -1,5 +1,5 @@
 // Pure ordering and grouping: the tag tree, sort modes, filters, Today and Upcoming, due labels.
-import type { Priority, SortMode, Task } from "./types";
+import type { Priority, Task } from "./types";
 
 const PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
@@ -90,9 +90,14 @@ export function compareNotes(a: { path: string; line: number }, b: { path: strin
 	return a.line - b.line;
 }
 
-export function sortTasks(tasks: readonly Task[], mode: SortMode | string): Task[] {
+/** Sorts tasks. "manual": the order the user dragged (`order`, task keys), then note order for the others. */
+export function sortTasks(tasks: readonly Task[], mode: string, order: readonly string[] = []): Task[] {
+	const rank = new Map(order.map((key, i) => [key, i]));
+	const at = (t: Task) => rank.get(t.key) ?? Number.MAX_SAFE_INTEGER;
 	const by =
-		mode === "priority"
+		mode === "manual"
+			? (a: Task, b: Task) => at(a) - at(b) || compareNotes(a, b)
+			: mode === "priority"
 			? (a: Task, b: Task) => comparePriority(a, b) || compareDue(a, b) || compareNotes(a, b)
 			: mode === "due"
 				? (a: Task, b: Task) => compareDue(a, b) || comparePriority(a, b) || compareNotes(a, b)
@@ -129,7 +134,11 @@ export interface TagNode {
 }
 
 /** Tag tree of the given tasks, nested tags inside their parent, alphabetical at each level. */
-export function buildTree(tasks: readonly Task[]): TagNode[] {
+/**
+ * The tag tree of these tasks. Siblings follow `order` (tags the user placed, dragged in the
+ * navigator), then the others by name.
+ */
+export function buildTree(tasks: readonly Task[], order: readonly string[] = []): TagNode[] {
 	const nodes = new Map<string, TagNode>();
 	const node = (tag: string): TagNode => {
 		let found = nodes.get(tag);
@@ -146,9 +155,24 @@ export function buildTree(tasks: readonly Task[]): TagNode[] {
 		node(t.primary).own.push(t);
 		for (let tag: string | null = t.primary; tag; tag = tagParent(tag)) node(tag).count++;
 	}
-	const byTag = (a: TagNode, b: TagNode) => a.tag.localeCompare(b.tag);
+	const rank = new Map(order.map((tag, i) => [tag, i]));
+	const at = (n: TagNode) => rank.get(n.tag) ?? Number.MAX_SAFE_INTEGER;
+	const byTag = (a: TagNode, b: TagNode) => at(a) - at(b) || a.tag.localeCompare(b.tag);
 	for (const n of nodes.values()) n.children.sort(byTag);
 	return [...nodes.values()].filter((n) => !tagParent(n.tag)).sort(byTag);
+}
+
+/**
+ * The order after moving `item` before or after `target`, two siblings shown as `siblings` (in
+ * their current order): tags of one level of the navigator, or tasks of one group. The siblings
+ * are written in their new order; other entries keep theirs.
+ */
+export function moveInOrder(order: readonly string[], siblings: readonly string[], item: string, target: string, after: boolean): string[] {
+	const next = siblings.filter((s) => s !== item);
+	const i = next.indexOf(target);
+	if (i < 0 || item === target) return [...order];
+	next.splice(after ? i + 1 : i, 0, item);
+	return [...order.filter((s) => !siblings.includes(s)), ...next];
 }
 
 export function findNode(nodes: readonly TagNode[], tag: string): TagNode | null {

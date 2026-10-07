@@ -229,7 +229,7 @@ class TabView implements ViewTabInstance {
 		});
 		// F2 is Obsidian's "Rename file": in the list, it renames the brainstorm under the cursor.
 		this.keyScope.register([], "F2", (e) => {
-			const row = (this.doc.activeElement as HTMLElement | null)?.closest?.(".sk-sessions-row") as HTMLElement | null;
+			const row = (this.doc.activeElement as HTMLElement | null)?.closest?.<HTMLElement>(".sk-sessions-row");
 			const path = row?.dataset.path ?? (this.desk && this.detail?.contains(this.doc.activeElement) ? this.selected : null);
 			if (!path || e.target instanceof HTMLInputElement) return;
 			this.startRename(path);
@@ -344,7 +344,7 @@ class TabView implements ViewTabInstance {
 		this.pending = false;
 		const before = this.doc.activeElement as HTMLElement | null;
 		const had = !!before && this.root.contains(before);
-		const key = had ? before!.dataset.focusKey ?? null : null;
+		const key = had ? before.dataset.focusKey ?? null : null;
 		const all = this.rt.sessionInfos();
 		const contexts = contextsOf(all.filter((s) => this.showArchived || !s.archived));
 		if (this.context && !contexts.some((c) => c.toLowerCase() === this.context!.toLowerCase())) this.context = null;
@@ -367,7 +367,7 @@ class TabView implements ViewTabInstance {
 		this.renderList(all, shown);
 		this.renderDetail();
 		if (had && !this.root.contains(this.doc.activeElement)) {
-			const same = key ? (Array.from(this.root.querySelectorAll("[data-focus-key]")) as HTMLElement[]).find((el) => el.dataset.focusKey === key) : null;
+			const same = key ? (Array.from(this.root.querySelectorAll<HTMLElement>("[data-focus-key]"))).find((el) => el.dataset.focusKey === key) : null;
 			if (same) same.focus({ preventScroll: true });
 			else if (key?.startsWith("row:") || key?.startsWith("det:")) this.focusRow(this.selectedIndex());
 			else this.search.focus({ preventScroll: true });
@@ -491,7 +491,7 @@ class TabView implements ViewTabInstance {
 			el.createSpan({ cls: "sk-sessions-sr", text: this.describe(s) });
 			el.style.left = `${b.x - b.r}px`;
 			el.style.bottom = `${30 + b.y - b.r}px`;
-			el.style.width = el.style.height = `${2 * b.r}px`;
+			el.setCssProps({ width: `${2 * b.r}px`, height: `${2 * b.r}px` });
 			el.style.animationDelay = this.first ? `${Math.min(600, i * 25)}ms` : "0ms";
 			el.toggleClass("is-dim", !shown.has(b.path));
 			el.toggleClass("is-selected", this.desk && this.selected === b.path);
@@ -656,7 +656,7 @@ class TabView implements ViewTabInstance {
 
 	private onListHover(e: MouseEvent): void {
 		if (this.pop || this.editing) return;
-		const row = (e.target as HTMLElement).closest?.(".sk-sessions-row") as HTMLElement | null;
+		const row = (e.target as HTMLElement).closest?.<HTMLElement>(".sk-sessions-row");
 		if (!row) return;
 		const path = row.dataset.path ?? null;
 		if (path === this.hoverPath && this.hoverCard) {
@@ -737,7 +737,7 @@ class TabView implements ViewTabInstance {
 	private suppressClick = 0;
 
 	private rows(): HTMLElement[] {
-		return Array.from(this.list.querySelectorAll(".sk-sessions-row")) as HTMLElement[];
+		return Array.from(this.list.querySelectorAll<HTMLElement>(".sk-sessions-row"));
 	}
 
 	private rowOf(path: string): HTMLElement | null {
@@ -765,7 +765,7 @@ class TabView implements ViewTabInstance {
 				r.setAttr("aria-selected", String(on));
 				r.setAttr("tabindex", on ? "0" : "-1");
 			}
-			for (const b of Array.from(this.track.querySelectorAll(".sk-sessions-bubble")) as HTMLElement[]) b.toggleClass("is-selected", b.dataset.focusKey === `bubble:${path}`);
+			for (const b of Array.from(this.track.querySelectorAll<HTMLElement>(".sk-sessions-bubble"))) b.toggleClass("is-selected", b.dataset.focusKey === `bubble:${path}`);
 			this.renderDetail();
 		}
 		if (focus) {

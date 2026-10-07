@@ -6,15 +6,13 @@ export function tagCapsule(doc: Document, tag: string, classes: string): HTMLEle
 	const el = doc.createElement("span");
 	el.className = `sk-tag-capsule ${classes}`.trim();
 	el.dataset.tag = tag;
-	const root = doc.createElement("span");
+	const root = el.createSpan();
 	root.className = "sk-tag-capsule-root";
 	root.textContent = parts[0];
-	el.appendChild(root);
 	if (parts.length > 1) {
-		const leaf = doc.createElement("span");
+		const leaf = el.createSpan();
 		leaf.className = "sk-tag-capsule-leaf";
 		leaf.textContent = parts.slice(1).join(" › ");
-		el.appendChild(leaf);
 	}
 	return el;
 }

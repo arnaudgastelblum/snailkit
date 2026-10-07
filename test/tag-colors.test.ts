@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { inTag, lineOutsideTasks, subTags } from "../src/modules/tag-colors/card";
-import { assignSlots, buildCss, contrastRatio, fnv1a, hexToHue, hueClasses, oklchToSrgb, roleColors, slotHue, splitTag, tagHues, tagKey } from "../src/modules/tag-colors/colors";
+import { assignSlots, buildCss, contrastRatio, fnv1a, hexToHue, hueClasses, oklchToSrgb, renameKeys, roleColors, slotHue, splitTag, tagHues, tagKey } from "../src/modules/tag-colors/colors";
 import { entries, migrate, registry, type ColorHost, type TagColorsSettings } from "../src/modules/tag-colors/types";
 import { classes, setOverride } from "../src/modules/tag-colors/dialogs";
 import { asTask, nextPart, rankTags, tagQuery, withoutTyped } from "../src/modules/tag-colors/suggest";
@@ -222,4 +222,11 @@ test("task placeholder: priorities are not a tag, the tag goes before them", () 
 	assert.equal(hasTaskTag("- [ ] Call the plumber #high #home"), true);
 	assert.equal(taskTagPosition("- [ ] Call the plumber 📅 2026-10-09 #high"), "- [ ] Call the plumber".length);
 	assert.equal(taskTagPosition("- [ ] Call the #highway"), "- [ ] Call the #highway".length);
+});
+
+test("the chosen colors follow a tag renamed in the vault, sub-tags included", () => {
+	const pairs: Array<[string, number]> = [["project", 3], ["project/web", 210], ["home", 5], ["work", 9]];
+	assert.deepEqual(renameKeys(pairs, "#Project", "client"), [["home", 5], ["work", 9], ["client", 3], ["client/web", 210]]);
+	assert.deepEqual(renameKeys(pairs, "project", "work"), [["home", 5], ["work", 9], ["work/web", 210]], "a merged tag keeps its own color");
+	assert.deepEqual(renameKeys(pairs, "projectx", "client"), pairs, "a lookalike tag is not touched");
 });

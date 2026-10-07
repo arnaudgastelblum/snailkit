@@ -4,7 +4,9 @@ import type { ModuleContext } from "../../core/context";
 import { TagCard } from "./card";
 import { registerTaskPlaceholders } from "./task-placeholder";
 import { TagSuggest } from "./suggest";
-import { assignSlots, buildCss, capsule, slotHue, tagKey } from "./colors";
+import { assignSlots, capsule, renameKeys, slotHue, tagKey } from "./colors";
+import { TAG_RENAMED_EVENT, type TagRenamedEvent } from "../../core/services";
+import { watchPalette } from "./palette";
 import { classes, ColorModal, ReassignModal } from "./dialogs";
 import { editorExtension, refreshColors } from "./editor";
 import { frequencies, registry, type ColorHost, type TagColorsSettings } from "./types";
@@ -14,13 +16,13 @@ export class TagRuntime implements ColorHost {
 	readonly editors = new Set<EditorView>();
 	private reading = new Map<Element, { tag: string; nodes: Node[] }>();
 	private panes = new Set<Element>();
-	private documents = new Map<Document, { style: HTMLStyleElement; observer: MutationObserver }>();
+	private documents = new Map<Document, { palette: ReturnType<typeof watchPalette>; observer: MutationObserver }>();
 	private dialogs = new Set<Modal>();
 	private frames = new Set<() => void>();
 	private menu: Menu | undefined;
-	private metadataTimer: ReturnType<typeof setTimeout> | undefined;
-	private paneTimer: ReturnType<typeof setTimeout> | undefined;
-	private saveTimer: ReturnType<typeof setTimeout> | undefined;
+	private metadataTimer: number | undefined;
+	private paneTimer: number | undefined;
+	private saveTimer: number | undefined;
 	private stopped = false;
 	private card: TagCard;
 	constructor(readonly ctx: ModuleContext<TagColorsSettings>) {
@@ -47,30 +49,37 @@ export class TagRuntime implements ColorHost {
 				for (const tag of Array.from(el.querySelectorAll("a.tag"))) this.renderReading(tag);
 			};
 			render();
-			const runtime = this;
-			context.addChild(new class extends MarkdownRenderChild {
-				onload(): void {
-					const win = el.ownerDocument.defaultView;
-					if (!win) return;
-					if (runtime.stopped) return;
-					const cancel = () => { win.cancelAnimationFrame(frame); runtime.frames.delete(cancel); };
-					const frame = win.requestAnimationFrame(() => { runtime.frames.delete(cancel); render(); });
-					runtime.frames.add(cancel);
-					this.register(cancel);
-				}
-				onunload(): void {
-					for (const tag of Array.from(el.querySelectorAll("a.tag"))) runtime.restoreReading(tag);
-				}
-			}(el));
+			const child = new MarkdownRenderChild(el);
+			child.onload = () => {
+				const win = el.ownerDocument.defaultView;
+				if (!win) return;
+				if (this.stopped) return;
+				const cancel = () => { win.cancelAnimationFrame(frame); this.frames.delete(cancel); };
+				const frame = win.requestAnimationFrame(() => { this.frames.delete(cancel); render(); });
+				this.frames.add(cancel);
+				child.register(cancel);
+			};
+			child.onunload = () => {
+				for (const tag of Array.from(el.querySelectorAll("a.tag"))) this.restoreReading(tag);
+			};
+			context.addChild(child);
 		});
 		const schedule = () => {
-			clearTimeout(this.metadataTimer);
-			this.metadataTimer = setTimeout(() => this.syncRegistry(), 1000);
+			window.clearTimeout(this.metadataTimer);
+			this.metadataTimer = window.setTimeout(() => this.syncRegistry(), 1000);
 		};
 		ctx.registerEvent(this.app.metadataCache.on("resolved", schedule));
 		ctx.registerEvent(this.app.metadataCache.on("changed", schedule));
 		ctx.registerEvent(this.app.metadataCache.on("deleted", schedule));
 		ctx.registerEvent(this.app.workspace.on("layout-change", () => this.refresh()));
+		// A tag renamed in the whole vault (Tasks): its chosen colors follow the new name.
+		const workspace = this.app.workspace as unknown as { on(name: string, cb: (e: TagRenamedEvent) => void): import("obsidian").EventRef };
+		ctx.registerEvent(workspace.on(TAG_RENAMED_EVENT, ({ from, to }) => {
+			this.settings.slots = renameKeys(this.settings.slots, from, to);
+			this.settings.overrides = renameKeys(this.settings.overrides, from, to);
+			this.refresh();
+			void this.save();
+		}));
 		ctx.registerEvent(this.app.workspace.on("file-open", () => this.schedulePanes()));
 		this.app.workspace.onLayoutReady(() => {
 			if (this.stopped) return;
@@ -88,8 +97,8 @@ export class TagRuntime implements ColorHost {
 		if (JSON.stringify(next) === JSON.stringify(this.settings.slots)) return;
 		this.settings.slots = next;
 		this.refresh();
-		clearTimeout(this.saveTimer);
-		this.saveTimer = setTimeout(() => {
+		window.clearTimeout(this.saveTimer);
+		this.saveTimer = window.setTimeout(() => {
 			this.saveTimer = undefined;
 			void this.save();
 		}, 400);
@@ -97,8 +106,7 @@ export class TagRuntime implements ColorHost {
 
 	private attachDocument(doc: Document): void {
 		if (this.documents.has(doc)) return;
-		const style = doc.createElement("style");
-		doc.head.append(style);
+		const palette = watchPalette(doc.body, this.hues());
 		const observer = new MutationObserver(records => {
 			const relevant = records.some(record => {
 				const target = record.target.nodeType === 1 ? record.target as Element : record.target.parentElement;
@@ -108,8 +116,8 @@ export class TagRuntime implements ColorHost {
 			});
 			if (relevant) this.schedulePanes();
 		});
-		this.documents.set(doc, { style, observer });
-		this.updateCss(doc, style);
+		this.documents.set(doc, { palette, observer });
+		this.updateCss(doc, palette);
 		this.ctx.registerDomEvent(doc, "click", event => {
 			if (!this.settings.tagCard || event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
 			const el = (event.target as Element | null)?.closest?.(".markdown-preview-view a.tag");
@@ -125,8 +133,12 @@ export class TagRuntime implements ColorHost {
 		});
 	}
 
-	private updateCss(doc: Document, style: HTMLStyleElement): void {
-		style.textContent = buildCss([...Array.from({ length: 14 }, (_, i) => slotHue(i)), ...Object.values(registry(this.settings, "overrides"))]);
+	private hues(): number[] {
+		return [...Array.from({ length: 14 }, (_, i) => slotHue(i)), ...Object.values(registry(this.settings, "overrides"))];
+	}
+
+	private updateCss(doc: Document, palette: ReturnType<typeof watchPalette>): void {
+		palette.update(this.hues());
 		doc.body.classList.toggle("sk-tag-colors-upper", this.settings.uppercase);
 	}
 
@@ -136,8 +148,8 @@ export class TagRuntime implements ColorHost {
 		for (const type of ["markdown", "tag"]) {
 			for (const leaf of this.app.workspace.getLeavesOfType(type)) this.attachDocument(leaf.view.containerEl.ownerDocument);
 		}
-		for (const [doc, { style }] of this.documents) {
-			this.updateCss(doc, style);
+		for (const [doc, { palette }] of this.documents) {
+			this.updateCss(doc, palette);
 			for (const el of Array.from(doc.querySelectorAll('.workspace-leaf-content[data-type="markdown"] .markdown-preview-view a.tag'))) {
 				if (!el.closest(".popover, .canvas-node, .search-result")) this.renderReading(el);
 			}
@@ -170,8 +182,8 @@ export class TagRuntime implements ColorHost {
 	}
 
 	private schedulePanes(): void {
-		clearTimeout(this.paneTimer);
-		this.paneTimer = setTimeout(() => this.observePanes(), 100);
+		window.clearTimeout(this.paneTimer);
+		this.paneTimer = window.setTimeout(() => this.observePanes(), 100);
 	}
 
 	private observePanes(): void {
@@ -203,10 +215,10 @@ export class TagRuntime implements ColorHost {
 		const manager = (this.app.workspace as unknown as { editorSuggest?: { suggests?: unknown[] } }).editorSuggest;
 		if (!Array.isArray(manager?.suggests)) return;
 		const suggest = new TagSuggest(this.app, this.ctx, (tag) => this.classes(tag));
-		manager!.suggests!.unshift(suggest);
+		manager.suggests.unshift(suggest);
 		this.ctx.register(() => {
 			suggest.close();
-			const list = manager!.suggests!;
+			const list = manager.suggests!;
 			const at = list.indexOf(suggest);
 			if (at >= 0) list.splice(at, 1);
 		});
@@ -249,16 +261,16 @@ export class TagRuntime implements ColorHost {
 
 	private stop(): void {
 		this.stopped = true;
-		clearTimeout(this.metadataTimer);
-		clearTimeout(this.paneTimer);
-		if (this.saveTimer !== undefined) { clearTimeout(this.saveTimer); void this.save(); }
+		window.clearTimeout(this.metadataTimer);
+		window.clearTimeout(this.paneTimer);
+		if (this.saveTimer !== undefined) { window.clearTimeout(this.saveTimer); void this.save(); }
 		this.menu?.hide();
 		this.card.close();
 		for (const cancel of this.frames) cancel();
 		for (const modal of this.dialogs) modal.close();
-		for (const [doc, { style, observer }] of this.documents) {
+		for (const [doc, { palette, observer }] of this.documents) {
 			observer.disconnect();
-			style.remove();
+			palette.destroy();
 			doc.body.classList.remove("sk-tag-colors-upper");
 		}
 		for (const [el] of this.reading) this.restoreReading(el);

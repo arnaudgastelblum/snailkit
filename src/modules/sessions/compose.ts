@@ -475,7 +475,7 @@ export class Composer {
 		if (reduced() || !start.width) return;
 		window.setTimeout(() => {
 			if (this.ended) return;
-			const slot = this.view.contentDOM.querySelector(".sk-sessions-tagslot") as HTMLElement | null;
+			const slot = this.view.contentDOM.querySelector<HTMLElement>(".sk-sessions-tagslot");
 			if (!slot) return;
 			const end = slot.getBoundingClientRect();
 			if (!end.width) return;
@@ -483,7 +483,7 @@ export class Composer {
 			const flyer = doc.body.createDiv({ cls: "sk-sessions-flyer" });
 			flyer.append(capsule(doc, tag, this.sv.rt.tagClasses(tag)));
 			const size = flyer.getBoundingClientRect();
-			slot.style.opacity = "0";
+			slot.addClass("is-flying");
 			const anim = flyer.animate(
 				[
 					{ transform: `translate(${start.left}px, ${start.top + (start.height - size.height) / 2}px)`, opacity: 0.9 },
@@ -493,7 +493,7 @@ export class Composer {
 			);
 			const done = () => {
 				flyer.remove();
-				slot.style.opacity = "";
+				slot.removeClass("is-flying");
 			};
 			anim.onfinish = done;
 			anim.oncancel = done;
@@ -739,8 +739,8 @@ export class Composer {
 		const el = this.hintEl;
 		if (!el) return;
 		const items = Array.from(el.children) as HTMLElement[];
-		for (const s of items) s.style.display = "";
-		for (let i = items.length - 1; i > 0 && el.scrollWidth > el.clientWidth + 1; i--) items[i].style.display = "none";
+		for (const s of items) s.removeClass("sk-sessions-overflow-hidden");
+		for (let i = items.length - 1; i > 0 && el.scrollWidth > el.clientWidth + 1; i--) items[i].addClass("sk-sessions-overflow-hidden");
 	}
 
 	toggleHelp(): boolean {
@@ -847,7 +847,7 @@ export class Composer {
 		let bottom = vv ? Math.max(0, win.innerHeight - vv.height - vv.offsetTop) : 0;
 		// The app's own keyboard height counts only when the page was not resized for it.
 		if (this.keyboard > 0 && win.innerHeight > this.baseHeight - 40) bottom = Math.max(bottom, this.keyboard);
-		const bar = doc.querySelector(".mobile-toolbar") as HTMLElement | null;
+		const bar = doc.querySelector<HTMLElement>(".mobile-toolbar");
 		if (bar) {
 			const r = bar.getBoundingClientRect();
 			if (r.height && r.top < win.innerHeight) bottom = Math.max(bottom, win.innerHeight - r.top);
@@ -856,7 +856,7 @@ export class Composer {
 		const visibleTop = vv ? vv.offsetTop : 0;
 		const room = Math.max(160, win.innerHeight - bottom - visibleTop - 56);
 		const list = this.picker.listEl;
-		list.style.maxHeight = "";
+		list.style.removeProperty("max-height");
 		const rest = this.panel.offsetHeight - list.offsetHeight;
 		list.style.maxHeight = `${Math.max(80, Math.min(220, room - rest))}px`;
 		this.panel.style.maxHeight = `${room}px`;
@@ -910,10 +910,10 @@ export class Composer {
 
 	private buildBracket(): void {
 		const doc = this.view.dom.ownerDocument;
-		this.svg = doc.createElementNS(SVG_NS, "svg") as SVGSVGElement;
+		this.svg = doc.createElementNS(SVG_NS, "svg");
 		this.svg.setAttribute("class", "sk-sessions-bracket");
 		this.svg.setAttribute("aria-hidden", "true");
-		this.path = doc.createElementNS(SVG_NS, "path") as SVGPathElement;
+		this.path = doc.createElementNS(SVG_NS, "path");
 		this.svg.appendChild(this.path);
 		this.sv.layer.appendChild(this.svg);
 		this.knob = this.sv.layer.createDiv({ cls: "sk-sessions-knob", attr: { role: "slider", tabindex: "0", "aria-label": this.t("panel.grip"), "aria-valuemin": "0" } });

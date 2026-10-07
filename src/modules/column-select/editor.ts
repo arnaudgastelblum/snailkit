@@ -189,7 +189,6 @@ export class ColumnSelectEditor {
 	}
 
 	buildExtension() {
-		const plugin = this;
 		const keys: KeyBinding[] = ([
 			["Alt-Shift-ArrowUp", "up"],
 			["Alt-Shift-ArrowDown", "down"],
@@ -197,7 +196,7 @@ export class ColumnSelectEditor {
 			["Alt-Shift-ArrowRight", "right"],
 		] as const).map(([key, dir]) => ({
 			key,
-			run: (cm) => !Platform.isMobile && !cm.composing && plugin.ctx.settings.keyboard && extendBox(cm, dir),
+			run: (cm) => !Platform.isMobile && !cm.composing && this.ctx.settings.keyboard && extendBox(cm, dir),
 		}));
 		keys.push(
 			{ key: "Home", run: (cm) => cursorEdge(cm, false) },
@@ -218,8 +217,8 @@ export class ColumnSelectEditor {
 		const extensions: Extension[] = [
 			EditorState.allowMultipleSelections.of(true),
 			ViewPlugin.define((cm) => {
-				plugin.views.add(cm);
-				return { destroy() { plugin.cancelDrag?.(); plugin.views.delete(cm); cm.dom.classList.remove("sk-column-select-alt"); } };
+				this.views.add(cm);
+				return { destroy: () => { this.cancelDrag?.(); this.views.delete(cm); cm.dom.classList.remove("sk-column-select-alt"); } };
 			}),
 			boxField,
 			Prec.highest(keymap.of(keys)),
@@ -228,7 +227,7 @@ export class ColumnSelectEditor {
 				EditorView.domEventHandlers({
 					mousedown: (event, cm) => this.handleMouseDown(event, cm),
 					mousemove: (event, cm) => {
-						cm.dom.classList.toggle("sk-column-select-alt", !!(event.altKey && plugin.ctx.settings.mouse));
+						cm.dom.classList.toggle("sk-column-select-alt", !!(event.altKey && this.ctx.settings.mouse));
 						return false;
 					},
 					mouseleave: (event, cm) => {

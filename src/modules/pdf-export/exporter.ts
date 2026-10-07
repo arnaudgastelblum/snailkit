@@ -136,7 +136,7 @@ export class PdfExporter {
 		});
 		try {
 			// Anything that measures its container lays itself out as on paper.
-			host.style.setProperty(WIDTH_VAR, contentWidthPx(settings.pageSize, settings.landscape, settings.marginMm) + "px");
+			host.setCssProps({ [WIDTH_VAR]: contentWidthPx(settings.pageSize, settings.landscape, settings.marginMm) + "px" });
 			const view = host.createDiv({ cls: `markdown-preview-view markdown-rendered ${CLS.wrap}` });
 			const sizer = view.createDiv({ cls: `markdown-preview-sizer markdown-preview-section ${CLS.wrap}` });
 			component.load();

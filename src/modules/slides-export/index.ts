@@ -1,3 +1,4 @@
+import { buildDemo } from "./demo";
 import { ItemView } from "obsidian";
 import { defineModule } from "../../core/module";
 import { unavailableReason } from "./availability";
@@ -14,6 +15,7 @@ export const slidesExport = defineModule<SlidesSettings>({
 	icon: "presentation",
 	category: "export",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: { slideSize: "16:9", imageWidth: "1920", theme: "view", withBackground: true, saveMode: "ask", outputFolder: "", lastSaveDir: "" },
 	keepOnReset: ["lastSaveDir"],
 	unavailableReason,

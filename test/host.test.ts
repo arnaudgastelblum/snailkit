@@ -15,6 +15,7 @@ function fakePlugin() {
 	const plugin = {
 		app: { commands: { addCommand: (c: { id: string }) => commands.set(c.id, c), removeCommand: (id: string) => commands.delete(id) }, workspace: { updateOptions() {}, trigger() {} } },
 		data: defaultData(),
+		workbench: { setAutoOpen() {} },
 		saveData: async () => undefined,
 		lang: "en",
 		manifest: { id: "snailkit", name: "Snailkit" },
@@ -186,6 +187,21 @@ test("a module just changed on this device keeps its local values over an older 
 	await Promise.all([applied, on]);
 	assert.equal(host.get("mod")!.state, "on");
 	assert.equal(plugin.data.modules.mod.enabled, true);
+});
+
+test("when the Workbench opens, just chosen on this device, wins over an older file", async () => {
+	const { plugin } = fakePlugin();
+	const host = new ModuleHost(plugin, []);
+	const older = defaultData();
+	const applied = host.applyExternal(async () => older);
+	const chosen = host.setWorkbenchAutoOpen("never");
+	await Promise.all([applied, chosen]);
+	assert.equal(plugin.data.workbench.autoOpen, "never");
+	const newer = defaultData();
+	newer.workbench.autoOpen = "startup";
+	(host as unknown as { workbenchLocalAt: number }).workbenchLocalAt = 0;
+	await host.applyExternal(async () => newer);
+	assert.equal(plugin.data.workbench.autoOpen, "startup", "a change from another device comes in");
 });
 
 test("a language change from another device restarts the running modules", async () => {

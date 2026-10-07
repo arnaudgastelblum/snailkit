@@ -34,9 +34,8 @@ type Item = { path: string; folderId: string | null } | { id: string };
 export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: PinsRowOptions, tokens: boolean): { update(): void; destroy(): void } {
 	const doc = el.ownerDocument;
 	const win = doc.defaultView!;
-	const root = doc.createElement("div");
+	const root = el.createDiv();
 	root.className = `sk-pins ${tokens ? "is-tokens" : "is-list"}`;
-	el.append(root);
 	let dead = false;
 	let groups: VaultPinGroups;
 	let popup: HTMLElement | null = null;
@@ -53,7 +52,7 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 	const items = new WeakMap<HTMLElement, Item>();
 	const t = (key: keyof typeof pinLabels, vars?: Record<string, string | number>): string => {
 		const translated = opts.t(key, vars);
-		return (translated && translated !== key ? translated : pinLabels[key]).replace(/\{(\w+)\}/g, (match, name) => String(vars?.[name] ?? match));
+		return (translated && translated !== key ? translated : pinLabels[key]).replace(/\{(\w+)\}/g, (match: string, name: string) => String(vars?.[name] ?? match));
 	};
 	const listen = (target: EventTarget, name: string, handler: EventListener, capture = false): void => {
 		target.addEventListener(name, handler, capture);
@@ -67,12 +66,11 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 		});
 	};
 	const button = (parent: HTMLElement, label: string, action: (e: MouseEvent) => void): HTMLButtonElement => {
-		const b = doc.createElement("button");
+		const b = parent.createEl("button");
 		b.type = "button";
 		b.className = "sk-btn is-ghost is-s";
 		b.textContent = label;
 		b.addEventListener("click", (e) => { e.stopPropagation(); action(e); });
-		parent.append(b);
 		return b;
 	};
 	const closePopup = (focus = false): void => {
@@ -88,7 +86,7 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 		closePopup();
 		popupOwner = owner;
 		menuOpen = menu;
-		const p = doc.createElement("div");
+		const p = root.createDiv();
 		p.className = "sk-pins-popup";
 		// The top layer escapes transformed or clipped ancestors, while DOM ownership stays local.
 		p.setAttribute("popover", "manual");
@@ -96,20 +94,18 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 		p.style.left = `${Math.max(8, Math.min(rect.left, win.innerWidth - 272))}px`;
 		p.style.top = `${Math.max(8, Math.min(rect.bottom + 4, win.innerHeight - 260))}px`;
 		p.style.maxHeight = `${Math.max(80, win.innerHeight - parseFloat(p.style.top) - 8)}px`;
-		root.append(p);
 		p.showPopover?.();
 		popup = p;
 		return p;
 	};
 	const folderName = (owner: HTMLElement, id?: string): void => {
 		const p = makePopup(owner, true);
-		const form = doc.createElement("form");
-		const input = doc.createElement("input");
+		const form = p.createEl("form");
+		const input = form.createEl("input");
 		input.type = "text";
 		input.placeholder = t("pins.folder-name");
 		input.setAttribute("aria-label", t("pins.folder-name"));
 		input.value = groups.folders.find((f) => f.id === id)?.name ?? "";
-		form.append(input);
 		const save = button(form, t("pins.save"), () => form.requestSubmit());
 		save.disabled = !input.value.trim();
 		input.addEventListener("input", () => { save.disabled = !input.value.trim(); });
@@ -121,7 +117,6 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 			closePopup(true);
 			run(() => id ? rail.renamePinFolder(id, name) : rail.createPinFolder(name));
 		});
-		p.append(form);
 		input.focus();
 		input.select();
 	};
@@ -191,14 +186,14 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 			} else if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
 				e.preventDefault(); e.stopPropagation(); context(row, item);
 			} else if (!e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-				const stops = Array.from((popup?.contains(row) ? popup : root)!.querySelectorAll<HTMLElement>("[data-pin-item]"));
+				const stops = Array.from((popup?.contains(row) ? popup : root).querySelectorAll<HTMLElement>("[data-pin-item]"));
 				const next = stops.indexOf(row) + (e.key === "ArrowUp" ? -1 : 1);
 				e.preventDefault(); e.stopPropagation(); stops[Math.max(0, Math.min(stops.length - 1, next))]?.focus();
 			}
 		});
 	};
 	const pin = (parent: HTMLElement, path: string, folderId: string | null): void => {
-		const row = doc.createElement("div");
+		const row = parent.createDiv();
 		row.className = "sk-pins-pin";
 		const open = button(row, path.split("/").pop()!.replace(/\.md$/, ""), (e) => opts.openNote(path, e));
 		open.title = path;
@@ -213,16 +208,14 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 		});
 		const color = opts.dot?.(path);
 		if (color) {
-			const dot = doc.createElement("span");
+			const dot = open.createSpan({ prepend: true });
 			dot.className = "sk-pins-dot";
 			dot.style.backgroundColor = color;
-			open.prepend(dot);
 		}
 		const x = button(row, "×", () => remove(path));
 		x.classList.add("is-icon", "sk-pins-remove");
 		x.setAttribute("aria-label", t("pins.remove"));
 		x.dataset.pinFocus = `pin:${path}`;
-		parent.append(row);
 	};
 	const showFolder = (owner: HTMLElement, id: string): void => {
 		const folder = groups.folders.find((f) => f.id === id);
@@ -246,14 +239,13 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 		closePopup();
 		groups = rail.listPins();
 		root.replaceChildren();
-		const loose = doc.createElement("div");
+		const loose = root.createDiv();
 		loose.className = "sk-pins-loose";
 		loose.dataset.pinDestination = "";
 		loose.dataset.emptyLabel = t("pins.loose");
 		groups.loose.forEach((path) => pin(loose, path, null));
-		root.append(loose);
 		for (const folder of groups.folders) {
-			const section = doc.createElement("div");
+			const section = root.createDiv();
 			section.className = "sk-pins-folder";
 			const heading = button(section, `${tokens ? "▸" : expanded.has(folder.id) ? "▾" : "▸"} ${folder.name} (${folder.pins.length})`, () => {
 				if (tokens) {
@@ -267,14 +259,12 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 			heading.setAttribute("aria-expanded", String(tokens ? reopen === folder.id : expanded.has(folder.id)));
 			wire(heading, { id: folder.id });
 			heading.dataset.pinDestination = folder.id;
-			root.append(section);
 			if (!tokens && expanded.has(folder.id)) {
-				const list = doc.createElement("div");
+				const list = section.createDiv();
 				list.className = "sk-pins-folder-list";
 				list.dataset.pinDestination = folder.id;
 				folder.pins.forEach((path) => pin(list, path, folder.id));
 				if (!folder.pins.length) list.textContent = t("pins.empty");
-				section.append(list);
 			}
 			if (tokens && reopen === folder.id) showFolder(heading, folder.id);
 		}
@@ -359,8 +349,8 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 		marked?.classList.add("is-drop-target");
 	}) as EventListener, true);
 	listen(win, "pointerup", ((e: PointerEvent) => { if (e.pointerId === drag?.pointer) finish(true); }) as EventListener, true);
-	listen(win, "pointercancel", (() => finish(false)) as EventListener, true);
-	listen(win, "blur", (() => { finish(false); closePopup(); }) as EventListener);
+	listen(win, "pointercancel", (() => finish(false)), true);
+	listen(win, "blur", (() => { finish(false); closePopup(); }));
 	listen(root, "click", ((e: MouseEvent) => {
 		if (Date.now() < suppressUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
 	}) as EventListener, true);
@@ -386,7 +376,7 @@ export function mountPinManager(el: HTMLElement, rail: NoteRailService, opts: Pi
 			buttons[(i + (e.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length].focus();
 		}
 	}) as EventListener, true);
-	listen(win, "resize", (() => closePopup()) as EventListener);
+	listen(win, "resize", (() => closePopup()));
 	cleanups.push(rail.onPinsChange(update));
 	update();
 	return { update, destroy() {

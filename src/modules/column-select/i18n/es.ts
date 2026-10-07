@@ -3,6 +3,8 @@ import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
 	"module.name": "Selección en columna",
+	"module.pitch": "Una edición en varias líneas, incluso las cortas.",
+	"demo.gesture": "Alt + arrastrar · Escribe en cada línea",
 	"module.description": "Selecciona una columna de texto y edita varias líneas a la vez.",
 	"command.up": "Ampliar la selección en columna hacia arriba",
 	"command.down": "Ampliar la selección en columna hacia abajo",

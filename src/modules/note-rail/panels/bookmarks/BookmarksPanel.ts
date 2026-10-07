@@ -1,6 +1,6 @@
 // Bookmarks: notes pinned to this note (in its frontmatter) and vault-wide pins (in the settings).
 import { Keymap, Notice, Platform, setIcon, TFile } from "obsidian";
-import type { HoverParent, HoverPopover } from "obsidian";
+import type { HoverParent } from "obsidian";
 import type { NoteRailService } from "../../../../core/services";
 import { mountPinManager } from "../../pin-manager";
 import { addNotePin, getNotePins, getVaultPins, pinsReorder, pinWritesSettled, removeNotePin, reorderNotePins } from "../../pins";
@@ -108,7 +108,7 @@ class BookmarksPanel implements PanelInstance {
 		this.vault = this.createList("vault", ctx.t("bookmarks.vault"));
 		const rail = ctx.service<NoteRailService>("note-rail");
 		if (rail) this.vaultManager = mountPinManager(this.vault.itemsEl, rail, {
-			t: ctx.t,
+			t: ctx.t.bind(ctx),
 			openNote: (path, event) => {
 				const file = ctx.app.vault.getAbstractFileByPath(path);
 				if (file instanceof TFile && event) void this.open(file, event);
@@ -158,7 +158,7 @@ class BookmarksPanel implements PanelInstance {
 				s.bookmarksTips = Math.min(TIP_OPENINGS, (s.bookmarksTips ?? 0) + 1);
 			});
 		}
-		const t = this.ctx.t;
+		const t = this.ctx.t.bind(this.ctx);
 		const tip = this.rootEl.createDiv("sk-note-rail-tip");
 		const text = tip.createDiv("sk-note-rail-tip-text");
 		// The property name as code wherever the language puts it.
@@ -221,7 +221,7 @@ class BookmarksPanel implements PanelInstance {
 		meta?.setText(label);
 		meta?.toggle(!!label);
 		row.toggleClass("has-area", !!area);
-		if (area) row.style.setProperty("--sk-bm-hue", String(hueOf(area.path)));
+		if (area) row.setCssProps({ "--sk-bm-hue": String(hueOf(area.path)) });
 		else row.style.removeProperty("--sk-bm-hue");
 	}
 
@@ -627,7 +627,7 @@ class BookmarksPanel implements PanelInstance {
 		d.row.addClass("is-dragging");
 		d.list.itemsEl.addClass("is-sorting");
 		this.rootEl.addClass("is-sorting");
-		const pop = this.hoverParent.hoverPopover as (HoverPopover & { hide?: () => void }) | null;
+		const pop = this.hoverParent.hoverPopover as unknown as { hide?(): void } | null;
 		pop?.hide?.();
 		if (d.touch) navigator.vibrate?.(8);
 	}
@@ -689,8 +689,8 @@ class BookmarksPanel implements PanelInstance {
 			const to = commit ? d.to : d.from;
 			const before = d.row.getBoundingClientRect().top;
 			for (const r of d.rows) {
-				r.style.transition = "none";
-				r.style.transform = "";
+				r.addClass("sk-note-rail-no-transition");
+				r.style.removeProperty("transform");
 			}
 			d.row.removeClass("is-dragging");
 			d.list.itemsEl.removeClass("is-sorting");
@@ -701,7 +701,7 @@ class BookmarksPanel implements PanelInstance {
 				for (const r of order) d.list.itemsEl.appendChild(r);
 			}
 			void d.list.itemsEl.offsetWidth;
-			for (const r of d.rows) r.style.transition = "";
+			for (const r of d.rows) r.removeClass("sk-note-rail-no-transition");
 			const after = d.row.getBoundingClientRect().top;
 			if (!reducedMotion(this.win) && typeof d.row.animate === "function") {
 				d.row.animate([{ transform: `translateY(${before - after}px) scale(1.02)` }, { transform: "none" }], { duration: 380, easing: SPRING });
@@ -891,7 +891,7 @@ class BookmarksPanel implements PanelInstance {
 		this.swallowUntilUp?.();
 		for (const c of this.cleanups) c();
 		this.cleanups = [];
-		const pop = this.hoverParent.hoverPopover as (HoverPopover & { hide?: () => void }) | null;
+		const pop = this.hoverParent.hoverPopover as unknown as { hide?(): void } | null;
 		pop?.hide?.();
 		this.hoverParent.hoverPopover = null;
 		this.body.empty();

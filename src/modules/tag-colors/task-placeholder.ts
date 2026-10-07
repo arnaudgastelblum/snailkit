@@ -37,9 +37,9 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 		el.tabIndex = -1;
 		el.className = "sk-tag-colors-task-placeholder";
 		el.setAttribute("aria-label", ctx.t("placeholder.add"));
-		const icon = doc.createElement("span");
+		const icon = el.createSpan();
 		setIcon(icon, "tag");
-		el.append(icon, doc.createTextNode("tag"));
+		el.appendText("tag");
 		el.addEventListener("mousedown", e => e.preventDefault());
 		el.addEventListener("click", e => {
 			e.preventDefault(); e.stopPropagation();
@@ -111,7 +111,7 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 	}
 	ctx.registerEditorExtension(ViewPlugin.fromClass(class {
 		decorations = Decoration.none;
-		private timer: ReturnType<typeof setTimeout> | undefined;
+		private timer: number | undefined;
 		private observer: MutationObserver;
 		constructor(private view: EditorView) {
 			editors.add(view);
@@ -120,8 +120,8 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 			this.observer.observe(view.scrollDOM, { attributes: true, attributeFilter: ["class"] });
 		}
 		private schedule(): void {
-			clearTimeout(this.timer);
-			this.timer = setTimeout(() => this.view.dispatch({ effects: refresh.of(null) }), 80);
+			window.clearTimeout(this.timer);
+			this.timer = window.setTimeout(() => this.view.dispatch({ effects: refresh.of(null) }), 80);
 		}
 		update(update: ViewUpdate): void {
 			// The note changed under an open picker: its line may have moved, it closes rather than write elsewhere.
@@ -133,7 +133,7 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 				this.schedule();
 			}
 		}
-		destroy(): void { clearTimeout(this.timer); this.observer.disconnect(); editors.delete(this.view); }
+		destroy(): void { window.clearTimeout(this.timer); this.observer.disconnect(); editors.delete(this.view); }
 	}, { decorations: value => value.decorations }));
 
 	ctx.registerMarkdownPostProcessor((el, context) => {

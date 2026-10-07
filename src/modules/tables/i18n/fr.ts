@@ -4,6 +4,11 @@ import type { en } from "./en";
 
 export const fr: StringsOf<typeof en> = {
 	"module.name": "Tableaux",
+	"module.pitch": "Mettez en forme et triez vos tableaux sans effort.",
+	"demo.rows": "Lignes",
+	"demo.columns": "Colonnes",
+	"demo.sort": "Trier",
+	"demo.style": "Style",
 	"module.description": "Insérez, triez, redimensionnez et mettez en forme vos tableaux Markdown avec une petite barre d'outils, comme dans un traitement de texte.",
 
 	"command.insert": "Insérer un tableau",

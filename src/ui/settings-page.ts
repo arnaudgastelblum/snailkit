@@ -147,7 +147,7 @@ export class SettingsSection<S extends object> {
 				toggle.setValue(this.values[key] as boolean).onChange((value) => {
 					if (!isQuiet()) void commit(value);
 				});
-				show = (value) => toggle.setValue(value);
+				show = (value) => { void toggle.setValue(value); };
 			});
 			return show;
 		});
@@ -217,7 +217,7 @@ export class SettingsSection<S extends object> {
 				dropdown.addOptions(choices).setValue(this.values[key] as string).onChange((value) => {
 					if (!isQuiet()) void commit(value);
 				});
-				show = (value) => dropdown.setValue(value);
+				show = (value) => { void dropdown.setValue(value); };
 			});
 			return show;
 		});
@@ -241,7 +241,7 @@ export class SettingsSection<S extends object> {
 					.onChange((value) => {
 						if (!isQuiet()) void commit(value);
 					});
-				show = (value) => slider.setValue(value);
+				show = (value) => { void slider.setValue(value); };
 			});
 			return show;
 		});

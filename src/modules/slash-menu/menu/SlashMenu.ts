@@ -200,7 +200,7 @@ export class SlashMenu {
 			el.addClass("is-unavailable");
 			if (row.availability.reason) el.setAttr("aria-label", row.availability.reason);
 		}
-		if (entering && index < STAGGER_ROWS) el.style.setProperty("--sk-slash-menu-i", String(index));
+		if (entering && index < STAGGER_ROWS) el.setCssProps({ "--sk-slash-menu-i": String(index) });
 
 		if (this.opts.showIcons) {
 			const icon = el.createDiv({ cls: "sk-slash-menu-menu-item-icon" });
@@ -273,11 +273,11 @@ export class SlashMenu {
 		this.root.toggleClass("is-above", above);
 		this.root.style.left = `${left}px`;
 		if (above) {
-			this.root.style.top = "";
+			this.root.style.removeProperty("top");
 			this.root.style.bottom = `${vh - this.anchor.top + MENU_GAP}px`;
 			this.root.style.maxHeight = `${Math.min(MAX_HEIGHT, spaceAbove)}px`;
 		} else {
-			this.root.style.bottom = "";
+			this.root.style.removeProperty("bottom");
 			this.root.style.top = `${this.anchor.bottom + MENU_GAP}px`;
 			this.root.style.maxHeight = `${Math.min(MAX_HEIGHT, Math.max(160, spaceBelow))}px`;
 		}

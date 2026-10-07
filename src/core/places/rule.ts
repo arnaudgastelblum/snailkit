@@ -21,7 +21,7 @@ const HOME_SHARE = 0.5;
 
 /** "[[Note|alias]]" or "Note" from a property value: the link path, or null. */
 export function linkpathOf(value: unknown): string | null {
-	const first = Array.isArray(value) ? value[0] : value;
+	const first: unknown = Array.isArray(value) ? value[0] : value;
 	if (typeof first !== "string") return null;
 	const text = first.trim();
 	const wiki = /^\[\[([^\]|#^]+)(?:[#^][^\]|]*)?(?:\|[^\]]*)?\]\]$/.exec(text);

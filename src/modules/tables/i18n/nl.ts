@@ -4,6 +4,11 @@ import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
 	"module.name": "Tabellen",
+	"module.pitch": "Geef je tabellen vorm en sorteer ze zonder gedoe.",
+	"demo.rows": "Rijen",
+	"demo.columns": "Kolommen",
+	"demo.sort": "Sorteren",
+	"demo.style": "Stijl",
 	"module.description": "Voeg Markdown-tabellen in, sorteer ze, pas de kolombreedte aan en geef ze een stijl met een kleine werkbalk, zoals in een tekstverwerker.",
 
 	"command.insert": "Tabel invoegen",

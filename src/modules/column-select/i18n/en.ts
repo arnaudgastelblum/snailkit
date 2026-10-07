@@ -1,5 +1,7 @@
 export const en = {
 	"module.name": "Column select",
+	"module.pitch": "One edit, several lines. Even the short ones.",
+	"demo.gesture": "Alt + drag · Type on every row",
 	"module.description": "Select a column of text and edit several rows at once.",
 	"command.up": "Extend column selection up",
 	"command.down": "Extend column selection down",

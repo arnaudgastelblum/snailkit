@@ -1,5 +1,6 @@
 import { Modal, Setting } from "obsidian";
-import { assignSlots, buildCss, capsule, hexToHue, hueClasses, oklchToSrgb, slotHue, tagHues, tagKey } from "./colors";
+import { assignSlots, capsule, hexToHue, hueClasses, oklchToSrgb, slotHue, tagHues, tagKey } from "./colors";
+import { watchPalette } from "./palette";
 import { frequencies, registry, type ColorHost } from "./types";
 
 export function classes(host: ColorHost, tag: string): string {
@@ -15,6 +16,7 @@ export async function setOverride(host: ColorHost, tag: string, hue: number | nu
 }
 
 export class ColorModal extends Modal {
+	private palette?: ReturnType<typeof watchPalette>;
 	constructor(private host: ColorHost, private tag: string, private done: () => void = () => {}) {
 		super(host.app);
 		this.tag = tagKey(tag);
@@ -24,8 +26,7 @@ export class ColorModal extends Modal {
 		el.addClass("sk-tag-colors-modal");
 		el.createEl("h2", { text: host.t("color.title", { tag: this.tag }) });
 		// Dialogs also work while the module is off; their palette is scoped to their content.
-		el.createEl("style").textContent = buildCss(Array.from({ length: 14 }, (_, i) => slotHue(i)))
-			.replace(/ \.sk-tag-colors-/g, " .sk-tag-colors-modal .sk-tag-colors-");
+		this.palette = watchPalette(el, Array.from({ length: 14 }, (_, i) => slotHue(i)));
 		const save = async (hue: number | null) => {
 			await setOverride(host, this.tag, hue);
 			this.close();
@@ -45,7 +46,7 @@ export class ColorModal extends Modal {
 		input.onchange = () => { void save(hexToHue(input.value)); };
 		new Setting(el).addButton(button => button.setButtonText(host.t("color.automatic")).onClick(() => save(null)));
 	}
-	onClose(): void { this.contentEl.empty(); }
+	onClose(): void { this.palette?.destroy(); this.palette = undefined; this.contentEl.empty(); }
 }
 
 export class ReassignModal extends Modal {

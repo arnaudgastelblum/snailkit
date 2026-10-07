@@ -198,7 +198,7 @@ function tagSpans(line: string): Array<{ tag: string; start: number; end: number
 	const masked = line.replace(/\[\[[^\]]*\]\]|\[[^\]]*\]\([^)]*\)|`[^`]*`/g, (m) => " ".repeat(m.length));
 	const out: Array<{ tag: string; start: number; end: number }> = [];
 	for (const m of masked.matchAll(/(^|\s)#([\p{L}\p{N}_/-]*[\p{L}_/-][\p{L}\p{N}_/-]*)/gu)) {
-		const start = m.index! + m[1].length;
+		const start = m.index + m[1].length;
 		out.push({ tag: m[2].replace(/\/+$/, ""), start, end: start + 1 + m[2].length });
 	}
 	return out;
@@ -265,7 +265,7 @@ export function withContext(lines: readonly string[], tag: string | null): strin
 		const span = tagSpans(line)[0];
 		if (name) out[head.at] = line.slice(0, span.start) + "#" + name + line.slice(span.end);
 		else {
-			const rest = (line.slice(0, span.start).replace(/[ 	]+$/, "") + line.slice(span.end)).replace(/\s+$/, "");
+			const rest = (line.slice(0, span.start).replace(/[ \t]+$/, "") + line.slice(span.end)).replace(/\s+$/, "");
 			if (!rest.trim()) out.splice(head.at, 1);
 			else out[head.at] = rest;
 		}

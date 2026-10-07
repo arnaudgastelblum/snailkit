@@ -31,7 +31,7 @@ class StyleChip extends WidgetType {
 		const t = (key: string) => this.controller.t(key);
 		const chip = createSpan({ cls: "sk-tables-chip", attr: { role: "button", tabindex: "0", "aria-label": t("command.style") } });
 		const accent = accentCss(this.meta.accent);
-		if (accent) chip.style.setProperty("--sk-tables-accent", accent);
+		if (accent) chip.setCssProps({ "--sk-tables-accent": accent });
 		setIcon(chip.createSpan("sk-tables-chip-icon"), "table");
 		const parts = [t("style." + shownStyle(this.meta.style))];
 		if (this.meta.banding !== "off") parts.push(t("banding." + this.meta.banding));
@@ -110,7 +110,7 @@ function stylerPlugin(controller: TablesController): Extension {
 				if (u.docChanged || u.viewportChanged || refreshed(u)) this.schedule();
 			}
 			schedule() {
-				if (!this.frame) this.frame = requestAnimationFrame(() => this.apply());
+				if (!this.frame) this.frame = window.requestAnimationFrame(() => this.apply());
 			}
 			apply() {
 				this.frame = 0;

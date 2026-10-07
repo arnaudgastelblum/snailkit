@@ -1,5 +1,7 @@
 import { defineModule } from "../../core/module";
-import { buildCss, capsule, slotHue } from "./colors";
+import { buildDemo } from "./demo";
+import { capsule, slotHue } from "./colors";
+import { watchPalette } from "./palette";
 import { classes, ColorModal, ReassignModal, setOverride } from "./dialogs";
 import { TagRuntime } from "./runtime";
 import { frequencies, migrate, registry, type ColorHost, type TagColorsSettings } from "./types";
@@ -11,8 +13,9 @@ import { es } from "./i18n/es";
 export const tagColors = defineModule<TagColorsSettings>({
 	id: "tag-colors",
 	icon: "tags",
-	category: "organize",
+	category: "notes",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, taskPlaceholder: false, placeholderRecent: [], slots: [], overrides: [] },
 	migrate,
 	activate(ctx) { new TagRuntime(ctx).start(); },
@@ -36,8 +39,8 @@ export const tagColors = defineModule<TagColorsSettings>({
 		const most = page.section(page.t("settings.most"), page.t("settings.most-desc"));
 		most.el.addClass("sk-tag-colors-settings");
 		most.el.toggleClass("sk-tag-colors-upper", page.settings.uppercase);
-		most.el.createEl("style").textContent = buildCss([...Array.from({ length: 14 }, (_, i) => slotHue(i)), ...Object.values(registry(page.settings, "overrides"))])
-			.replace(/ \.sk-tag-colors-/g, " .sk-tag-colors-settings .sk-tag-colors-");
+		const palette = watchPalette(most.el, [...Array.from({ length: 14 }, (_, i) => slotHue(i)), ...Object.values(registry(page.settings, "overrides"))]);
+		page.onDispose(() => palette.destroy());
 		const tags = Object.entries(frequencies(page.app)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 20);
 		if (!tags.length) most.note(page.t("settings.empty"));
 		for (const [tag, count] of tags) {

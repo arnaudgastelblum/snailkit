@@ -1535,9 +1535,15 @@ body.sk-tasks-dnd .sk-tasks-grip {
 	flex: 1;
 	width: 100%;
 	min-width: 120px;
-	height: 24px !important;
-	margin: -2px 0 -2px -6px;
-	padding: 0 6px !important;
+	height: var(--sk-tasks-rename-h, auto) !important;
+	min-height: 26px;
+	margin: -3px 0 -3px -6px;
+	padding: 2px 6px !important;
+	resize: none;
+	overflow: hidden;
+	line-height: 1.45;
+	font-family: inherit;
+	white-space: pre-wrap;
 	border: 1px solid var(--sk-accent-line) !important;
 	border-radius: 6px !important;
 	background: var(--sk-surface) !important;
@@ -1621,4 +1627,81 @@ body.sk-tasks-dnd .sk-tasks-grip {
 }
 .is-side .sk-tasks-note-content {
 	max-height: 280px;
+}
+.sk-tasks-row.is-leaving.is-collapsed { height: 0; }
+.sk-tasks-tag-fallback {
+	--sk-tag-r-bg: initial;
+	--sk-tag-r-fg: initial;
+	--sk-tag-l-bg: initial;
+	--sk-tag-l-fg: initial;
+}
+
+/* Reordering a tag in the navigator: a line where it lands. */
+.sk-tasks-nav-tag {
+	position: relative;
+}
+.sk-tasks-nav-tag.is-dragging {
+	opacity: 0.45;
+}
+.sk-tasks-nav-tag.is-drop-before::before,
+.sk-tasks-nav-tag.is-drop-after::after,
+.sk-tasks-row.is-drop-before::before,
+.sk-tasks-row.is-drop-after::after {
+	content: "";
+	position: absolute;
+	left: 8px;
+	right: 8px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--sk-accent);
+	pointer-events: none;
+}
+.sk-tasks-nav-tag.is-drop-before::before,
+.sk-tasks-row.is-drop-before::before {
+	top: -1px;
+}
+.sk-tasks-nav-tag.is-drop-after::after,
+.sk-tasks-row.is-drop-after::after {
+	bottom: -1px;
+}
+
+/* Rename a tag in the vault. */
+.sk-tasks-rename-tag-field {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.sk-tasks-rename-tag-hash {
+	color: var(--text-faint);
+	font-size: 16px;
+}
+.sk-tasks-rename-tag-field input {
+	flex: 1;
+	min-width: 0;
+}
+.sk-tasks-rename-tag-preview {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-height: 52px;
+	margin: 14px 0 4px;
+	font-size: 13px;
+	color: var(--text-muted);
+	transition: opacity var(--sk-fast) ease;
+}
+.sk-tasks-rename-tag-preview.is-loading {
+	opacity: 0.5;
+}
+.sk-tasks-rename-tag-line {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+.sk-tasks-rename-tag-line.is-warn {
+	color: var(--text-warning, var(--sk-danger));
+}
+.sk-tasks-rename-tag-icon {
+	display: flex;
+	margin-top: 2px;
+	--icon-size: 14px;
 }

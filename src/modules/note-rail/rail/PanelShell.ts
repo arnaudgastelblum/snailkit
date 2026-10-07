@@ -76,7 +76,7 @@ export class PanelShell {
 				const box = entry?.borderBoxSize?.[0];
 				const height = box ? box.blockSize : this.innerEl.offsetHeight;
 				// + the card's border (1px each side).
-				this.el.style.setProperty("--sk-note-rail-panel-h", `${Math.ceil(height) + 2}px`);
+				this.el.setCssProps({ "--sk-note-rail-panel-h": `${Math.ceil(height) + 2}px` });
 			});
 			this.sizer.observe(this.innerEl);
 		}
@@ -84,13 +84,13 @@ export class PanelShell {
 
 	/** Largest size the card may take in its pane (pixels), so the inner column never depends on the card. */
 	setBounds(width: number, height: number): void {
-		if (width > 0) this.el.style.setProperty("--sk-note-rail-max-w", `${Math.floor(width)}px`);
-		if (height > 0) this.el.style.setProperty("--sk-note-rail-max-h", `${Math.floor(height)}px`);
+		if (width > 0) this.el.setCssProps({ "--sk-note-rail-max-w": `${Math.floor(width)}px` });
+		if (height > 0) this.el.setCssProps({ "--sk-note-rail-max-h": `${Math.floor(height)}px` });
 	}
 
 	/** Where the card grows from (the middle of the active rail button, from the top of the card). */
 	setOrigin(y: number): void {
-		this.el.style.setProperty("--sk-note-rail-origin-y", `${Math.max(0, Math.round(y))}px`);
+		this.el.setCssProps({ "--sk-note-rail-origin-y": `${Math.max(0, Math.round(y))}px` });
 	}
 
 	/**
@@ -136,7 +136,7 @@ export class PanelShell {
 			return;
 		}
 		this.progressEl.show();
-		this.barEl.style.setProperty("--p", Math.max(0, Math.min(1, progress)).toFixed(3));
+		this.barEl.setCssProps({ "--p": Math.max(0, Math.min(1, progress)).toFixed(3) });
 	}
 
 	setFooter(content: string | DocumentFragment): void {

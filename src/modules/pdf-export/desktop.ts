@@ -1,9 +1,7 @@
 // Desktop-only access to Electron and Node. Nothing here is loaded at import time: the Snailkit
 // bundle also runs on mobile, where these modules do not exist. Only the export path calls
 // `loadDesktop()`, and the module is desktop only.
-import type * as NodeFs from "fs";
-import type * as NodeOs from "os";
-import type * as NodePath from "path";
+import { Platform } from "obsidian";
 import type { PrintOptions } from "./logic";
 
 /** The few Electron types the export uses, declared here instead of adding a package. */
@@ -40,9 +38,13 @@ export interface Remote {
 
 export interface Desktop {
 	remote: Remote;
-	fs: typeof NodeFs;
-	os: typeof NodeOs;
-	path: typeof NodePath;
+	fs: { promises: {
+		mkdir(path: string, options: { recursive: true }): Promise<string | undefined>;
+		writeFile(path: string, data: string | Uint8Array, encoding?: "utf8"): Promise<void>;
+		unlink(path: string): Promise<void>;
+	} };
+	os: { tmpdir(): string; homedir(): string };
+	path: { join(...paths: string[]): string; dirname(path: string): string };
 }
 
 /**
@@ -50,6 +52,7 @@ export interface Desktop {
  * Null when one of them is out of reach: the export then stops with a notice.
  */
 export function loadDesktop(): Desktop | null {
+	if (!Platform.isDesktopApp) return null;
 	try {
 		const load = (window as unknown as { require?: (id: string) => unknown }).require;
 		if (typeof load !== "function") return null;
@@ -58,9 +61,9 @@ export function loadDesktop(): Desktop | null {
 		if (!remote?.BrowserWindow) return null;
 		return {
 			remote,
-			fs: load("fs") as typeof NodeFs,
-			os: load("os") as typeof NodeOs,
-			path: load("path") as typeof NodePath,
+			fs: load("fs") as Desktop["fs"],
+			os: load("os") as Desktop["os"],
+			path: load("path") as Desktop["path"],
 		};
 	} catch (error) {
 		console.warn("[Snailkit] pdf-export: Electron is not available", error);

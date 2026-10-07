@@ -7,7 +7,9 @@ export function readPinGroups(pins: unknown, stored: unknown): VaultPinGroups {
 	const remaining = new Set(all);
 	const ids = new Set<string>();
 	const folders: VaultPinFolder[] = [];
-	for (const raw of Array.isArray(stored) ? stored : []) {
+	for (const item of (Array.isArray(stored) ? stored : []) as unknown[]) {
+		if (!item || typeof item !== "object") continue;
+		const raw = item as Record<string, unknown>;
 		if (!raw || typeof raw.id !== "string" || !raw.id.trim() || ids.has(raw.id)
 			|| typeof raw.name !== "string" || !raw.name.trim()) continue;
 		ids.add(raw.id);

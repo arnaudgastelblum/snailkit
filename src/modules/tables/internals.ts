@@ -67,8 +67,8 @@ export function tableCellOf(view: MarkdownView | null | undefined): TableCell | 
 		const raw = view as unknown as { editMode?: { tableCell?: unknown }; editor?: { editorComponent?: { tableCell?: unknown } } };
 		const tc = raw.editMode?.tableCell ?? raw.editor?.editorComponent?.tableCell;
 		if (!isObject(tc) || !isObject(tc.table) || !isObject(tc.cell)) return null;
-		const table = tc.table as Record<string, unknown>;
-		const cell = tc.cell as Record<string, unknown>;
+		const table = tc.table;
+		const cell = tc.cell;
 		// Not `instanceof HTMLElement`: a table in a pop-out window comes from another window.
 		if (typeof table.start !== "number" || !isObject(table.containerEl) || typeof (table.containerEl as { querySelector?: unknown }).querySelector !== "function") return null;
 		if (typeof cell.row !== "number" || typeof cell.col !== "number") return null;

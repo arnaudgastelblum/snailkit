@@ -187,7 +187,7 @@ const EMPTY_TREE =
 
 export function xmlEscape(s: string) {
 	return String(s)
-		.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
+		.replace(/[\s\S]/g, char => char.charCodeAt(0) < 32 && char !== "\t" && char !== "\n" && char !== "\r" ? "" : char)
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")

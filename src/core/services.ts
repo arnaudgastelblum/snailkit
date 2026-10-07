@@ -218,3 +218,15 @@ export interface TagColorsReader {
 	version: 1;
 	classes(tag: string): string;
 }
+
+// ----- "snailkit:tag-renamed": a tag was renamed in the whole vault -----
+
+/**
+ * Workspace event triggered after a tag was renamed in every note (`from` and its sub-tags now
+ * read `to`). Tools that keep something per tag (Tags: the chosen colors) follow it.
+ */
+export const TAG_RENAMED_EVENT = "snailkit:tag-renamed";
+export interface TagRenamedEvent {
+	from: string;
+	to: string;
+}

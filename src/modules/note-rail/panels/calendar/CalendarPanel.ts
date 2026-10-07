@@ -1,7 +1,7 @@
 // Calendar: a month of daily notes, with dots for notes and open tasks, opening or creating the
 // note of a day, keyboard and wheel navigation.
 import { Keymap, MarkdownView, moment, Notice, setIcon } from "obsidian";
-import type { HoverParent, HoverPopover, TFile } from "obsidian";
+import type { HoverParent, TFile } from "obsidian";
 import type { Moment } from "moment";
 import { asElement, dur, reducedMotion, SPRING } from "../../rail/motion";
 import type { PanelContext, PanelDefinition, PanelInstance } from "../../types";
@@ -117,9 +117,9 @@ class CalendarPanel implements PanelInstance {
 		const foot = this.body.doc.createDocumentFragment();
 		this.footTextEl = foot.createSpan("sk-note-rail-cal-foot-text");
 		const legend = (this.legendEl = foot.createSpan("sk-note-rail-cal-legend"));
-		legend.createSpan({ cls: "sk-note-rail-cal-legend-item", text: ctx.t("calendar.legend-note") }).prepend(this.body.doc.createElement("i"));
+		legend.createSpan({ cls: "sk-note-rail-cal-legend-item", text: ctx.t("calendar.legend-note") }).createEl("i", { prepend: true });
 		this.legendTaskEl = legend.createSpan({ cls: "sk-note-rail-cal-legend-item is-task", text: ctx.t("calendar.legend-tasks") });
-		this.legendTaskEl.prepend(this.body.doc.createElement("i"));
+		this.legendTaskEl.createEl("i", { prepend: true });
 		ctx.setFooter(foot);
 
 		this.listen(this.monthBtn, "click", () => this.goToday(false));
@@ -257,7 +257,7 @@ class CalendarPanel implements PanelInstance {
 				// Diagonal sweep: row and column both add a little delay.
 				const col = i % (weeks ? 8 : 7);
 				const row = Math.floor(i / (weeks ? 8 : 7));
-				el.style.setProperty("--i", String(row + col * 0.5));
+				el.setCssProps({ "--i": String(row + col * 0.5) });
 				el.addClass("sk-note-rail-cal-in");
 				el.addEventListener("animationend", () => {
 					el.removeClass("sk-note-rail-cal-in");
@@ -575,7 +575,7 @@ class CalendarPanel implements PanelInstance {
 		e.preventDefault();
 		e.stopPropagation();
 		if (inGrid) this.moveFocus(keyOf(next));
-		else this.goTo({ year: next.year(), month: next.month() }, () => this.setRoving(keyOf(next!)));
+		else this.goTo({ year: next.year(), month: next.month() }, () => this.setRoving(keyOf(next)));
 	}
 
 	private onWindowKeyDown(e: KeyboardEvent): void {
@@ -730,7 +730,7 @@ class CalendarPanel implements PanelInstance {
 		this.cleanups = [];
 		this.unsubscribe();
 		this.index.destroy();
-		const pop = this.hoverParent.hoverPopover as (HoverPopover & { hide?: () => void }) | null;
+		const pop = this.hoverParent.hoverPopover as unknown as { hide?(): void } | null;
 		pop?.hide?.();
 		this.hoverParent.hoverPopover = null;
 		this.cells.clear();

@@ -7,6 +7,7 @@ import type SnailkitPlugin from "../main";
 import { ModuleContext } from "./context";
 import type { AnyModule, ModuleDefinition } from "./module";
 import { mergeSettings, type SnailkitData } from "./settings";
+import type { AutoOpenMode } from "./workbench/types";
 
 /** How long a change made on this device wins over a file arriving from another one. */
 const LOCAL_WINS_MS = 3000;
@@ -179,6 +180,9 @@ export class ModuleHost {
 		return this.handles.find((handle) => handle.def.id === id);
 	}
 
+	/** When this device last changed the Workbench's settings (see applyExternal). */
+	private workbenchLocalAt = 0;
+
 	private run<T>(task: () => Promise<T>): Promise<T> {
 		const next = this.queue.then(task, task);
 		this.queue = next.catch(() => undefined);
@@ -226,6 +230,17 @@ export class ModuleHost {
 		});
 	}
 
+	/** When the Workbench opens by itself: applied at once, saved at its turn in the queue. */
+	setWorkbenchAutoOpen(mode: AutoOpenMode): Promise<void> {
+		this.plugin.data.workbench.autoOpen = mode;
+		this.plugin.workbench.setAutoOpen(mode);
+		this.workbenchLocalAt = Date.now();
+		return this.run(async () => {
+			await this.plugin.saveData(this.plugin.data);
+			this.workbenchLocalAt = Date.now();
+		});
+	}
+
 	/**
 	 * data.json was changed on disk, usually by Obsidian Sync from another device: take the new
 	 * values, so that this device never writes its older copy back over them. Settings reach the
@@ -244,8 +259,10 @@ export class ModuleHost {
 				const local = this.plugin.data.modules[handle.def.id];
 				if (local && now - handle.localAt < LOCAL_WINS_MS) fresh.modules[handle.def.id] = local;
 			}
+			if (now - this.workbenchLocalAt < LOCAL_WINS_MS) fresh.workbench = this.plugin.data.workbench;
 			const language = fresh.language !== this.plugin.data.language;
 			this.plugin.data = fresh;
+			this.plugin.workbench.setAutoOpen(fresh.workbench.autoOpen);
 			for (const handle of this.handles) {
 				if (this.closed) return;
 				const settings = handle.readSettings();

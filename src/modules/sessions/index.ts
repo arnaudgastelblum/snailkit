@@ -1,6 +1,7 @@
 // Idea sessions: write freely in one note, catch the tasks in it, close with a short summary.
 import { normalizePath, Platform } from "obsidian";
 import { defineModule } from "../../core/module";
+import { buildDemo } from "./demo";
 import { keys } from "./capsule";
 import { SessionsRuntime } from "./runtime";
 import { DEFAULTS, type SessionsSettings } from "./types";
@@ -12,8 +13,9 @@ import { es } from "./i18n/es";
 export const sessions = defineModule<SessionsSettings>({
 	id: "sessions",
 	icon: "zap",
-	category: "write",
+	category: "workbench",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: DEFAULTS,
 	keepOnReset: ["sessions", "created", "learned", "recentTags", "pinned", "archived"],
 	activate(ctx) {

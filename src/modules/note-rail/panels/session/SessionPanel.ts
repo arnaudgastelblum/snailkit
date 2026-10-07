@@ -62,7 +62,7 @@ class SessionPanel implements PanelInstance {
 	private build(): void {
 		const sessions = sessionsOf(this.ctx);
 		if (this.destroyed || !sessions) return;
-		const { t } = this.ctx;
+		const t = this.ctx.t.bind(this.ctx);
 		const focusKey = asElement(this.body.doc.activeElement)?.closest<HTMLElement>("[data-key]")?.dataset.key;
 		this.body.empty();
 		this.actions.clear();

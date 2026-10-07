@@ -92,7 +92,7 @@ export class ColumnResizer {
 	private dragTo(x: number): void {
 		const d = this.drag as Drag;
 		d.width = Math.max(MIN_WIDTH, Math.round(d.startW + x - d.startX));
-		d.table.style.setProperty("--sk-tables-w" + (d.col + 1), d.width + "px");
+		d.table.setCssProps({ ["--sk-tables-w" + (d.col + 1)]: d.width + "px" });
 		d.table.setAttribute("data-sk-widths", "");
 		if (this.handle) this.handle.style.left = d.th.getBoundingClientRect().right - 4 + "px";
 	}

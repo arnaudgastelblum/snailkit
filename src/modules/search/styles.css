@@ -5,6 +5,7 @@
 	background: var(--sk-accent-soft);
 }
 .sk-search-dialog {
+	top: 48px;
 	position: absolute;
 	top: 48px;
 	left: 50%;

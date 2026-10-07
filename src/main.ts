@@ -6,6 +6,7 @@ import { ModuleHost } from "./core/host";
 import { createPlaces, type PlacesCore } from "./core/places";
 import { normalizeData, type SnailkitData } from "./core/settings";
 import { WorkbenchCore } from "./core/workbench";
+import type { AutoOpenMode } from "./core/workbench/types";
 import { Translator, resolveLanguage, type Lang, type LanguageSetting, type Vars } from "./i18n";
 import { CORE_STRINGS } from "./i18n/core";
 import { MODULES } from "./modules/registry";
@@ -52,6 +53,7 @@ export default class SnailkitPlugin extends Plugin {
 		this.app.workspace.trigger("snailkit:services-changed");
 		// The Workbench view exists before the modules start and before the workspace is restored.
 		this.workbench.start(this, startup);
+		this.workbench.setAutoOpen(this.data.workbench.autoOpen);
 
 		this.host = new ModuleHost(this, MODULES);
 		this.settingTab = new SnailkitSettingTab(this);
@@ -96,6 +98,11 @@ export default class SnailkitPlugin extends Plugin {
 		await this.host.relocalize();
 	}
 
+	/** When the Workbench opens by itself (its page in the settings). */
+	setWorkbenchAutoOpen(mode: AutoOpenMode): Promise<void> {
+		return this.host.setWorkbenchAutoOpen(mode);
+	}
+
 	/**
 	 * Obsidian calls this when data.json changed on disk (Obsidian Sync from another device).
 	 * Without it, this device would keep its older copy in memory and write it back on its next
@@ -104,7 +111,7 @@ export default class SnailkitPlugin extends Plugin {
 	async onExternalSettingsChange(): Promise<void> {
 		await this.host.applyExternal(async () => {
 			try {
-				const raw = await this.loadData();
+				const raw: unknown = await this.loadData();
 				// A file caught half written reads as nothing: keep what we have.
 				return raw && typeof raw === "object" ? normalizeData(raw) : null;
 			} catch {
@@ -118,7 +125,7 @@ export default class SnailkitPlugin extends Plugin {
 		this.translator = new Translator(resolveLanguage(this.data.language, this.obsidianLanguage()), [CORE_STRINGS]);
 	}
 
-	/** Opens Snailkit's settings, on a tool's page when `moduleId` is given. */
+	/** Opens Snailkit's settings, on a tool's page when `moduleId` is given ("workbench": the Workbench's page). */
 	openSettings(moduleId?: string): void {
 		const setting = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
 		if (!setting) return;

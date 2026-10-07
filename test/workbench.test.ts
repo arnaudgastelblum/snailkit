@@ -56,16 +56,19 @@ test("ids are checked, taken ids refused, and an old remover never removes a new
 	assert.deepEqual(core.ids(), [], "nothing registers after the plugin unloads");
 });
 
-test("a module's tabs and automatic opening go away when it stops", () => {
+test("a module's tabs go away when it stops, and an empty Workbench never opens by itself", () => {
 	const core = new WorkbenchCore();
+	core.setAutoOpen("startup");
+	assert.equal(core.autoOpenMode, "never", "no tab yet");
 	const cleanups: Array<() => unknown> = [];
 	const bench = moduleWorkbench(core, (cleanup) => cleanups.push(cleanup));
-	bench.addTab(tab("home", 10));
-	bench.setAutoOpen("startup-and-new-tabs", "home");
-	bench.setAutoOpen("startup", "home");
-	assert.equal(bench.hasTab("home"), true);
+	bench.addTab(tab("tasks", 20));
 	assert.equal(core.autoOpenMode, "startup");
-	assert.equal(cleanups.length, 2, "one cleanup for the tabs, one for the automatic opening");
+	assert.equal(core.autoOpenTab, "tasks", "the first tab without Home");
+	bench.addTab(tab("home", 10));
+	assert.equal(bench.hasTab("home"), true);
+	assert.equal(core.autoOpenTab, "home", "Home when it is on");
+	assert.equal(cleanups.length, 1, "one cleanup for the tabs");
 	for (const cleanup of cleanups.splice(0)) cleanup();
 	assert.equal(bench.hasTab("home"), false);
 	assert.equal(core.autoOpenMode, "never");

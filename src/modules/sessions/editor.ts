@@ -95,20 +95,19 @@ class TagWidget extends WidgetType {
 		const el = doc.createElement("span");
 		el.className = "sk-sessions-tagslot" + (this.preview ? " is-preview" : "");
 		if (this.tag) {
-			const cap = doc.createElement("span");
+			const cap = el.createSpan();
 			cap.className = `sk-tag-capsule ${this.classes}`.trim();
 			const parts = this.tag.split("/");
-			const root = cap.appendChild(doc.createElement("span"));
+			const root = cap.createSpan();
 			root.className = "sk-tag-capsule-root";
 			root.textContent = parts[0];
 			if (parts.length > 1) {
-				const leaf = cap.appendChild(doc.createElement("span"));
+				const leaf = cap.createSpan();
 				leaf.className = "sk-tag-capsule-leaf";
 				leaf.textContent = parts.slice(1).join(" › ");
 			}
-			el.appendChild(cap);
 		} else {
-			const pill = el.appendChild(doc.createElement("span"));
+			const pill = el.createSpan();
 			pill.className = "sk-sessions-tagph";
 			pill.textContent = this.label;
 		}
@@ -170,9 +169,9 @@ export class SessionView {
 		const doc = view.dom.ownerDocument;
 		this.layer = doc.createElement("div");
 		this.layer.className = "sk-sessions-layer";
-		this.markersEl = this.layer.appendChild(doc.createElement("div"));
+		this.markersEl = this.layer.createDiv();
 		this.markersEl.className = "sk-sessions-markers";
-		this.actsEl = this.layer.appendChild(doc.createElement("div"));
+		this.actsEl = this.layer.createDiv();
 		this.actsEl.className = "sk-sessions-acts";
 		this.buildActs();
 		view.scrollDOM.appendChild(this.layer);
@@ -589,7 +588,7 @@ export class SessionView {
 	}
 
 	private onMarkerClick(e: MouseEvent): void {
-		const el = (e.target as HTMLElement).closest(".sk-sessions-marker") as HTMLElement | null;
+		const el = (e.target as HTMLElement).closest<HTMLElement>(".sk-sessions-marker");
 		if (!el || this.composer) return;
 		const n = Number(el.dataset.line);
 		const m = this.markers.find((x) => x.line === n);
@@ -647,7 +646,7 @@ export class SessionView {
 	 */
 	textLeft(): number {
 		const content = this.view.contentDOM;
-		const line = content.querySelector(".cm-line") as HTMLElement | null;
+		const line = content.querySelector<HTMLElement>(".cm-line");
 		if (line) {
 			const linePad = parseFloat(getComputedStyle(line).paddingLeft) || 0;
 			return line.getBoundingClientRect().left + Math.min(linePad, 24);
@@ -686,7 +685,7 @@ export class SessionView {
 				let seal: { top: number; left: number; right: number } | null = null;
 				if (this.saisie.isSealed) {
 					const content = view.contentDOM.getBoundingClientRect();
-					const line = view.contentDOM.querySelector(".cm-line") as HTMLElement | null;
+					const line = view.contentDOM.querySelector<HTMLElement>(".cm-line");
 					const right = line ? line.getBoundingClientRect().right : content.right;
 					seal = { top: content.top - o.y, left: left - o.x, right: right - o.x };
 				}
@@ -699,8 +698,8 @@ export class SessionView {
 				if (r.acts && h) {
 					this.updateActLabels(h);
 					if (Platform.isMobile) {
-						this.actsEl.style.left = "";
-						this.actsEl.style.right = "";
+						this.actsEl.style.removeProperty("left");
+						this.actsEl.style.removeProperty("right");
 						this.actsEl.style.top = `${r.acts.y}px`;
 						this.actsEl.style.left = `${Math.max(r.minX, r.acts.right - this.actsEl.offsetWidth)}px`;
 					} else {

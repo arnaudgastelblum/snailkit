@@ -90,7 +90,7 @@ function offsetToPosIn(text: string, start: EditorPosition, offset: number): Edi
 }
 
 export function flash(ctx: ActionContext, from: number, to: number): void {
-	if (ctx.settings.flashInserted && ctx.settings.animations && ctx.cmView) flashRange(ctx.cmView, from, to, ctx.host.later);
+	if (ctx.settings.flashInserted && ctx.settings.animations && ctx.cmView) flashRange(ctx.cmView, from, to, ctx.host.later.bind(ctx.host));
 }
 
 export function requireEditor(ctx: ActionContext): Editor {

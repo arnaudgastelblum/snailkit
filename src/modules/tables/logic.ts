@@ -357,7 +357,7 @@ export function plainText(md: string | undefined): string {
 
 /** "1 234,50 €", "$1,234.50", "12%", "-$20" to a number, or null. */
 export function parseNumber(text: string): number | null {
-	let t = text.replace(/[\s  ']/g, "").replace(/−/g, "-");
+	let t = text.replace(/[\s\u00a0\u202f']/g, "").replace(/−/g, "-");
 	// The sign may sit before or after a leading currency: -$20, $-20.
 	let sign = 1;
 	const takeSign = () => {

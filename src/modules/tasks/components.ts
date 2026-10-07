@@ -55,9 +55,9 @@ export function colorFor(el: HTMLElement, tag: string, hub: TasksHub): void {
 		el.addClasses(classes.split(/\s+/).filter(Boolean));
 		return;
 	}
-	for (const name of ["--sk-tag-r-bg", "--sk-tag-r-fg", "--sk-tag-l-bg", "--sk-tag-l-fg"]) el.style.setProperty(name, "initial");
-	el.style.setProperty("--sk-tasks-hr", String(fallbackHue(tag.split("/")[0])));
-	el.style.setProperty("--sk-tasks-hl", String(fallbackHue(tag)));
+	el.addClass("sk-tasks-tag-fallback");
+	el.setCssProps({ "--sk-tasks-hr": String(fallbackHue(tag.split("/")[0])) });
+	el.setCssProps({ "--sk-tasks-hl": String(fallbackHue(tag)) });
 }
 
 /** Tag capsule: [ PROJECT ][ website › footer ]. */

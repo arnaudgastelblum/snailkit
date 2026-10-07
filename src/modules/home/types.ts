@@ -1,11 +1,8 @@
 // Settings of the Home module. The arrangement of the domains lives here (data.json), never in
 // the notes. Recently opened notes are per device (app.saveLocalStorage), not in the settings.
-import type { AutoOpenMode } from "../../core/workbench/types";
 import type { MapState } from "../../ui/map/types";
 
 export interface HomeSettings {
-	/** When the Workbench opens by itself, on the Home tab. Phones follow the same setting. */
-	openWorkbench: AutoOpenMode;
 	/** Root of the Map and the domains: a note path, or "" to detect the home page. */
 	homePage: string;
 	/** Folders left out of the Map, the domains and the rail's area (comma separated vault paths). */
@@ -34,7 +31,6 @@ export interface HomeSettings {
 }
 
 export const DEFAULTS: HomeSettings = {
-	openWorkbench: "startup-and-new-tabs",
 	homePage: "",
 	ignoredFolders: "",
 	lens: "map",
@@ -49,7 +45,7 @@ export const DEFAULTS: HomeSettings = {
 };
 
 /** Settings that hold the user's data rather than preferences. */
-export const KEEP_ON_RESET: Array<keyof HomeSettings & string> = ["domainOrder", "featured", "groups", "domainGroups", "hidden", "pulledOut", "noteOrder"];
+export const KEEP_ON_RESET: Array<keyof HomeSettings> = ["domainOrder", "featured", "groups", "domainGroups", "hidden", "pulledOut", "noteOrder"];
 
 /** The Home's three views of the domains. */
 export type HomeLens = "domains" | "map" | "tags";

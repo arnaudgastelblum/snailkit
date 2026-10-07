@@ -1,3 +1,4 @@
+import { buildDemo } from "./demo";
 // Tables: insert with a size grid, a floating toolbar, smart sorting, column widths and styles
 // saved in a comment below each table, keyboard navigation in Source mode.
 import { Platform, type Menu } from "obsidian";
@@ -16,6 +17,7 @@ export const tables = defineModule<TablesSettings>({
 	icon: "table",
 	category: "write",
 	strings: { en, fr, nl, es },
+	demo: (el, t) => buildDemo(el, t),
 	defaults: {
 		newStyle: "plain",
 		newBanding: "rows",

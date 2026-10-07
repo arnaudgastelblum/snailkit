@@ -1313,3 +1313,4 @@
 	width: calc(100cqw - max(24px, (100cqw - 760px) / 2) - 24px);
 	max-width: none;
 }
+.sk-segm-thumb.sk-home-empty-thumb { width: 0; }

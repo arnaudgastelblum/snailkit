@@ -4,6 +4,10 @@ import type { en } from "./en";
 export const nl: StringsOf<typeof en> = {
 	"module.name": "Start",
 	"module.description": "Een tabblad Start in de Werkbank: vandaag, je vastgepinde notities, je domeinen, een kaart van je notities en wat je onlangs opende. Het vult zichzelf aan vanuit je notities.",
+	"module.pitch": "De voorpagina van je kluis, gevuld vanuit je notities.",
+	"demo.tasks": "Taken",
+	"demo.brainstorms": "Brainstorms",
+	"demo.daily": "Notitie van vandaag",
 
 	"tab.label": "Start",
 	"ribbon": "Start openen",
@@ -27,7 +31,7 @@ export const nl: StringsOf<typeof en> = {
 	"today.new-brainstorm": "Nieuwe brainstorm",
 
 	"pins.title": "Vastgepind",
-	"pins.need-rail": "Zet Notitierail aan om notities vast te pinnen.",
+	"pins.need-rail": "Zet Notitiemenu aan om notities vast te pinnen.",
 	"pins.pinned": "“{name}” vastgepind",
 	"pins.unpinned": "“{name}” losgemaakt",
 	"pins.only-notes": "Alleen notities kun je vastpinnen.",
@@ -243,13 +247,6 @@ export const nl: StringsOf<typeof en> = {
 	"help.s-close": "Leegmaken, dan sluiten",
 	"help.read": "Lezen",
 
-	"settings.opening": "Openen",
-	"settings.open-workbench": "De Werkbank openen",
-	"settings.open-desc": "Bij het opstarten: de Werkbank komt als eerste tabblad, vastgezet, op Start, nooit dubbel; herstelde tabbladen blijven. Ook in nieuwe tabbladen: Ctrl/Cmd+T en het sluiten van het laatste tabblad tonen Start, de cursor in het zoekveld. Geldt ook op telefoons.",
-	"settings.mode.startup-and-new-tabs": "Bij het opstarten en in nieuwe tabbladen",
-	"settings.mode.startup": "Bij het opstarten",
-	"settings.mode.never": "Nooit",
-	"settings.open-warn": "Als er bij het opstarten al een notitie opent (instelling van Obsidian of een andere plugin), zet die dan uit.",
 	"settings.domains": "Domeinen en kaart",
 	"settings.home-page": "Startpagina",
 	"settings.home-page-desc": "De wortel van de kaart en van de domeinen: het pad van een notitie. Leeg: vanzelf gevonden, {found}.",

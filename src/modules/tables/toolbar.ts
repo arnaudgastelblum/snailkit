@@ -24,7 +24,7 @@ export class TableToolbar {
 
 	refreshSoon(): void {
 		if (this.frame) return;
-		this.frame = requestAnimationFrame(() => {
+		this.frame = window.requestAnimationFrame(() => {
 			this.frame = 0;
 			this.refresh();
 		});
@@ -211,7 +211,7 @@ export class TableToolbar {
 		let offset = vv ? Math.max(0, win.innerHeight - vv.height - vv.offsetTop) : 0;
 		const bar = mobileToolbar(el.doc || document);
 		if (bar) offset = Math.max(offset, win.innerHeight - bar.getBoundingClientRect().top);
-		el.style.setProperty("--sk-tables-dock-offset", offset + "px");
+		el.setCssProps({ "--sk-tables-dock-offset": offset + "px" });
 	}
 
 	hide(): void {

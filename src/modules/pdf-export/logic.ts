@@ -414,12 +414,12 @@ export function withTimeout<T>(promise: Promise<T> | T, ms: number, label: strin
 			return;
 		}
 		const onAbort = () => {
-			if (timer !== null) clearTimeout(timer);
+			if (timer !== null) window.clearTimeout(timer);
 			reject(new ExportCancelled());
 		};
 		const timer =
 			ms > 0
-				? setTimeout(() => {
+				? window.setTimeout(() => {
 						signal?.removeEventListener("abort", onAbort);
 						reject(new Error(label + " timed out"));
 					}, ms)
@@ -427,14 +427,14 @@ export function withTimeout<T>(promise: Promise<T> | T, ms: number, label: strin
 		signal?.addEventListener("abort", onAbort, { once: true });
 		Promise.resolve(promise).then(
 			(value) => {
-				if (timer !== null) clearTimeout(timer);
+				if (timer !== null) window.clearTimeout(timer);
 				signal?.removeEventListener("abort", onAbort);
 				resolve(value);
 			},
 			(error) => {
-				if (timer !== null) clearTimeout(timer);
+				if (timer !== null) window.clearTimeout(timer);
 				signal?.removeEventListener("abort", onAbort);
-				reject(error);
+				reject(error instanceof Error ? error : new Error(String(error)));
 			},
 		);
 	});

@@ -1,11 +1,9 @@
 // Settings of the Home module as the code reads them: every value checked, the arrangement
 // cleaned (logic/arrange.ts). Pure, tested in test/home.test.ts.
-import type { AutoOpenMode } from "../../core/workbench/types";
 import { normalizeArrangement, type Arrangement } from "./logic/arrange";
 import { cleanOrder } from "./logic/order";
 import { DEFAULTS, type HomeLens, type HomeSettings } from "./types";
 
-export const OPEN_MODES: AutoOpenMode[] = ["startup-and-new-tabs", "startup", "never"];
 /** The views of the Home, in the switch's order; the Map first and by default. */
 export const LENSES: HomeLens[] = ["map", "domains", "tags"];
 
@@ -35,7 +33,6 @@ export function cleanSettings(settings: HomeSettings): HomeSettings {
 	const arr = normalizeArrangement(settings);
 	return {
 		...arr,
-		openWorkbench: OPEN_MODES.includes(settings.openWorkbench) ? settings.openWorkbench : DEFAULTS.openWorkbench,
 		homePage: cleanNotePath(settings.homePage),
 		ignoredFolders: typeof settings.ignoredFolders === "string" ? settings.ignoredFolders : "",
 		lens: LENSES.includes(settings.lens as HomeLens) ? settings.lens : DEFAULTS.lens,

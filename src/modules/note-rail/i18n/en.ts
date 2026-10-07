@@ -1,7 +1,9 @@
-// English reference for the Note rail module.
+// English reference for the Note menu module.
 export const en = {
-	"module.name": "Note rail",
+	"module.name": "Note menu",
 	"module.description": "A quiet row of icons on every note: contents, bookmarks, open tasks and a calendar of daily notes.",
+	"module.pitch": "Contents, tasks and calendar beside every note.",
+	"demo.month": "October 2026",
 
 	"command.open-contents": "Open contents",
 	"command.open-bookmarks": "Open bookmarks",

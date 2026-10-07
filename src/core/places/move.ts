@@ -27,7 +27,7 @@ export function parentKeyIn(frontmatter: Record<string, unknown> | null | undefi
 
 /** The new value of the parent property: the link, or a list whose first item becomes the link. */
 export function parentValue(old: unknown, link: string): unknown {
-	if (Array.isArray(old) && old.length > 1) return [link, ...old.slice(1)];
+	if (Array.isArray(old) && old.length > 1) return [link, ...(old as unknown[]).slice(1)];
 	return link;
 }
 

@@ -176,7 +176,7 @@ class TasksController implements PanelInstance {
 			this.collapse(section, group);
 			for (const task of group.tasks) {
 				const row = items.createDiv({ cls: "sk-note-rail-row sk-note-rail-tasks-row", attr: { tabindex: "0", role: "group", "aria-label": task.display, "aria-keyshortcuts": "Space Enter" } });
-				row.style.setProperty("--sk-note-rail-tasks-depth", String(task.indent));
+				row.setCssProps({ "--sk-note-rail-tasks-depth": String(task.indent) });
 				this.rows.set(row, { group, task });
 				const check = row.createSpan({ cls: "sk-note-rail-tasks-check", attr: { role: "checkbox", "aria-checked": "false", "aria-label": this.ctx.t("tasks.complete", { task: task.display }) } });
 				setIcon(check, "check");

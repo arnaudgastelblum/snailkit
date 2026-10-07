@@ -1,6 +1,11 @@
 // English reference for the Tables module.
 export const en = {
 	"module.name": "Tables",
+	"module.pitch": "Shape and sort tables without wrestling with Markdown.",
+	"demo.rows": "Rows",
+	"demo.columns": "Columns",
+	"demo.sort": "Sort",
+	"demo.style": "Style",
 	"module.description": "Insert, sort, resize and style Markdown tables with a small toolbar, like in a word processor.",
 
 	"command.insert": "Insert table",

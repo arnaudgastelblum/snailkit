@@ -1,5 +1,7 @@
 export const en = {
 	"module.name": "Slides to PowerPoint",
+	"module.pitch": "Your Excalidraw frames, ready for PowerPoint.",
+	"demo.export": "Export slideshow to PowerPoint",
 	"module.description": "Export Excalidraw frames as pictures in a PowerPoint presentation.",
 	"reason.missing": "Excalidraw is not installed.",
 	"reason.disabled": "Excalidraw is turned off.",

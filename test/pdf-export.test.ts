@@ -261,7 +261,10 @@ test("output paths: folders normalized, empty means the vault root", () => {
 	assert.equal(tempHtmlName("", 1), "note-1.html");
 });
 
-test("waits time out, pass results through, and stop at once on cancel", async () => {
+test("waits time out, pass results through, and stop at once on cancel", async (t) => {
+	const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+	Object.defineProperty(globalThis, "window", { configurable: true, value: { setTimeout, clearTimeout } });
+	t.after(() => { if (previous) Object.defineProperty(globalThis, "window", previous); else Reflect.deleteProperty(globalThis, "window"); });
 	assert.equal(await withTimeout(Promise.resolve(3), 1000, "x"), 3);
 	await assert.rejects(withTimeout(new Promise(() => undefined), 10, "Printing"), /Printing timed out/);
 	await assert.rejects(withTimeout(Promise.reject(new Error("boom")), 1000, "x"), /boom/);
