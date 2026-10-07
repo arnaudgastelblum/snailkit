@@ -12,11 +12,16 @@ export interface SnailkitData {
 	language: LanguageSetting;
 	/** False until the welcome notice has been shown once. */
 	welcomed: boolean;
+	/** One-time hints of the core already shown (for example "workbench-tabs"). */
+	hints: string[];
 	modules: Record<string, ModuleRecord>;
 }
 
+/** The hint bubble of the Workbench's tabs (shown once). */
+export const HINT_WORKBENCH_TABS = "workbench-tabs";
+
 export function defaultData(): SnailkitData {
-	return { version: 1, language: "auto", welcomed: false, modules: {} };
+	return { version: 1, language: "auto", welcomed: false, hints: [], modules: {} };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -29,6 +34,9 @@ export function normalizeData(raw: unknown): SnailkitData {
 	if (!isObject(raw)) return data;
 	if (raw.language === "auto" || isLang(raw.language)) data.language = raw.language;
 	data.welcomed = raw.welcomed === true;
+	if (Array.isArray(raw.hints)) {
+		for (const hint of raw.hints) if (typeof hint === "string" && hint && !data.hints.includes(hint)) data.hints.push(hint);
+	}
 	if (isObject(raw.modules)) {
 		for (const [id, record] of Object.entries(raw.modules)) {
 			if (!isObject(record)) continue;
@@ -38,6 +46,9 @@ export function normalizeData(raw: unknown): SnailkitData {
 			};
 		}
 	}
+	// The Workbench's hint was a setting of the Tasks module before the Workbench moved to the core.
+	const tasks = data.modules.tasks?.settings;
+	if (tasks?.workbenchTabsHintSeen === true && !data.hints.includes(HINT_WORKBENCH_TABS)) data.hints.push(HINT_WORKBENCH_TABS);
 	return data;
 }
 

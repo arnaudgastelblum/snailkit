@@ -24,7 +24,19 @@ body {
 	--sk-ease: cubic-bezier(0.16, 1, 0.3, 1);
 	--sk-spring: cubic-bezier(0.2, 1.3, 0.35, 1);
 	--sk-fast: 140ms;
+	--sk-mid: 260ms;
 	--sk-slow: 420ms;
+
+	/* Pastel colors from a hue (a domain, a note's dot): set --sk-hue (0-359) on the element, then
+	   pill (background) hsl(var(--sk-hue) var(--sk-pill-s) var(--sk-pill-l)),
+	   ink (text on it)   hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l)),
+	   dot (small mark)   hsl(var(--sk-hue) var(--sk-dot-s) var(--sk-dot-l)). */
+	--sk-pill-s: 72%;
+	--sk-pill-l: 91%;
+	--sk-ink-s: 42%;
+	--sk-ink-l: 30%;
+	--sk-dot-s: 55%;
+	--sk-dot-l: 62%;
 }
 
 body.theme-dark {
@@ -33,6 +45,12 @@ body.theme-dark {
 	--sk-accent-line: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-modifier-border));
 	--sk-danger-wash: color-mix(in srgb, var(--text-error) 18%, transparent);
 	--sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -12px rgba(0, 0, 0, 0.6);
+	--sk-pill-s: 30%;
+	--sk-pill-l: 24%;
+	--sk-ink-s: 62%;
+	--sk-ink-l: 80%;
+	--sk-dot-s: 50%;
+	--sk-dot-l: 60%;
 }
 
 @keyframes sk-rise {

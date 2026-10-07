@@ -6,6 +6,7 @@ import { applyDailyTemplate, dailyPath, getDailyConfig, monthGrid, parseDailyPat
 import { checkTaskLine, locateTask, parseOpenTasks } from "../src/modules/note-rail/panels/tasks/parse";
 import { buildToc, currentIndex, plainHeading } from "../src/modules/note-rail/panels/toc/headings";
 import { hueOf, linkpathOf, parentLinkpath } from "../src/modules/note-rail/parents";
+import { commandHotkeys, hotkeyText, pillAction } from "../src/modules/note-rail/rail/entry";
 import { addNotePin, getNotePins, pinLinkpath, pinLinkpaths, pinsAdd, pinsRemove, pinsReorder, removeNotePin, reorderNotePins, type PinResolver } from "../src/modules/note-rail/pins";
 import { cleanVaultPins, DEFAULT_SETTINGS, moveInOrder, pinsKey, railOrder, remapVaultPins } from "../src/modules/note-rail/settings";
 import type { NoteRailSettings } from "../src/modules/note-rail/types";
@@ -271,4 +272,100 @@ test("parent: a parent property wins, else the first link at the top of the note
 	assert.equal(parentLinkpath(null), null);
 	assert.equal(hueOf("Work.md"), hueOf("Work.md"));
 	assert.ok(hueOf("Work.md") >= 0 && hueOf("Work.md") < 360);
+});
+
+// ---- Open on hover, vault summary, idea sessions ------------------------------------
+
+import { headingToPanel, inTriangle } from "../src/modules/note-rail/rail/hover";
+import { countDue, dueBadge, summaryParts } from "../src/modules/note-rail/panels/tasks/summary";
+import { sessionsToSort, toSortCount } from "../src/modules/note-rail/panels/session/list";
+import type { SessionEntry } from "../src/modules/note-rail/types";
+
+test("hover: triangle test, edges included", () => {
+	const a = { x: 0, y: 0 }, b = { x: 10, y: 0 }, c = { x: 0, y: 10 };
+	assert.equal(inTriangle({ x: 2, y: 2 }, a, b, c), true);
+	assert.equal(inTriangle({ x: 5, y: 5 }, a, b, c), true);
+	assert.equal(inTriangle({ x: 8, y: 8 }, a, b, c), false);
+	assert.equal(inTriangle({ x: -1, y: 1 }, a, b, c), false);
+});
+
+test("hover: the corridor toward a panel on the right of a left rail", () => {
+	const panel = { left: 100, top: 80, right: 380, bottom: 360 };
+	// Diagonal toward the panel, crossing the button below: still heading there.
+	assert.equal(headingToPanel({ x: 73, y: 240 }, { x: 86, y: 272 }, panel, "left"), true);
+	// Straight down: not toward the panel.
+	assert.equal(headingToPanel({ x: 73, y: 240 }, { x: 73, y: 272 }, panel, "left"), false);
+	// Moving away from the panel.
+	assert.equal(headingToPanel({ x: 80, y: 240 }, { x: 70, y: 250 }, panel, "left"), false);
+	// Toward a point below the panel: outside the triangle.
+	assert.equal(headingToPanel({ x: 73, y: 200 }, { x: 90, y: 400 }, { left: 100, top: 88, right: 380, bottom: 187 }, "left"), false);
+	// Already past the near edge: not "on the way" any more.
+	assert.equal(headingToPanel({ x: 95, y: 240 }, { x: 105, y: 245 }, panel, "left"), false);
+});
+
+test("hover: the corridor mirrors for a rail on the right", () => {
+	const panel = { left: 1100, top: 80, right: 1430, bottom: 360 };
+	assert.equal(headingToPanel({ x: 1471, y: 240 }, { x: 1458, y: 272 }, panel, "right"), true);
+	assert.equal(headingToPanel({ x: 1471, y: 240 }, { x: 1484, y: 272 }, panel, "right"), false);
+	assert.equal(headingToPanel({ x: 1471, y: 240 }, { x: 1471, y: 272 }, panel, "right"), false);
+});
+
+test("vault summary: overdue and today, done and undated tasks left out", () => {
+	const tasks = [
+		{ due: "2026-10-01", done: false },
+		{ due: "2026-09-30", done: false },
+		{ due: "2026-10-05", done: false },
+		{ due: "2026-10-05", done: true },
+		{ due: "2026-10-06", done: false },
+		{ due: null, done: false },
+		{ due: "soon", done: false },
+	];
+	assert.deepEqual(countDue(tasks, "2026-10-05"), { overdue: 2, today: 1 });
+	assert.deepEqual(countDue([], "2026-10-05"), { overdue: 0, today: 0 });
+	assert.deepEqual(summaryParts({ overdue: 2, today: 1 }), [{ kind: "overdue", count: 2 }, { kind: "today", count: 1 }]);
+	assert.deepEqual(summaryParts({ overdue: 0, today: 3 }), [{ kind: "today", count: 3 }]);
+	assert.deepEqual(summaryParts({ overdue: 0, today: 0 }), []);
+	assert.deepEqual(dueBadge({ overdue: 2, today: 1 }), { count: 3, warn: true });
+	assert.deepEqual(dueBadge({ overdue: 0, today: 1 }), { count: 1, warn: false });
+	assert.deepEqual(dueBadge({ overdue: 0, today: 0 }), { count: null, warn: false });
+});
+
+test("sessions panel: the sessions to sort, newest first, five at most", () => {
+	const s = (path: string, created: number, state: SessionEntry["state"]): SessionEntry => ({ path, title: path.replace(/\.md$/, ""), created, state, tasks: 1, undecided: 0 });
+	const list = [
+		s("A.md", 1, "to-sort"), s("B.md", 7, "to-sort"), s("C.md", 3, "open"), s("D.md", 5, "to-sort"),
+		s("E.md", 4, "closed"), s("F.md", 2, "to-sort"), s("G.md", 6, "to-sort"), s("H.md", 8, "to-sort"),
+	];
+	assert.deepEqual(sessionsToSort(list).map((x) => x.title), ["H", "B", "G", "D", "F"]);
+	assert.deepEqual(sessionsToSort(list, 2).map((x) => x.title), ["H", "B"]);
+	assert.equal(toSortCount(list), 6);
+	assert.deepEqual(sessionsToSort(undefined), []);
+	assert.equal(toSortCount(null), 0);
+});
+
+test("rail search: the tooltip shows the command's hotkey the platform's way", () => {
+	assert.equal(hotkeyText([{ modifiers: ["Mod"], key: "o" }], false), "Ctrl+O");
+	assert.equal(hotkeyText([{ modifiers: ["Mod"], key: "o" }], true), "⌘O");
+	assert.equal(hotkeyText([{ modifiers: ["Shift", "Mod"], key: "F" }], false), "Ctrl+Shift+F");
+	assert.equal(hotkeyText([{ modifiers: ["Shift", "Alt"], key: "ArrowUp" }], true), "⌥⇧ArrowUp");
+	assert.equal(hotkeyText([], false), "");
+	assert.equal(hotkeyText(undefined, false), "");
+	// The user's own hotkeys win, an empty list included (hotkey removed); else the defaults.
+	const defaults = [{ modifiers: ["Mod"], key: "o" }];
+	assert.deepEqual(commandHotkeys(undefined, defaults), defaults);
+	assert.deepEqual(commandHotkeys([], defaults), []);
+	assert.deepEqual(commandHotkeys([{ modifiers: ["Alt"], key: "s" }], defaults), [{ modifiers: ["Alt"], key: "s" }]);
+	assert.deepEqual(commandHotkeys(undefined, undefined), []);
+});
+
+test("rail pill: the page of the area with Home, the old way without it or with Ctrl or Cmd", () => {
+	const base = { home: true, mobile: false, isArea: false, mod: false };
+	assert.equal(pillAction(base), "place");
+	assert.equal(pillAction({ ...base, mobile: true }), "place");
+	assert.equal(pillAction({ ...base, isArea: true }), "place");
+	assert.equal(pillAction({ ...base, mod: true }), "note");
+	assert.equal(pillAction({ ...base, mod: true, isArea: true }), "menu");
+	assert.equal(pillAction({ ...base, home: false }), "note");
+	assert.equal(pillAction({ ...base, home: false, mobile: true }), "menu");
+	assert.equal(pillAction({ ...base, home: false, isArea: true }), "menu");
 });

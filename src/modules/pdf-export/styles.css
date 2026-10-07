@@ -1,0 +1,34 @@
+/* PDF export: the hidden host where a note is rendered before it is printed. Neither
+   display: none nor visibility: hidden, because some post-processors (Dataview, Excalidraw,
+   Mermaid) measure the DOM and would render nothing. The scale brings a long note back inside
+   the viewport, so lazy renderers based on an IntersectionObserver still fire. Its width is the
+   usable width of the page, set inline (--sk-pdf-export-width). The printed page carries its
+   own CSS: nothing here travels to the PDF. */
+.sk-pdf-export-host {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: var(--sk-pdf-export-width, 800px);
+	opacity: 0;
+	pointer-events: none;
+	z-index: -1;
+	transform: scale(0.02);
+	transform-origin: 0 0;
+}
+
+/* Obsidian's preview containers are absolute, full height and scrollable: inside the host they
+   would clip the content and mislead the renderers. */
+.sk-pdf-export-host .sk-pdf-export-wrap {
+	position: static;
+	display: block;
+	width: var(--sk-pdf-export-width, 800px);
+	max-width: none;
+	height: auto;
+	min-height: 0;
+	max-height: none;
+	overflow: visible;
+	margin: 0;
+	padding: 0;
+	contain: none;
+	transform: none;
+}

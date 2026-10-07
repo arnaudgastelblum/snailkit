@@ -5,13 +5,24 @@ import { getNotePins, getVaultPins } from "../../pins";
 import { asElement, reducedMotion } from "../../rail/motion";
 import type { PanelContext, PanelDefinition, PanelInstance } from "../../types";
 import { checkTaskLine, locateTask, parseOpenTasks, type TaskItem } from "./parse";
+import { workbenchFooter } from "../workbench-link";
+import { dueBadge, summaryParts } from "./summary";
 
 export const tasksPanel: PanelDefinition = {
 	id: "tasks",
 	icon: "list-checks",
 	isAvailable: (_env, view) => view.file?.extension === "md",
-	badge: (env, view) => env.settings.tasksBadge && view.file
-		? env.app.metadataCache.getFileCache(view.file)?.listItems?.filter((item) => item.task === " ").length || null : null,
+	// With the Tasks module: what is due in the vault (overdue and today). Without: the open tasks of the note.
+	badge: (env, view) => {
+		if (!env.settings.tasksBadge) return null;
+		const vault = env.vaultTasks();
+		if (vault) return dueBadge(vault).count;
+		return view.file ? env.app.metadataCache.getFileCache(view.file)?.listItems?.filter((item) => item.task === " ").length || null : null;
+	},
+	badgeTone: (env) => {
+		const vault = env.settings.tasksBadge ? env.vaultTasks() : null;
+		return vault && dueBadge(vault).warn ? "warn" : null;
+	},
 	create: (ctx, body) => new TasksController(ctx, body),
 };
 
@@ -32,8 +43,12 @@ class TasksController implements PanelInstance {
 	private renderer = new Component();
 	private animations = new Set<Animation>();
 	private delays = new Map<number, () => void>();
+	/** With the Tasks module: what is due in the vault, and the way to the Workbench. Kept on top of the list. */
+	private summaryEl: HTMLElement;
 
 	constructor(private ctx: PanelContext, private body: HTMLElement) {
+		this.summaryEl = body.createDiv({ cls: "sk-note-rail-tasks-summary" });
+		this.renderSummary();
 		const changed = ctx.app.metadataCache.on("changed", (file) => {
 			if (this.watched.has(file)) this.refresh();
 		});
@@ -43,6 +58,7 @@ class TasksController implements PanelInstance {
 			if (info.file && this.watched.has(info.file)) this.refresh();
 		});
 		this.cleanups.push(() => ctx.app.workspace.offref(edited));
+		this.summaryEl.addEventListener("click", (event) => this.onSummary(event));
 		this.listen("click", (event) => this.activate(event as MouseEvent));
 		this.listen("auxclick", (event) => { if ((event as MouseEvent).button === 1) this.activate(event as MouseEvent); });
 		this.listen("keydown", (event) => {
@@ -64,6 +80,43 @@ class TasksController implements PanelInstance {
 	private listen(type: string, listener: EventListener): void {
 		this.body.addEventListener(type, listener);
 		this.cleanups.push(() => this.body.removeEventListener(type, listener));
+	}
+
+	/** Overdue and today's tasks of the vault, as links to the Workbench (zero counts left out). The Workbench itself is in the footer. */
+	private renderSummary(): void {
+		const el = this.summaryEl;
+		el.empty();
+		const vault = this.ctx.vaultTasks();
+		const parts = vault ? summaryParts(vault) : [];
+		el.toggle(parts.length > 0);
+		if (!parts.length) return;
+		const counts = el.createDiv("sk-note-rail-tasks-summary-counts");
+		parts.forEach((part, i) => {
+			if (i) counts.createSpan({ cls: "sk-note-rail-tasks-summary-sep", text: "·" });
+			counts.createEl("button", {
+				cls: `sk-btn is-ghost is-s sk-note-rail-tasks-summary-count is-${part.kind}`,
+				text: this.ctx.tn(`tasks.summary-${part.kind}`, part.count),
+				attr: { type: "button", "data-scope": "today" },
+			});
+		});
+	}
+
+	onVaultTasks(): void {
+		if (this.destroyed) return;
+		const focused = asElement(this.body.doc.activeElement);
+		const scope = focused && this.summaryEl.contains(focused) ? (focused as HTMLElement).dataset.scope : undefined;
+		this.renderSummary();
+		if (scope) this.summaryEl.querySelector<HTMLElement>(`[data-scope="${scope}"]`)?.focus({ preventScroll: true });
+	}
+
+	private onSummary(event: MouseEvent): void {
+		const button = asElement(event.target)?.closest<HTMLElement>("[data-scope]");
+		if (!button) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const scope = button.dataset.scope === "today" ? "today" : "all";
+		if (!this.ctx.openWorkbench({ scope })) new Notice(this.ctx.t("rail.workbench-unavailable"));
+		else if (!this.destroyed) this.ctx.close("commit");
 	}
 
 	refresh(): void {
@@ -99,10 +152,11 @@ class TasksController implements PanelInstance {
 		this.renderer.unload();
 		this.renderer = new Component();
 		this.renderer.load();
+		this.body.appendChild(this.summaryEl);
 		this.total = groups.reduce((sum, group) => sum + group.tasks.length, 0);
 		this.ctx.setCount(this.total);
 		this.ctx.setSubtitle(current.basename);
-		this.ctx.setFooter(this.ctx.t("tasks.foot"));
+		this.ctx.setFooter(this.ctx.vaultTasks() ? workbenchFooter(this.ctx, { tab: "tasks" }, this.ctx.t("rail.workbench-tip-tasks")) : this.ctx.t("tasks.foot"));
 		this.ctx.setProgress(null);
 		for (const group of groups) {
 			if (group.error) {
@@ -113,10 +167,10 @@ class TasksController implements PanelInstance {
 			const section = this.body.createDiv("sk-note-rail-tasks-group");
 			this.groups.set(section, group);
 			const header = section.createDiv("sk-note-rail-section sk-note-rail-tasks-header");
-			const toggle = header.createEl("button", { cls: "sk-note-rail-tasks-toggle", attr: { type: "button", "aria-label": this.ctx.t("tasks.fold", { name: group.file.basename }) } });
+			const toggle = header.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-note-rail-tasks-toggle", attr: { type: "button", "aria-label": this.ctx.t("tasks.fold", { name: group.file.basename }) } });
 			setIcon(toggle, "chevron-down");
 			const name = group.file === current ? this.ctx.t("tasks.this-note") : group.file.basename;
-			header.createEl("button", { cls: "sk-note-rail-tasks-name", text: name, attr: { type: "button", title: group.file.path } });
+			header.createEl("button", { cls: "sk-btn is-ghost is-s sk-note-rail-tasks-name", text: name, attr: { type: "button", title: group.file.path } });
 			header.createSpan({ cls: "sk-note-rail-row-meta sk-note-rail-tasks-count", text: String(group.tasks.length) });
 			const items = section.createDiv("sk-note-rail-tasks-items");
 			this.collapse(section, group);
@@ -313,6 +367,7 @@ class TasksController implements PanelInstance {
 		this.rows.clear();
 		this.groups.clear();
 		this.renderer.unload();
+		this.summaryEl.remove();
 		this.body.empty();
 	}
 }

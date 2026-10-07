@@ -40,6 +40,12 @@ export const fr: StringsOf<typeof en> = {
 
 	"reason.desktop": "il a besoin de l'application pour ordinateur.",
 
+	"workbench.title": "Atelier",
+	"workbench.tabs-hint": "Vos autres outils sont ici : passez de l'un à l'autre avec ces onglets.",
+	"workbench.empty.title": "Rien ici pour l'instant",
+	"workbench.empty.text": "L'atelier rassemble les onglets d'Accueil, de Tâches et de Brainstorm. Activez l'un de ces outils dans les réglages de Snailkit.",
+	"workbench.empty.action": "Ouvrir les réglages",
+
 	"common.cancel": "Annuler",
 	"common.confirm": "Confirmer",
 	"common.create": "Créer",

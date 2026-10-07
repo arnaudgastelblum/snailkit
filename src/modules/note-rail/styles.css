@@ -1,0 +1,1432 @@
+/* Note rail. Every color and curve comes from Snailkit's tokens or Obsidian's variables, so the rail
+   follows any theme, light or dark. Reduced motion is handled by the shared rule (classes start with sk-). */
+body {
+	--sk-note-rail-bg: var(--sk-surface);
+	--sk-note-rail-w: 38px;
+	--sk-note-rail-inset: 10px;
+	--sk-note-rail-panel-w: 284px;
+}
+body.theme-dark {
+	--sk-note-rail-bg: var(--background-primary-alt);
+}
+
+@keyframes sk-note-rail-wash { 0% { opacity: 0; } 12% { opacity: 1; } 65% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes sk-note-rail-fade-in { from { opacity: 0; } }
+@keyframes sk-note-rail-bar-in { from { transform: scaleY(0.2); opacity: 0; } }
+@keyframes sk-note-rail-item-in { from { opacity: 0; transform: translateY(5px); } }
+
+/* Rail: discreet at rest, frosted pill when the note pane is hovered or a panel is open. */
+.sk-note-rail-host {
+	position: relative;
+}
+
+.sk-note-rail {
+	position: absolute;
+	/* --sk-note-rail-top: what floats over the top of the note on phones (set by the rail). */
+	top: calc(var(--sk-note-rail-top, 0px) + var(--sk-note-rail-inset));
+	left: var(--sk-note-rail-inset);
+	z-index: 22;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 4px;
+	border-radius: 12px;
+	opacity: var(--sk-note-rail-rest, 0.5);
+	transition: opacity 240ms ease;
+}
+.sk-note-rail-right > .sk-note-rail {
+	left: auto;
+	right: var(--sk-note-rail-inset);
+}
+.sk-note-rail.is-empty {
+	display: none;
+}
+.sk-note-rail::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: color-mix(in srgb, var(--sk-note-rail-bg) 82%, transparent);
+	-webkit-backdrop-filter: blur(12px) saturate(1.4);
+	backdrop-filter: blur(12px) saturate(1.4);
+	border: 1px solid var(--sk-line);
+	box-shadow: var(--sk-shadow);
+	opacity: 0;
+	transform: scale(0.94);
+	transition: opacity 200ms ease, transform 420ms var(--sk-spring);
+}
+.sk-note-rail-host:hover > .sk-note-rail,
+.sk-note-rail.is-engaged {
+	opacity: 1;
+}
+.sk-note-rail-host:hover > .sk-note-rail::before,
+.sk-note-rail.is-engaged::before {
+	opacity: 1;
+	transform: none;
+}
+
+.sk-note-rail-puck {
+	position: absolute;
+	left: 4px;
+	top: 0;
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+	background: var(--sk-accent-wash);
+	opacity: 0;
+	transform: translateY(var(--y, 4px)) scale(0.8);
+	transition: transform 460ms var(--sk-spring), opacity 160ms ease;
+	pointer-events: none;
+}
+.sk-note-rail-puck.is-on {
+	opacity: 1;
+	transform: translateY(var(--y, 4px));
+}
+/* The glowing mark on the panel side of the rail: it glides with the puck to the active button. */
+.sk-note-rail-puck::after {
+	content: "";
+	position: absolute;
+	top: 8px;
+	bottom: 8px;
+	right: -4px;
+	width: 3px;
+	border-radius: 2px;
+	background: var(--sk-accent);
+	box-shadow: 0 0 6px 1px color-mix(in srgb, var(--sk-accent) 55%, transparent);
+	opacity: 0;
+	transform: scaleY(0.3);
+	transition: opacity 160ms ease, transform 460ms var(--sk-spring);
+}
+.sk-note-rail-right > .sk-note-rail .sk-note-rail-puck::after {
+	right: auto;
+	left: -4px;
+}
+.sk-note-rail-puck.is-on::after {
+	opacity: 1;
+	transform: none;
+}
+/* Opened by hovering: a lighter mark (a click keeps the panel and lights it fully). */
+.sk-note-rail.is-peek .sk-note-rail-puck::after {
+	opacity: 0.55;
+}
+
+.sk-note-rail .sk-note-rail-btn {
+	position: relative;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	margin: 0;
+	border: 0;
+	border-radius: 8px;
+	background: none;
+	box-shadow: none;
+	display: grid;
+	place-items: center;
+	color: var(--text-muted);
+	cursor: var(--cursor);
+	--icon-size: 16px;
+	--icon-stroke: 2px;
+	transition: transform 300ms var(--sk-spring), color 120ms ease;
+}
+.sk-note-rail .sk-note-rail-btn[hidden] {
+	display: none;
+}
+.sk-note-rail-btn::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: var(--sk-hover);
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+.sk-note-rail-btn:hover::before {
+	opacity: 1;
+}
+.sk-note-rail-btn.is-active::before {
+	opacity: 0;
+}
+.sk-note-rail-btn:active {
+	transform: scale(0.9);
+}
+.sk-note-rail-btn.is-active {
+	color: var(--sk-accent-text);
+}
+.sk-note-rail-btn-icon {
+	position: relative;
+	display: grid;
+	place-items: center;
+}
+
+.sk-note-rail-badge {
+	position: absolute;
+	top: -3px;
+	right: -5px;
+	min-width: 14px;
+	height: 14px;
+	padding: 0 3px;
+	border-radius: 7px;
+	background: var(--sk-accent);
+	color: var(--text-on-accent);
+	font-size: 9px;
+	font-weight: 650;
+	line-height: 14px;
+	text-align: center;
+	box-shadow: 0 0 0 2px var(--sk-note-rail-bg);
+	transition: transform 320ms var(--sk-spring), opacity 150ms;
+}
+.sk-note-rail-badge.is-warn {
+	background: var(--color-orange, #e0782b);
+	color: #fff;
+}
+.sk-note-rail-badge.is-zero {
+	transform: scale(0.4);
+	opacity: 0;
+}
+.sk-note-rail-pin-dot {
+	position: absolute;
+	bottom: 3px;
+	right: 3px;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--sk-accent);
+	opacity: 0;
+	transform: scale(0.3);
+	transition: opacity 150ms, transform 320ms var(--sk-spring);
+}
+.sk-note-rail-btn.is-pinned .sk-note-rail-pin-dot {
+	opacity: 1;
+	transform: none;
+}
+
+.sk-note-rail-tooltip {
+	position: absolute;
+	z-index: 40;
+	pointer-events: none;
+	padding: 5px 8px;
+	border-radius: 6px;
+	background: var(--background-modifier-message);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	white-space: nowrap;
+	box-shadow: var(--sk-shadow);
+	opacity: 0;
+	transform: translate(-4px, -50%);
+	transition: opacity 120ms ease, transform 260ms var(--sk-spring);
+}
+.sk-note-rail-right > .sk-note-rail-tooltip {
+	transform: translate(4px, -50%);
+}
+.sk-note-rail-tooltip.is-on {
+	opacity: 1;
+	transform: translate(0, -50%);
+}
+
+.sk-note-rail-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+/* Panel shell: one card shape for every panel (header, optional progress, body, footer).
+   The card clips an inner column whose size depends on the content only (width per panel, height
+   capped from the pane in pixels, set by the rail). The card follows the column's height
+   (--sk-note-rail-panel-h, from a ResizeObserver) and the panel's width with a transition, so going
+   from one panel to another glides instead of jumping. */
+.sk-note-rail-panel {
+	--sk-note-rail-card-w: min(var(--sk-note-rail-panel-w), var(--sk-note-rail-max-w, 100vw));
+	position: absolute;
+	top: calc(var(--sk-note-rail-top, 0px) + var(--sk-note-rail-inset));
+	left: calc(var(--sk-note-rail-inset) + var(--sk-note-rail-w) + 8px);
+	z-index: 21;
+	box-sizing: border-box;
+	width: var(--sk-note-rail-card-w);
+	height: var(--sk-note-rail-panel-h, auto);
+	max-width: calc(100% - var(--sk-note-rail-w) - 2 * var(--sk-note-rail-inset) - 16px);
+	max-height: calc(100% - var(--sk-note-rail-top, 0px) - 2 * var(--sk-note-rail-inset));
+	display: flex;
+	align-items: flex-start;
+	justify-content: flex-start;
+	overflow: hidden;
+	background: var(--sk-note-rail-bg);
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-l);
+	box-shadow: var(--sk-shadow-pop);
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: 13px;
+	/* Grows out of the active rail button. */
+	transform-origin: 0 var(--sk-note-rail-origin-y, 14px);
+	opacity: 0;
+	visibility: hidden;
+	transform: translateX(-12px) scale(0.94);
+	transition: opacity 140ms ease, transform 300ms var(--sk-ease), visibility 0s linear 300ms,
+		width 340ms var(--sk-ease), height 340ms var(--sk-ease);
+}
+.sk-note-rail-right > .sk-note-rail-panel {
+	left: auto;
+	right: calc(var(--sk-note-rail-inset) + var(--sk-note-rail-w) + 8px);
+	justify-content: flex-end;
+	transform-origin: 100% var(--sk-note-rail-origin-y, 14px);
+	transform: translateX(12px) scale(0.94);
+}
+.sk-note-rail-host > .sk-note-rail-panel.is-open {
+	opacity: 1;
+	visibility: visible;
+	transform: none;
+	transition: opacity 180ms ease, transform 520ms var(--sk-spring), visibility 0s,
+		width 340ms var(--sk-ease), height 340ms var(--sk-ease);
+}
+.sk-note-rail-panel-inner {
+	flex: none;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	width: calc(var(--sk-note-rail-card-w) - 2px);
+	max-height: calc(var(--sk-note-rail-max-h, 80vh) - 2px);
+}
+/* Another panel took the card: its title and content fade in. */
+.sk-note-rail-head-text.is-swap,
+.sk-note-rail-body.is-swap {
+	animation: sk-note-rail-swap-in 260ms var(--sk-ease) both;
+}
+@keyframes sk-note-rail-swap-in {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+	}
+}
+
+.sk-note-rail-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 11px 8px 9px 14px;
+	flex: none;
+}
+.sk-note-rail-head-text {
+	flex: 1;
+	min-width: 0;
+}
+.sk-note-rail-title {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: -0.005em;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+}
+.sk-note-rail-count {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+}
+.sk-note-rail-sub {
+	font-size: 11.5px;
+	color: var(--text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	margin-top: 1px;
+}
+
+.sk-note-rail-pin .svg-icon {
+	transition: transform 380ms var(--sk-spring);
+}
+.sk-note-rail-pin .svg-icon {
+	transform: rotate(45deg);
+}
+.sk-note-rail-panel .sk-note-rail-pin.is-pinned {
+	color: var(--sk-accent-text);
+}
+.sk-note-rail-pin.is-pinned .svg-icon {
+	transform: rotate(0deg);
+}
+.sk-note-rail-pin.is-pinned .svg-icon path {
+	fill: var(--sk-accent-wash);
+}
+
+.sk-note-rail-progress {
+	height: 2px;
+	margin: 0 14px;
+	border-radius: 1px;
+	background: var(--sk-line);
+	overflow: hidden;
+	flex: none;
+}
+.sk-note-rail-progress i {
+	display: block;
+	height: 100%;
+	background: var(--sk-accent);
+	transform-origin: left;
+	transform: scaleX(var(--p, 0));
+	transition: transform 160ms linear;
+}
+
+.sk-note-rail-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 6px;
+	scrollbar-width: thin;
+	scrollbar-color: var(--sk-line) transparent;
+}
+
+.sk-note-rail-foot {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 34px;
+	padding: 7px 14px;
+	border-top: 1px solid var(--sk-line);
+	font-size: 11.5px;
+	color: var(--text-faint);
+}
+.sk-note-rail-foot-msg {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sk-note-rail-foot-msg.is-swap {
+	animation: sk-note-rail-item-in 260ms var(--sk-ease) both;
+}
+.sk-note-rail-kbd {
+	display: inline-flex;
+	align-items: center;
+	height: 17px;
+	padding: 0 5px;
+	border-radius: 4px;
+	border: 1px solid var(--sk-line);
+	border-bottom-width: 2px;
+	font-size: 10.5px;
+	color: var(--text-muted);
+	background: var(--sk-surface);
+}
+.sk-note-rail-live {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--sk-accent);
+	animation: sk-pulse 1.2s ease-in-out infinite;
+	flex: none;
+}
+
+/* Generic list pieces any panel can use. */
+.sk-note-rail-section {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 8px 5px;
+	font-size: 10.5px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--text-faint);
+}
+.sk-note-rail-section:first-child {
+	padding-top: 4px;
+}
+.sk-note-rail-in {
+	animation: sk-note-rail-item-in 420ms var(--sk-ease) both;
+	animation-delay: calc(var(--i, 0) * 14ms + 40ms);
+}
+.sk-note-rail-row {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 30px;
+	padding: 0 8px;
+	border-radius: 7px;
+	color: var(--text-muted);
+	cursor: var(--cursor);
+	user-select: none;
+}
+.sk-note-rail-row::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: var(--sk-hover);
+	opacity: 0;
+	transition: opacity 100ms;
+}
+.sk-note-rail-row:hover::before {
+	opacity: 1;
+}
+.sk-note-rail-row > * {
+	position: relative;
+}
+.sk-note-rail-row:hover {
+	color: var(--text-normal);
+}
+.sk-note-rail-row-title {
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sk-note-rail-row-meta {
+	font-size: 11px;
+	color: var(--text-faint);
+	white-space: nowrap;
+}
+.sk-note-rail-empty {
+	padding: 8px 10px;
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+/* Make room: the readable column glides aside while a panel is open. */
+.sk-note-rail-room {
+	transition: transform 520ms var(--sk-spring);
+}
+.markdown-source-view .cm-scroller.sk-note-rail-room-clip,
+.markdown-reading-view .markdown-preview-view.sk-note-rail-room-clip {
+	overflow-x: hidden;
+}
+
+.sk-note-rail-row:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 2px var(--sk-accent);
+}
+
+/* Contents panel. */
+.sk-note-rail-toc {
+	position: relative;
+}
+.sk-note-rail-toc-marker {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 2px;
+	height: calc(var(--h, 30px) - 10px);
+	margin-top: 5px;
+	border-radius: 2px;
+	background: var(--sk-accent);
+	transform: translateY(var(--y, 0px));
+	opacity: 0;
+	transition: transform 380ms var(--sk-spring), opacity 160ms;
+}
+.sk-note-rail-toc-marker.is-on {
+	opacity: 1;
+}
+.sk-note-rail-toc-marker.is-instant {
+	transition: none;
+}
+.sk-note-rail-toc .sk-note-rail-row {
+	min-height: 30px;
+	padding-left: calc(10px + var(--depth, 0) * 14px);
+	font-size: 13px;
+}
+.sk-note-rail-toc .sk-note-rail-row[data-depth="0"] {
+	color: var(--text-normal);
+	font-weight: 500;
+}
+.sk-note-rail-toc .sk-note-rail-row[data-depth="0"]:not(:nth-child(2)) {
+	margin-top: 2px;
+}
+.sk-note-rail-guide {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--sk-line);
+}
+.sk-note-rail-toc .sk-note-rail-row.is-current {
+	color: var(--sk-accent-text);
+}
+.sk-note-rail-toc .sk-note-rail-row.is-preview::before {
+	opacity: 1;
+	background: var(--sk-accent-soft);
+}
+.sk-note-rail-lvl {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-faint);
+	opacity: 0;
+	transition: opacity 120ms;
+	font-family: var(--font-monospace);
+}
+.sk-note-rail-toc .sk-note-rail-row:hover .sk-note-rail-lvl {
+	opacity: 1;
+}
+
+/* Heading wash in the note: held while previewing, flashed after a jump. */
+.cm-line.sk-note-rail-hold,
+.cm-line.sk-note-rail-flash,
+.markdown-preview-section > .sk-note-rail-hold,
+.markdown-preview-section > .sk-note-rail-flash {
+	position: relative;
+	z-index: 0;
+}
+.sk-note-rail-hold::before,
+.sk-note-rail-flash::before {
+	content: "";
+	position: absolute;
+	inset: -3px -12px;
+	border-radius: var(--sk-radius);
+	background: var(--sk-accent-wash);
+	pointer-events: none;
+	z-index: -1;
+}
+.sk-note-rail-hold::before {
+	animation: sk-note-rail-fade-in 220ms ease both;
+}
+.sk-note-rail-flash::before {
+	animation: sk-note-rail-wash 1500ms var(--sk-ease) both;
+}
+.sk-note-rail-hold::after {
+	content: "";
+	position: absolute;
+	left: -12px;
+	top: 4px;
+	bottom: 4px;
+	width: 3px;
+	border-radius: 2px;
+	background: var(--sk-accent);
+	pointer-events: none;
+	animation: sk-note-rail-bar-in 360ms var(--sk-spring) both;
+}
+
+/* Bookmarks: "This note" (frontmatter pins) and "Vault" (settings), drag to reorder. */
+.sk-note-rail-bm {
+	padding: 0 0 2px;
+}
+.sk-note-rail-bm .sk-note-rail-section .sk-note-rail-count {
+	font-size: 10.5px;
+	letter-spacing: 0;
+}
+.sk-note-rail-bm-grow {
+	flex: 1;
+}
+.sk-note-rail-bm-items {
+	position: relative;
+}
+
+/* Rows: file icon that turns into a grip on hover, name, faint folder, remove button. */
+.sk-note-rail-bm-row {
+	gap: 9px;
+	touch-action: pan-y;
+}
+.sk-note-rail-bm-lead {
+	position: relative;
+	width: 16px;
+	height: 16px;
+	flex: none;
+	color: var(--text-faint);
+	--icon-size: 15px;
+}
+.sk-note-rail-bm-lead > span {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	transition: opacity 120ms, transform 260ms var(--sk-spring);
+}
+.sk-note-rail-bm-grip {
+	opacity: 0;
+	transform: scale(0.7);
+	cursor: grab;
+}
+.sk-note-rail-bm-items:not(.is-sorting) .sk-note-rail-bm-row:hover .sk-note-rail-bm-file,
+.sk-note-rail-bm-row.is-dragging .sk-note-rail-bm-file {
+	opacity: 0;
+	transform: scale(0.7);
+}
+.sk-note-rail-bm-items:not(.is-sorting) .sk-note-rail-bm-row:hover .sk-note-rail-bm-grip,
+.sk-note-rail-bm-row.is-dragging .sk-note-rail-bm-grip {
+	opacity: 1;
+	transform: none;
+}
+.sk-note-rail-bm-items:has(> .sk-note-rail-bm-row:only-child) .sk-note-rail-bm-grip {
+	display: none;
+}
+.sk-note-rail-bm-items:has(> .sk-note-rail-bm-row:only-child) .sk-note-rail-bm-row:hover .sk-note-rail-bm-file {
+	opacity: 1;
+	transform: none;
+}
+.sk-note-rail-bm-row .sk-note-rail-row-meta {
+	max-width: 42%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sk-note-rail-bm-row.is-self .sk-note-rail-row-title::after {
+	content: attr(data-self);
+	margin-left: 6px;
+	font-size: 10.5px;
+	color: var(--text-faint);
+}
+.sk-note-rail-panel .sk-note-rail-row-action {
+	flex: none;
+	margin-right: -4px;
+	opacity: 0;
+}
+.sk-note-rail-bm-items:not(.is-sorting) .sk-note-rail-bm-row:hover .sk-note-rail-row-action,
+.sk-note-rail-bm-row:focus-within .sk-note-rail-row-action {
+	opacity: 1;
+}
+.sk-note-rail-panel .sk-note-rail-row-action:hover {
+	color: var(--sk-danger);
+}
+.is-mobile .sk-note-rail-panel .sk-note-rail-row-action {
+	opacity: 0.7;
+}
+
+/* Drag: the held row lifts, neighbours glide to make room. */
+.sk-note-rail-bm-items.is-sorting .sk-note-rail-bm-row:not(.is-dragging) {
+	transition: transform 280ms var(--sk-spring);
+}
+.sk-note-rail-bm-items.is-sorting .sk-note-rail-bm-row::before {
+	opacity: 0;
+}
+.sk-note-rail-bm.is-sorting,
+.sk-note-rail-bm.is-sorting * {
+	cursor: grabbing;
+}
+.sk-note-rail-bm-row.is-dragging {
+	z-index: 3;
+	color: var(--text-normal);
+}
+.sk-note-rail-bm-row.is-dragging::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background: var(--sk-note-rail-bg);
+	border: 1px solid var(--sk-line);
+	box-shadow: var(--sk-shadow-pop);
+}
+.sk-note-rail-bm-row.is-leaving {
+	pointer-events: none;
+}
+
+/* "Pin a note here" / "Pin current note". */
+.sk-note-rail-panel button.sk-note-rail-add {
+	justify-content: flex-start;
+	width: 100%;
+	text-align: left;
+}
+.sk-note-rail-add-icon {
+	display: grid;
+	place-items: center;
+	width: 16px;
+	flex: none;
+}
+.sk-note-rail-panel button.sk-note-rail-add.is-on .sk-note-rail-add-icon {
+	color: var(--sk-accent-text);
+}
+
+/* Rail: the area of the note as a colored initial, and today's note. */
+.sk-note-rail .sk-note-rail-btn.sk-note-rail-place {
+	--sk-place: hsl(var(--sk-place-hue, 220) 60% 40%);
+}
+body.theme-dark .sk-note-rail .sk-note-rail-btn.sk-note-rail-place {
+	--sk-place: hsl(var(--sk-place-hue, 220) 60% 66%);
+}
+.sk-note-rail-place-initial {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 7px;
+	background: color-mix(in srgb, var(--sk-place) 16%, transparent);
+	box-shadow: inset 0 0 0 1.5px var(--sk-place);
+	color: var(--sk-place);
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1;
+}
+.sk-note-rail .sk-note-rail-btn.sk-note-rail-today.is-active {
+	color: var(--sk-accent-text);
+}
+.sk-note-rail-today + .sk-note-rail-btn:not(.sk-note-rail-today),
+.sk-note-rail-place:not([hidden]) + .sk-note-rail-today[hidden] + .sk-note-rail-btn,
+.sk-note-rail-search:not([hidden]) + .sk-note-rail-place[hidden] + .sk-note-rail-today[hidden] + .sk-note-rail-btn {
+	margin-top: 5px;
+}
+/* A long press on the pill shows the path menu: no text selection or system callout on touch screens. */
+.sk-note-rail .sk-note-rail-btn.sk-note-rail-place {
+	-webkit-touch-callout: none;
+	user-select: none;
+}
+
+/* The tip card of the first openings. */
+.sk-note-rail-tip {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0 4px 6px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: var(--sk-accent-soft);
+	color: var(--text-muted);
+	font-size: 11.5px;
+	line-height: 1.45;
+}
+.sk-note-rail-tip-text {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.sk-note-rail-tip code {
+	font-family: var(--font-monospace);
+	font-size: 10.5px;
+	color: var(--sk-accent-text);
+	padding: 0 3px;
+}
+.sk-note-rail-panel button.sk-note-rail-tip-ok {
+	align-self: flex-end;
+}
+
+/* A pinned note in its area color: tinted icon, area name under the title. */
+.sk-note-rail-bm-row.has-area {
+	--sk-bm-area: hsl(var(--sk-bm-hue, 220) 60% 40%);
+}
+.sk-note-rail-bm-row.has-area .sk-note-rail-bm-file {
+	color: var(--sk-bm-area);
+}
+.sk-note-rail-bm-row.has-area .sk-note-rail-row-meta {
+	color: var(--sk-bm-area);
+	opacity: 0.85;
+}
+
+/* An empty list says nothing. */
+.sk-note-rail-empty.is-silent {
+	display: none;
+}
+
+/* Inline note search. */
+.sk-note-rail-suggest {
+	margin: 2px 2px 6px;
+	border: 1px solid var(--sk-line);
+	border-radius: 9px;
+	background: var(--sk-surface);
+	box-shadow: var(--sk-shadow);
+	overflow: hidden;
+	transform-origin: top center;
+	animation: sk-note-rail-suggest-in 300ms var(--sk-spring) both;
+}
+@keyframes sk-note-rail-suggest-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+.sk-note-rail-suggest-input {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	height: 34px;
+	padding: 0 10px;
+	border-bottom: 1px solid var(--sk-line);
+	color: var(--text-faint);
+	--icon-size: 14px;
+}
+.sk-note-rail-suggest-icon {
+	display: grid;
+	place-items: center;
+}
+.sk-note-rail-suggest-input input[type="text"] {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	box-shadow: none;
+	background: none;
+	font: inherit;
+	font-size: 13px;
+	color: var(--text-normal);
+}
+.sk-note-rail-panel .sk-note-rail-suggest-input input[type="text"],
+.sk-note-rail-panel .sk-note-rail-suggest-input input[type="text"]:hover,
+.sk-note-rail-panel .sk-note-rail-suggest-input input[type="text"]:focus,
+.sk-note-rail-panel .sk-note-rail-suggest-input input[type="text"]:focus-visible {
+	border: 0;
+	box-shadow: none;
+	background: transparent;
+}
+.sk-note-rail-suggest-input input::placeholder {
+	color: var(--text-faint);
+}
+.sk-note-rail-suggest-list {
+	max-height: 230px;
+	padding: 4px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.sk-note-rail-suggest .sk-note-rail-bm-lead {
+	display: grid;
+	place-items: center;
+}
+.sk-note-rail-suggest .sk-note-rail-row-meta {
+	max-width: 42%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sk-note-rail-suggest .sk-note-rail-row.is-sel::before {
+	opacity: 1;
+}
+.sk-note-rail-suggest .sk-note-rail-row.is-sel {
+	color: var(--text-normal);
+}
+.sk-note-rail-suggest .suggestion-highlight {
+	color: var(--sk-accent-text);
+	font-weight: 600;
+}
+.sk-note-rail-suggest .sk-note-rail-row:not(.is-sel):hover::before {
+	opacity: 0;
+}
+
+.sk-note-rail-tasks-header { gap: 6px; }
+.sk-note-rail-tasks-header .sk-note-rail-tasks-name {
+	flex: 1;
+	min-width: 0;
+	justify-content: flex-start;
+	text-align: left;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sk-note-rail-tasks-toggle { display: flex; flex: none; }
+.sk-note-rail-tasks-toggle .svg-icon {
+	transition: transform 200ms ease;
+}
+.sk-note-rail-tasks-collapsed .sk-note-rail-tasks-toggle .svg-icon { transform: rotate(-90deg); }
+.sk-note-rail-tasks-collapsed .sk-note-rail-tasks-items { display: none; }
+/* Tasks are sentences: a wider card, and the full text wraps instead of being cut. */
+.sk-note-rail-panel[data-panel="tasks"] {
+	--sk-note-rail-panel-w: 380px;
+}
+.sk-note-rail-tasks-row {
+	align-items: flex-start;
+	padding-block: 5px;
+	padding-inline-start: calc(8px + var(--sk-note-rail-tasks-depth, 0) * 14px);
+	color: var(--text-normal);
+	font-size: 13px;
+	line-height: 1.45;
+}
+.sk-note-rail-tasks-row > .sk-note-rail-tasks-check {
+	margin-top: 1px;
+}
+.sk-note-rail-tasks-row > .sk-note-rail-tasks-due {
+	margin-top: 1px;
+	flex: none;
+}
+.sk-note-rail-tasks-text {
+	flex: 1;
+	min-width: 0;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+/* The text is rendered as Markdown inside a reading-view class: undo that view's layout. */
+.sk-note-rail-tasks-text.markdown-preview-view {
+	padding: 0;
+	width: auto;
+	height: auto;
+	overflow: visible;
+	font-size: inherit;
+	line-height: inherit;
+	user-select: none;
+	background: none;
+}
+.sk-note-rail-tasks-text.markdown-preview-view > *,
+.sk-note-rail-tasks-text.markdown-preview-view p {
+	display: inline;
+	margin: 0;
+	padding: 0;
+}
+.sk-note-rail-tasks-text a {
+	cursor: var(--cursor);
+}
+.sk-note-rail-tasks-text a.tag {
+	font-size: 0.9em;
+}
+.sk-note-rail-tasks-check {
+	position: relative;
+	flex: none;
+	width: 16px;
+	height: 16px;
+	border: 1.5px solid var(--text-faint);
+	border-radius: 50%;
+	transition: transform 250ms ease;
+}
+.sk-note-rail-tasks-check:hover { transform: scale(1.12); }
+.sk-note-rail-tasks-check::before {
+	content: "";
+	position: absolute;
+	inset: -1.5px;
+	border-radius: inherit;
+	background: var(--sk-accent);
+	opacity: 0;
+	transform: scale(0.4);
+	transition: opacity 120ms, transform 380ms var(--sk-spring);
+}
+.sk-note-rail-tasks-check .svg-icon {
+	position: absolute;
+	inset: 1px;
+	width: 11px;
+	height: 11px;
+	color: var(--text-on-accent);
+	opacity: 0;
+	transform: scale(0.4) rotate(-20deg);
+	stroke-dasharray: 24;
+	stroke-dashoffset: 24;
+	transition: opacity 120ms 60ms, transform 300ms 60ms, stroke-dashoffset 240ms 80ms;
+}
+.sk-note-rail-tasks-done .sk-note-rail-tasks-check::before,
+.sk-note-rail-tasks-done .sk-note-rail-tasks-check .svg-icon { opacity: 1; transform: none; stroke-dashoffset: 0; }
+.sk-note-rail-tasks-text { text-decoration: line-through; text-decoration-color: transparent; transition: opacity 220ms, text-decoration-color 220ms 60ms; }
+.sk-note-rail-tasks-done .sk-note-rail-tasks-text { opacity: 0.45; text-decoration-color: var(--text-muted); }
+.sk-note-rail-tasks-due { border-radius: var(--sk-radius-s); padding: 1px 4px; background: var(--sk-hover); }
+.sk-note-rail-tasks-overdue { color: var(--sk-danger); }
+
+/* Calendar: month bar, fixed 6-week grid, dots for notes and open tasks, inline create confirmation. */
+.sk-note-rail-panel[data-panel="calendar"] {
+	--sk-note-rail-panel-w: 300px;
+	--sk-note-rail-cell: 34px;
+	--sk-note-rail-task: var(--color-orange);
+}
+/* The body keeps the shell's scrolling: vertical in short panes, horizontal in very narrow ones
+   (the grid never squeezes below a readable width). The month slide is clipped by the viewport. */
+.sk-note-rail-panel[data-panel="calendar"] .sk-note-rail-body {
+	padding: 0 8px 6px;
+	overflow-x: auto;
+}
+.sk-note-rail-cal {
+	position: relative;
+	min-width: 240px;
+}
+
+/* Month bar: big month name (click = back to today), Today, previous, next. */
+.sk-note-rail-cal-bar {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 0 6px 4px;
+}
+.sk-note-rail-panel .sk-note-rail-cal-month {
+	flex: 1;
+	min-width: 0;
+	justify-content: flex-start;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sk-note-rail-cal-month b {
+	font-weight: inherit;
+}
+.sk-note-rail-cal-month span {
+	color: var(--text-faint);
+}
+.sk-note-rail-panel .sk-note-rail-cal-today {
+	margin: 0 4px;
+}
+
+/* Grid: one row of weekday names, then always 6 weeks, so the card never changes height. */
+.sk-note-rail-cal-viewport {
+	overflow: hidden;
+	touch-action: pan-y;
+}
+.sk-note-rail-cal-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.sk-note-rail-cal-row {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+}
+.sk-note-rail-cal-grid.has-weeks .sk-note-rail-cal-row {
+	grid-template-columns: 24px repeat(7, 1fr);
+}
+.sk-note-rail-cal-head {
+	margin-bottom: 1px;
+}
+.sk-note-rail-cal-dow {
+	height: 22px;
+	display: grid;
+	place-items: center;
+	font-size: 10.5px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-faint);
+}
+.sk-note-rail-cal-wk {
+	height: var(--sk-note-rail-cell);
+	display: grid;
+	place-items: center;
+	font-size: 10px;
+	color: var(--text-faint);
+	opacity: 0.7;
+	font-variant-numeric: tabular-nums;
+}
+.sk-note-rail-cal-head .sk-note-rail-cal-wk {
+	height: 22px;
+	font-weight: 600;
+	opacity: 0.5;
+}
+
+/* A day: soft square behind the number, note dot under it, task dot in the corner. */
+.sk-note-rail-panel button.sk-note-rail-day {
+	position: relative;
+	height: var(--sk-note-rail-cell);
+	min-width: 0;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	font-variant-numeric: tabular-nums;
+	-webkit-tap-highlight-color: transparent;
+}
+.sk-note-rail-day-bg {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 30px;
+	height: 30px;
+	margin: -15px 0 0 -15px;
+	border-radius: 9px;
+	background: var(--sk-hover);
+	opacity: 0;
+	transform: scale(0.8);
+	transition: opacity 120ms, transform 300ms var(--sk-spring), background-color 160ms;
+}
+.sk-note-rail-day b {
+	position: relative;
+	margin-top: -3px;
+	font-weight: 450;
+}
+.sk-note-rail-day.is-weekend:not(.is-out) b {
+	color: var(--text-muted);
+}
+.sk-note-rail-day.is-out {
+	color: var(--text-faint);
+}
+.sk-note-rail-day.is-out b,
+.sk-note-rail-day.is-out .sk-note-rail-day-dot,
+.sk-note-rail-day.is-out .sk-note-rail-day-tk {
+	opacity: 0.5;
+}
+
+.sk-note-rail-day-dot {
+	position: absolute;
+	bottom: 6px;
+	left: 50%;
+	width: 4px;
+	height: 4px;
+	margin-left: -2px;
+	border-radius: 50%;
+	background: var(--text-faint);
+	opacity: 0;
+	transform: scale(0);
+	transition: opacity 150ms, transform 360ms var(--sk-spring);
+}
+.sk-note-rail-day.has-note .sk-note-rail-day-dot {
+	opacity: 1;
+	transform: none;
+}
+.sk-note-rail-day.has-note b {
+	font-weight: 550;
+}
+.sk-note-rail-day-tk {
+	position: absolute;
+	top: 4px;
+	right: calc(50% - 14px);
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--sk-note-rail-task);
+	box-shadow: 0 0 0 1.5px var(--sk-note-rail-bg);
+	opacity: 0;
+	transform: scale(0);
+	transition: opacity 150ms, transform 360ms var(--sk-spring);
+}
+.sk-note-rail-day.has-tasks .sk-note-rail-day-tk {
+	opacity: 1;
+	transform: none;
+}
+.sk-note-rail-cal.hide-tasks .sk-note-rail-day-tk {
+	display: none;
+}
+
+/* Today: filled with the accent. */
+.sk-note-rail-day.is-today .sk-note-rail-day-bg {
+	background: var(--sk-accent);
+	opacity: 1;
+	transform: none;
+	box-shadow: 0 3px 10px -3px var(--sk-accent);
+}
+.sk-note-rail-day.is-today:hover .sk-note-rail-day-bg {
+	background: var(--interactive-accent-hover, var(--sk-accent));
+}
+.sk-note-rail-day.is-today b {
+	color: var(--text-on-accent) !important;
+	font-weight: 650;
+}
+.sk-note-rail-day.is-today .sk-note-rail-day-dot {
+	background: var(--text-on-accent);
+	opacity: 0.85;
+}
+
+/* The daily note this view shows: an accent ring. */
+.sk-note-rail-day.is-current .sk-note-rail-day-bg {
+	opacity: 1;
+	transform: none;
+	background: var(--sk-accent-soft);
+	box-shadow: inset 0 0 0 1.5px var(--sk-accent);
+}
+.sk-note-rail-day.is-current b {
+	color: var(--sk-accent-text);
+	font-weight: 650;
+}
+.sk-note-rail-day.is-today.is-current .sk-note-rail-day-bg {
+	background: var(--sk-accent);
+	box-shadow: 0 0 0 2px var(--sk-note-rail-bg), 0 0 0 3.5px var(--sk-accent);
+}
+
+/* Keyboard focus: a clear ring, never on mouse clicks. */
+.sk-note-rail-day:focus-visible .sk-note-rail-day-bg {
+	opacity: 1;
+	transform: none;
+	box-shadow: inset 0 0 0 2px var(--sk-accent);
+}
+.sk-note-rail-day.is-today:focus-visible .sk-note-rail-day-bg {
+	box-shadow: 0 0 0 2px var(--sk-note-rail-bg), 0 0 0 4px var(--sk-accent);
+}
+
+/* Waiting for the confirmation, or being created. */
+.sk-note-rail-day.is-pending .sk-note-rail-day-bg {
+	opacity: 1;
+	transform: none;
+	background: var(--sk-accent-wash);
+	box-shadow: inset 0 0 0 1.5px var(--sk-accent);
+}
+.sk-note-rail-day.is-busy .sk-note-rail-day-bg {
+	animation: sk-pulse 900ms ease-in-out infinite;
+}
+
+/* Today button and keyboard T: today's square pops. */
+.sk-note-rail-day.is-ping .sk-note-rail-day-bg {
+	animation: sk-note-rail-cal-ping 620ms var(--sk-spring);
+}
+@keyframes sk-note-rail-cal-ping {
+	0% { transform: scale(0.6); }
+	55% { transform: scale(1.18); }
+	100% { transform: none; }
+}
+
+/* First open: cells sweep in diagonally. */
+.sk-note-rail-cal-in {
+	animation: sk-note-rail-cal-cell-in 460ms var(--sk-ease) both;
+	animation-delay: calc(var(--i, 0) * 22ms + 30ms);
+}
+@keyframes sk-note-rail-cal-cell-in {
+	from { opacity: 0; transform: translateY(4px) scale(0.92); }
+}
+
+/* Inline confirmation, slides up over the last weeks. */
+.sk-note-rail-cal-confirm {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 2;
+	padding: 10px 10px 8px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+	background: var(--sk-note-rail-bg);
+	box-shadow: var(--sk-shadow);
+	animation: sk-note-rail-cal-confirm-in 320ms var(--sk-spring) both;
+}
+.sk-note-rail-cal-confirm.is-leaving {
+	pointer-events: none;
+	animation: sk-note-rail-cal-confirm-out 160ms ease-in both;
+}
+@keyframes sk-note-rail-cal-confirm-in {
+	from { opacity: 0; transform: translateY(10px) scale(0.98); }
+}
+@keyframes sk-note-rail-cal-confirm-out {
+	to { opacity: 0; transform: translateY(6px); }
+}
+.sk-note-rail-cal-confirm-text {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 12.5px;
+	line-height: 1.4;
+	color: var(--text-muted);
+}
+.sk-note-rail-cal-confirm-text b {
+	color: var(--text-normal);
+	font-weight: 600;
+}
+.sk-note-rail-cal-confirm-icon {
+	flex: none;
+	margin-top: 1px;
+	color: var(--sk-accent-text);
+	--icon-size: 15px;
+}
+.sk-note-rail-cal-confirm-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+/* Footer: the hovered day on the left, a tiny legend on the right. */
+.sk-note-rail-panel[data-panel="calendar"] .sk-note-rail-foot-msg {
+	flex: 1;
+	gap: 10px;
+}
+.sk-note-rail-cal-foot-text {
+	flex: 1;
+	transition: padding 240ms var(--sk-ease);
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sk-note-rail-panel[data-panel="calendar"] .sk-note-rail-foot-msg {
+	position: relative;
+}
+.sk-note-rail-cal-foot-text.has-legend {
+	padding-right: 112px;
+}
+.sk-note-rail-cal-legend {
+	position: absolute;
+	right: 0;
+	top: 50%;
+	margin-top: -8px;
+	height: 16px;
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	flex: none;
+	transition: opacity 140ms, transform 240ms var(--sk-ease);
+}
+.sk-note-rail-cal-legend.is-hidden {
+	opacity: 0;
+	transform: translateX(6px);
+	pointer-events: none;
+}
+.sk-note-rail-cal-legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+.sk-note-rail-cal-legend-item i {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--text-faint);
+}
+.sk-note-rail-cal-legend-item.is-task i {
+	background: var(--sk-note-rail-task);
+}
+
+/* Touch screens: bigger targets. */
+.is-mobile .sk-note-rail-panel[data-panel="calendar"] {
+	--sk-note-rail-cell: 40px;
+	--sk-note-rail-panel-w: 320px;
+}
+
+/* Rail: the idea sessions button (Idea sessions module), lit on an open session. */
+.sk-note-rail .sk-note-rail-btn.sk-note-rail-session.is-lit:not(.is-active) {
+	color: var(--sk-accent-text);
+	background: var(--sk-accent-wash);
+}
+.sk-note-rail-session-dot {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--color-orange, #e0782b);
+	box-shadow: 0 0 0 2px var(--sk-note-rail-bg);
+	transform: scale(0);
+	transition: transform var(--sk-slow) var(--sk-spring);
+}
+.sk-note-rail-session.has-pending .sk-note-rail-session-dot {
+	transform: scale(1);
+}
+
+/* A quiet link to somewhere else (the Workbench), with an arrow that nudges on hover. */
+.sk-note-rail-link-arrow {
+	display: inline-flex;
+	transition: transform 280ms var(--sk-spring);
+}
+.sk-note-rail-link:hover .sk-note-rail-link-arrow {
+	transform: translateX(2px);
+}
+
+/* Open tasks: what is due in the vault (Tasks module), above the tasks of the note. */
+.sk-note-rail-tasks-summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 2px 6px 6px;
+	margin-bottom: 4px;
+	border-bottom: 1px solid var(--sk-line);
+}
+.sk-note-rail-tasks-summary-counts {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+.sk-note-rail-tasks-summary-sep {
+	color: var(--text-faint);
+}
+.sk-note-rail-panel button.sk-note-rail-tasks-summary-count.is-overdue {
+	color: var(--color-orange, #e0782b);
+}
+
+/* Idea sessions panel. */
+.sk-note-rail-session-icon {
+	display: grid;
+	place-items: center;
+}
+button.sk-btn.sk-note-rail-session-action {
+	width: 100%;
+	justify-content: flex-start;
+	margin-bottom: 4px;
+	text-align: left;
+}
+.sk-note-rail-session-row .sk-note-rail-row-meta {
+	font-variant-numeric: tabular-nums;
+}
+.sk-note-rail-session-panel > .sk-note-rail-link {
+	margin: 6px 0 2px 2px;
+}
+
+/* "Open in Workbench": the same place, the footer, in every panel that has it. */
+.sk-note-rail-foot button.sk-note-rail-workbench {
+	width: 100%;
+	justify-content: flex-start;
+	gap: 8px;
+	color: var(--text-muted);
+}
+.sk-note-rail-foot button.sk-note-rail-workbench:hover {
+	color: var(--text-normal);
+}
+.sk-note-rail-workbench .sk-note-rail-link-arrow {
+	margin-left: auto;
+}
+.sk-note-rail-workbench-icon {
+	display: inline-flex;
+}

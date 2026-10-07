@@ -29,6 +29,8 @@ export interface TaskInfo extends TaskLocation {
 	title: string;
 	/** The title with links and emphasis as plain text. */
 	plainTitle: string;
+	/** Indented block text without checkbox lines or fenced code, with common indentation removed; empty when absent. */
+	description: string;
 	/** Group tag, lowercased, without "#". */
 	tag: string;
 	/** Every tag of the line, lowercased, without "#". */
@@ -65,6 +67,37 @@ export interface ViewAction {
 	onClick(): void;
 }
 
+export interface ViewTabHost {
+	/** "page" (large) or "side" (narrow side panel). */
+	readonly layout: "page" | "side";
+	/** Opens a note at a line (or its top), like a task row does: Ctrl/Cmd for a new tab. */
+	open(path: string, line: number | null, event?: MouseEvent | KeyboardEvent): void;
+	/** Asks the Workbench to call `update()` of this tab soon. */
+	refresh(): void;
+}
+
+export interface ViewTabInstance {
+	/** Called when the tab must show fresh data (vault changes, refreshViews). Keep focus and scroll. */
+	update?(): void;
+	/** Called when the tab is hidden, the layout changes, or the tab is removed. */
+	destroy?(): void;
+}
+
+export interface ViewTab {
+	/** Unique id, a-z and "-". */
+	id: string;
+	/** Lucide icon. */
+	icon: string;
+	/** Already translated. */
+	label: string;
+	/** Small count next to the label, or null. */
+	count?(): number | null;
+	/** Warning color for the count, or null for its usual color. */
+	countTone?(): "warn" | null;
+	/** Builds the tab in `el` (empty) when it is shown. */
+	mount(el: HTMLElement, host: ViewTabHost): ViewTabInstance | void;
+}
+
 export interface TasksApi {
 	readonly version: 1;
 	/** False until the first read of the vault is done (a "change" event follows). */
@@ -98,10 +131,20 @@ export interface TasksApi {
 
 	/** Adds a button to the header of the open lists; `get` returns it as it is now, or null to hide it. Returns a remove function. */
 	addViewAction(get: () => ViewAction | null): () => void;
-	/** Redraws the open lists soon (after a ViewAction changed). */
+	/** Adds a Workbench tab, after Snailkit's own tabs ("tasks", "home" and "sessions" are theirs). Returns a remove function. */
+	addViewTab(tab: ViewTab): () => void;
+	/** Refreshes the open views soon (after a ViewAction or ViewTab changed). */
 	refreshViews(): void;
 	/** Opens the task list as a page on one tag and its sub-tags. False when no list could open. */
 	openTag(tag: string): Promise<boolean>;
+	/** Reveals the Workbench, selects a registered tab (else Tasks), and optionally its task scope. */
+	openWorkbench(options?: { tab?: string; scope?: "all" | "today" }): Promise<void>;
+}
+
+/** Resolves a Workbench destination without changing a view (`tabs`: the registered tabs). */
+export function resolveWorkbench(options: Parameters<TasksApi["openWorkbench"]>[0], tabs: { has(id: string): boolean }): { tab: string; scope?: "all" | "today" } {
+	const tab = options?.tab && tabs.has(options.tab) ? options.tab : "tasks";
+	return tab === "tasks" && options?.scope ? { tab, scope: options.scope } : { tab };
 }
 
 const MARKER_NAME_RE = /^[a-z][a-z0-9-]*$/;
@@ -118,6 +161,7 @@ function info(t: Task): TaskInfo {
 		text: t.text,
 		title: t.title,
 		plainTitle: plainTitle(t.title),
+		description: t.description,
 		tag: t.primary,
 		tags: [...t.tags],
 		priority: t.priority,
@@ -134,7 +178,7 @@ function location(value: TaskLocation): TaskRef | null {
 }
 
 /** Builds the API over the module's index and writer. `alive` turns false when the module stops. */
-export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () => boolean, hub?: Pick<TasksHub, "viewActions" | "refreshViews" | "showTag">): TasksApi {
+export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () => boolean, hub?: Pick<TasksHub, "viewActions" | "addViewTab" | "refreshViews" | "showTag" | "openWorkbench">): TasksApi {
 	const after = (written: Written | null) => (written && alive() ? index.at(written.path, written.line) : null);
 	const run = async (value: TaskLocation, op: (task: Task) => Promise<Written | null>): Promise<TaskInfo | null> => {
 		const ref = location(value);
@@ -152,6 +196,10 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 
 	return {
 		version: 1,
+		openWorkbench: async (options) => {
+			if (!hub || !alive()) return;
+			await hub.openWorkbench(options);
+		},
 		isReady: () => alive() && index.ready,
 		getTasks: (options) => (alive() ? index.list.filter((t) => options?.includeDone || !t.done).map(info) : []),
 		find: (value) => {
@@ -212,6 +260,11 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 			return () => {
 				if (hub.viewActions.delete(get)) hub.refreshViews();
 			};
+		},
+		addViewTab: (tab) => {
+			if (!hub || !alive() || !tab || typeof tab.id !== "string" || !/^[a-z-]+$/.test(tab.id) || typeof tab.mount !== "function") return () => undefined;
+			// The Workbench (core) keeps the tab, after Brainstorm; it goes away when this module stops.
+			return hub.addViewTab(tab);
 		},
 		refreshViews: () => {
 			if (hub && alive()) hub.refreshViews();

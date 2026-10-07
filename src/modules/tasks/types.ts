@@ -62,6 +62,7 @@ export interface Task extends TaskFields {
 	/** baseKey, with "#2", "#3"... for identical tasks. */
 	key: string;
 	subtasks: Subtask[];
+	description: string;
 }
 
 /** Enough to find a task line again. */

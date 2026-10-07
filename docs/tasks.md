@@ -6,6 +6,8 @@ Every task with a `#tag`, from all your notes, in one list grouped by tag: check
 
 ## What it does
 
+The list is the **Tasks** tab of the [Workbench](workbench.md), Snailkit's window for Home, Tasks and Brainstorm, as a page or in the side panel. Notes recognized by the Brainstorm module have a small lightning icon beside their name in task rows.
+
 Your tasks live where you wrote them: a meeting note, a project note, today's daily note. Tasks gathers every open checkbox that carries a tag into one list, grouped by tag, and lets you act on it from there:
 
 - **Check** a task: it is ticked in its note, with an Undo button for a few seconds.
@@ -24,10 +26,10 @@ Nothing is stored apart: every change is written in the note, in plain Markdown 
 ## How to use it
 
 1. Turn on **Tasks** in **Settings → Snailkit**.
-2. Click the list icon in the left ribbon, or run **Snailkit: Open tasks as a page** from the command palette. Right-click the ribbon icon to open it in the side panel instead.
+2. Click the list icon in the left ribbon, or run **Snailkit: Open the workbench as a page** from the command palette. Right-click the ribbon icon to open it in the side panel instead. An open Workbench keeps the tab it shows; a new one opens on Tasks.
 3. Click a task to see its details, tick its box to complete it, right-click it for every action.
 
-The list adapts to its width. In the side panel it is a compact list whose details unfold under the task. As a page it shows a navigator of views and tags on the left, the list in the middle and the details of the selected task on the right.
+The list adapts to its width. In the side panel it is a compact list whose details unfold under the task; its **Open as a page** button shows the Tasks tab of a page Workbench, whatever tab that page showed. As a page it shows a navigator of views and tags on the left, the list in the middle and the details of the selected task on the right.
 
 Keyboard, once the list has the focus:
 
@@ -123,7 +125,7 @@ A missing note is created (empty: your daily note template is not applied). When
 
 ### Opening a task
 
-**Open in note** (the arrow of a row, `O`, a double click outside the title) shows the note in a tab that already has it, else opens it (in a new tab when the list is a page, so the list stays), and puts the cursor at the end of the task line.
+**Open in note** (the arrow of a row, `O`, a double click outside the title) shows the note in a tab that already has it, else opens it (in a new tab when the list is a page, so the list stays), and puts the cursor at the end of the task line. From a Workbench standing in a new tab (see [Opening by itself](workbench.md#opening-by-itself)), the note takes its place, unless you pinned that tab.
 
 ### Safety
 
@@ -140,7 +142,8 @@ Each tag has a stable color of its own. When the **Tag colors** module is on, it
 - Recurring tasks of the Tasks plugin (`🔁`) are shown as plain tasks: completing one does not create the next occurrence.
 - Quick add creates a missing daily note empty, without your template.
 - Dragging tasks does not work on mobile: use **Move to tag...** from the menu.
-- Changing Snailkit's language closes the open lists (the module restarts).
+- Changing Snailkit's language draws the list again (the module restarts): the scope, the search and the selection are kept.
+- Text typed in the quick add row and not added yet stays there when the list redraws, when you switch to another tab of the Workbench and back, or when the Workbench changes between page and panel. `Esc`, or coming back on another scope, drops it.
 
 ## For developers
 
@@ -168,10 +171,16 @@ Listen to the workspace event `snailkit:services-changed` to know when the API a
 | `setMarker(location, name, value \| null)` | same | Sets or removes a hidden `%%name:value%%` comment in the line. |
 | `addTask({ title, tag, priority?, due?, markers? })` | same | Writes a new open task where quick add writes. |
 | `addViewAction(get)` | remove function | Puts a button in the header of the task list. `get()` returns `{ icon, label, text?, state?, onClick }` as it is now (or null to hide it); it is read again at each redraw. `state`: `"busy"` turns the icon, `"error"` colors it. `text` shows next to the icon when the list is a page. |
-| `refreshViews()` | nothing | Redraws the open lists soon, after a button changed. |
+| `addViewTab(tab)` | remove function | Adds a [Workbench](workbench.md) tab after Snailkit's own tabs (Home, Tasks, Brainstorm). `tab` is `{ id, icon, label, count?, countTone?, mount }`; `icon` is a Lucide name, `label` is already translated, and `count()` returns a number or null. Optional `countTone?(): "warn" \| null` colors the count like overdue task counts when it returns `"warn"`. Ids start with a letter and contain only `a-z` and `-`; `home`, `tasks` and `sessions` are reserved. Invalid or duplicate ids and a stopped module return a no-op remover. The tab goes away when the remover runs or when the Tasks module stops. |
+| `refreshViews()` | nothing | Redraws the open views soon, after a button or tab changed. |
+| `openWorkbench(options?: { tab?: string; scope?: "all" \| "today" })` | `Promise<void>` | Reveals the Workbench used last (page or side panel), or opens a page. Selects `tab` when registered, otherwise Tasks. Applies the optional scope only on Tasks; Today includes overdue tasks. Quietly does nothing after the module stops. |
 | `openTag(tag)` | `Promise<boolean>` | Opens the list as a page on one tag and its sub-tags. |
 
-A `TaskInfo` is a copy of what the line says: `path`, `line` (0-based), `raw` (the whole line), `key` (group tag and words, stable when priority or dates change and when the task moves to another note), `text`, `title`, `plainTitle`, `tag`, `tags`, `priority`, `due`, `done`, `doneDate`, `markers`.
+`ViewTab.mount(el, host)` receives an empty content area and a `ViewTabHost`: readonly `layout` (`"page"` or `"side"`), `open(path, line, event?)` (0-based line or null for the top, Ctrl/Cmd opens a new tab), and `refresh()` to request an update soon. It returns a `ViewTabInstance` or nothing. The instance's optional `update()` runs on view refreshes, including vault changes, `refreshViews()` and `host.refresh()`; keep focus and scroll when updating. Its optional `destroy()` runs when switching away, changing layout, removing the tab or closing the view. Showing it again mounts a fresh instance. Call the remover when your module or plugin stops. The host is the Workbench's, which has more members (see [the Workbench page](workbench.md#for-developers)); `layout`, `open` and `refresh` keep their meaning. Tabs sit in the view header, hidden when only one tab exists. Tab reaches the selected button; Left/Right selects and focuses the adjacent tab (wrapping), and Enter or Space activates it. Warning counts use the same `is-warn` color as overdue task counts. A one-time hint disappears on click, tab change or after eight seconds; its seen state is saved internally, with no settings control. The commands **Open the workbench: tasks** and **Open the workbench: today** select Tasks or its Today scope; the existing page and side-panel command ids stay unchanged.
+
+A `TaskInfo` is a copy of what the task says: `path`, `line` (0-based), `raw` (the whole line), `key` (group tag and words, stable when priority or dates change and when the task moves to another note), `text`, `title`, `plainTitle`, `description`, `tag`, `tags`, `priority`, `due`, `done`, `doneDate`, `markers`.
+
+`description` is the task's indented block text without checkbox lines or fenced code, with common indentation and leading/trailing empty lines removed, joined by `\n` (empty string when absent).
 
 A **location** is `{ path, line, raw }`: any `TaskInfo` works. Every write finds the line again first and resolves to the task as written (with its new `line` and `raw`), or to `null` when nothing was written (line gone or ambiguous, invalid value, module turned off). Writes show no notice; the caller decides what to say. Use the returned task for the next call: the old `raw` no longer matches.
 

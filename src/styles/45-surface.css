@@ -1,0 +1,57 @@
+/* The gliding cursor (src/ui/surface.ts): a pastel shape under the item it rests on, in the
+   hue of that item (--sk-hue). */
+.sk-surface {
+	position: relative;
+}
+.sk-surface-cursor {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 0;
+	width: 0;
+	height: 0;
+	border-radius: 8px;
+	background: hsl(var(--sk-hue, 220) var(--sk-pill-s) var(--sk-pill-l));
+	opacity: 0;
+	overflow: hidden;
+	pointer-events: none;
+	transition: transform var(--sk-slow) var(--sk-spring), width var(--sk-slow) var(--sk-spring), height var(--sk-slow) var(--sk-spring), background-color var(--sk-mid) var(--sk-ease), opacity var(--sk-fast);
+}
+.sk-surface-cursor.is-shown {
+	opacity: 1;
+}
+.sk-surface-cursor.is-gray {
+	background: var(--sk-hover);
+}
+.sk-surface-cursor.is-mouse {
+	transition: transform var(--sk-mid) var(--sk-ease), width var(--sk-mid) var(--sk-ease), height var(--sk-mid) var(--sk-ease), background-color var(--sk-mid) var(--sk-ease), opacity var(--sk-fast);
+}
+.sk-surface-cursor.is-snap {
+	transition: opacity var(--sk-fast);
+}
+.sk-surface-item {
+	position: relative;
+	z-index: 1;
+}
+.sk-surface-item.is-hi:not(.is-gray) {
+	color: hsl(var(--sk-hue, 220) var(--sk-ink-s) var(--sk-ink-l));
+}
+.sk-surface-cursor.is-held::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: var(--sk-accent-line);
+	transform-origin: left;
+	animation: sk-surface-fill 450ms linear both;
+}
+@keyframes sk-surface-fill {
+	from { transform: scaleX(0); }
+	to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-surface-cursor,
+	.sk-surface-cursor.is-mouse {
+		transition: opacity 120ms;
+	}
+	.sk-surface-cursor.is-held::after { animation: none; }
+}

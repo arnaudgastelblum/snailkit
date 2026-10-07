@@ -40,6 +40,12 @@ export const es: StringsOf<typeof en> = {
 
 	"reason.desktop": "necesita la aplicación de escritorio.",
 
+	"workbench.title": "Taller",
+	"workbench.tabs-hint": "Tus otras herramientas están aquí: cambia con estas pestañas.",
+	"workbench.empty.title": "Todavía no hay nada aquí",
+	"workbench.empty.text": "El taller reúne las pestañas de Inicio, Tareas y Lluvia de ideas. Activa una de estas herramientas en los ajustes de Snailkit.",
+	"workbench.empty.action": "Abrir los ajustes",
+
 	"common.cancel": "Cancelar",
 	"common.confirm": "Confirmar",
 	"common.create": "Crear",

@@ -1,5 +1,5 @@
 // Note rail: a quiet row of icons on every note, each opening a sliding panel (Contents, Bookmarks,
-// Open tasks, Calendar). The rail and panels live in rail/ and panels/, the controller keeps them
+// Open tasks, Calendar, and Idea sessions with that module). The rail and panels live in rail/ and panels/, the controller keeps them
 // on every note pane.
 import { moment } from "obsidian";
 import { defineModule } from "../../core/module";
@@ -52,6 +52,7 @@ function railSection(page: SettingsPage<NoteRailSettings>): void {
 	const rail = page.section(page.t("settings.rail"), page.t("settings.rail-desc"));
 	rail.toggle("showPlace", page.t("settings.show-place"), { desc: page.t("settings.show-place-desc") });
 	rail.toggle("showToday", page.t("rail.today"), { desc: page.t("settings.show-today-desc") });
+	rail.toggle("showSession", page.t("rail.session"), { desc: page.t("settings.show-session-desc") });
 	const order = railOrder(page.settings.buttonOrder);
 	order.forEach((id, index) => {
 		const row = rail.toggle(SHOW_KEY[id], page.t(`panel.${id}`), { desc: page.t(`settings.button-${id}`) });
@@ -75,6 +76,7 @@ function railSection(page: SettingsPage<NoteRailSettings>): void {
 		left: page.t("settings.position-left"),
 		right: page.t("settings.position-right"),
 	}, { desc: page.t("settings.mobile-position-desc") });
+	rail.toggle("openOnHover", page.t("settings.hover-open"), { desc: page.t("settings.hover-open-desc") });
 	rail.number("restOpacity", page.t("settings.opacity"), { desc: page.t("settings.opacity-desc"), min: 0.2, max: 1, step: 0.05 });
 	rail.toggle("makeRoom", page.t("settings.room"), { desc: page.t("settings.room-desc") });
 }

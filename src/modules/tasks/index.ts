@@ -1,11 +1,11 @@
-// Tasks: every tagged task of the vault in one list (page or side panel), plus a public API.
+// Tasks: every tagged task of the vault in one list (the Tasks tab of the Workbench, as a page or
+// in the side panel), plus a public API.
 import { Menu, TFile } from "obsidian";
 import { defineModule } from "../../core/module";
 import { createTasksApi } from "./api";
 import { TasksHub } from "./hub";
 import { parseFolderList, parseTagList } from "./parse";
-import { VIEW_TYPE, type TasksSettings } from "./types";
-import { TasksView } from "./view";
+import type { TasksSettings } from "./types";
 import { en } from "./i18n/en";
 import { fr } from "./i18n/fr";
 import { nl } from "./i18n/nl";
@@ -29,7 +29,8 @@ export const tasks = defineModule<TasksSettings>({
 		const hub = new TasksHub(ctx);
 		ctx.register(() => hub.dispose());
 
-		ctx.registerView(VIEW_TYPE, (leaf) => new TasksView(leaf, hub));
+		// The Workbench is a view of the core: this module adds its tab there (removed when it stops).
+		ctx.workbench.addTab(hub.tab());
 		const ribbon = ctx.addRibbonIcon("list-checks", ctx.t("ribbon.open"), () => void hub.activate("page"));
 		ctx.registerDomEvent(ribbon, "contextmenu", (event) => {
 			event.preventDefault();
@@ -41,6 +42,8 @@ export const tasks = defineModule<TasksSettings>({
 		});
 		ctx.addCommand({ id: "open-page", name: ctx.t("command.open-page"), callback: () => void hub.activate("page") });
 		ctx.addCommand({ id: "open-side", name: ctx.t("command.open-side"), callback: () => void hub.activate("side") });
+		ctx.addCommand({ id: "open-tasks", name: ctx.t("command.open-tasks"), callback: () => void hub.openWorkbench({ tab: "tasks" }) });
+		ctx.addCommand({ id: "open-today", name: ctx.t("command.open-today"), callback: () => void hub.openWorkbench({ tab: "tasks", scope: "today" }) });
 		ctx.addCommand({ id: "new-task", name: ctx.t("command.new-task"), callback: () => void hub.newTask() });
 
 		// The index reads the vault once the layout is ready, then follows every change.
@@ -70,8 +73,8 @@ export const tasks = defineModule<TasksSettings>({
 		});
 		// Colors from the Tag colors module come and go with it.
 		ctx.onServicesChange(() => hub.refreshViews());
-		// Today moves at midnight: due labels and the Today view follow.
-		ctx.registerInterval(window.setInterval(() => hub.refreshViews(), 60_000));
+		// Today moves at midnight: due labels and the Today view follow the Workbench's own clock
+		// (it draws its shown tabs again every minute).
 
 		ctx.provide("tasks", createTasksApi(hub.index, hub.writer, () => hub.alive, hub));
 	},

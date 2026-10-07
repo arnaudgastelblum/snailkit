@@ -8,7 +8,8 @@ import {
 } from "./edit";
 import { parseTaskText, taskKey } from "./parse";
 import type { TaskIndex } from "./task-index";
-import { VIEW_TYPE, type Context, type Priority, type Task, type TaskRef } from "./types";
+import type { Context, Priority, Task, TaskRef } from "./types";
+import { openNoteAt } from "../../core/workbench/open";
 
 /** Puts the line back as it was. Resolves to false when the line changed since. */
 export type Undo = () => Promise<boolean>;
@@ -247,28 +248,20 @@ export class TaskWriter {
 
 	// ----- opening -----
 
-	/** Opens the note at the task line, without replacing the list when it is a page. */
-	async openTask(task: TaskRef): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(task.path);
-		if (!(file instanceof TFile)) return;
-		const workspace = this.app.workspace;
-		let leaf = null as WorkspaceLeaf | null;
-		workspace.iterateAllLeaves((l) => {
-			if (!leaf && l.view instanceof MarkdownView && l.view.file?.path === task.path) leaf = l;
+	/**
+	 * Opens the note at the task line, without replacing the list when it is a page. From a
+	 * transient Workbench (a new tab), `replace` is its leaf: the note takes its place.
+	 */
+	async openTask(task: TaskRef, event?: MouseEvent | KeyboardEvent, replace?: WorkspaceLeaf | null): Promise<void> {
+		await this.openNote(task.path, task.line, event, task.raw, replace);
+	}
+
+	/** The Workbench's rules (src/core/workbench/open.ts); the task line is found again by its text. */
+	async openNote(path: string, line: number | null, event?: MouseEvent | KeyboardEvent, raw?: string, replace?: WorkspaceLeaf | null): Promise<void> {
+		await openNoteAt(this.app, path, line, {
+			event,
+			replace,
+			locate: raw === undefined ? undefined : (lines) => locateLine(lines, line ?? 0, raw),
 		});
-		if (!leaf) {
-			const recent = workspace.getMostRecentLeaf();
-			const listInMain = recent?.view.getViewType() === VIEW_TYPE;
-			leaf = workspace.getLeaf(listInMain ? "tab" : false);
-			await leaf.openFile(file);
-		}
-		workspace.setActiveLeaf(leaf, { focus: true });
-		const view = leaf.view;
-		if (!(view instanceof MarkdownView)) return;
-		const lines = view.editor.getValue().split(/\r?\n/);
-		const at = Math.max(0, locateLine(lines, task.line, task.raw));
-		const ch = lines[at]?.length ?? 0;
-		view.editor.setCursor({ line: at, ch });
-		view.editor.scrollIntoView({ from: { line: at, ch: 0 }, to: { line: at, ch } }, true);
 	}
 }

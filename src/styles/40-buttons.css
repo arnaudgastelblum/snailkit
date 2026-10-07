@@ -1,0 +1,177 @@
+/* Shared buttons. One family for every module:
+   .sk-btn              soft (default): light fill, for most actions
+   .sk-btn.is-primary   the one main action of a view or a window
+   .sk-btn.is-ghost     quiet: cancel, secondary links
+   .sk-btn.is-icon      square, icon only (give it an aria-label)
+   .sk-btn.is-s         small size (default is medium)
+   <kbd> inside a button shows its shortcut.
+   .sk-segm             segmented control: .sk-btn children with aria-pressed or aria-selected,
+                        plus one .sk-segm-thumb that the module moves under the active one. */
+button.sk-btn,
+a.sk-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	height: 32px;
+	padding: 0 13px;
+	border: 1px solid transparent;
+	border-radius: 9px;
+	background: var(--sk-surface-sunken);
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: 13.5px;
+	font-weight: 500;
+	line-height: 1;
+	text-decoration: none;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+	-webkit-user-select: none;
+	transition: background var(--sk-fast), color var(--sk-fast), transform var(--sk-fast) var(--sk-ease), box-shadow var(--sk-fast), border-color var(--sk-fast);
+}
+button.sk-btn:hover,
+a.sk-btn:hover {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+button.sk-btn:active,
+a.sk-btn:active {
+	transform: scale(0.97);
+}
+button.sk-btn:focus-visible,
+a.sk-btn:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--sk-surface), 0 0 0 4px var(--sk-accent);
+}
+button.sk-btn:disabled {
+	opacity: 0.4;
+	pointer-events: none;
+}
+.sk-btn svg {
+	width: 16px;
+	height: 16px;
+	flex: none;
+}
+.sk-btn kbd {
+	margin-right: -4px;
+	padding: 0 4px;
+	border: 1px solid var(--sk-line);
+	border-bottom-width: 1.5px;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--text-faint);
+	font-family: inherit;
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+button.sk-btn.is-primary,
+a.sk-btn.is-primary {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+button.sk-btn.is-primary:hover,
+a.sk-btn.is-primary:hover {
+	background: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
+}
+.sk-btn.is-primary kbd {
+	border-color: color-mix(in srgb, var(--text-on-accent) 35%, transparent);
+	color: var(--text-on-accent);
+	opacity: 0.8;
+}
+
+button.sk-btn.is-ghost,
+a.sk-btn.is-ghost {
+	background: transparent;
+	color: var(--text-muted);
+}
+button.sk-btn.is-ghost:hover,
+a.sk-btn.is-ghost:hover {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+
+button.sk-btn.is-icon {
+	width: 32px;
+	padding: 0;
+}
+button.sk-btn.is-s,
+a.sk-btn.is-s {
+	height: 26px;
+	padding: 0 10px;
+	gap: 5px;
+	border-radius: 7px;
+	font-size: 12.5px;
+}
+button.sk-btn.is-s.is-icon {
+	width: 26px;
+	padding: 0;
+}
+.sk-btn.is-s svg {
+	width: 14px;
+	height: 14px;
+}
+.sk-btn.is-s kbd {
+	font-size: 10.5px;
+}
+
+.sk-segm {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 10px;
+	background: var(--sk-surface-sunken);
+	isolation: isolate;
+}
+.sk-segm button.sk-btn {
+	position: relative;
+	z-index: 1;
+	height: 26px;
+	padding: 0 11px;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+.sk-segm button.sk-btn:hover {
+	background: transparent;
+	color: var(--text-normal);
+}
+.sk-segm button.sk-btn:is([aria-pressed="true"], [aria-selected="true"]) {
+	color: var(--text-normal);
+}
+.sk-segm button.sk-btn:focus-visible {
+	box-shadow: 0 0 0 2px var(--sk-accent);
+}
+.sk-segm-thumb {
+	position: absolute;
+	z-index: 0;
+	top: 3px;
+	left: 0;
+	height: 26px;
+	border-radius: 7px;
+	background: var(--sk-surface);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.03);
+	transition: transform var(--sk-slow) var(--sk-ease), width var(--sk-slow) var(--sk-ease);
+}
+.sk-segm.is-m {
+	border-radius: 11px;
+}
+.sk-segm.is-m button.sk-btn {
+	height: 30px;
+	padding: 0 14px;
+	font-size: 13.5px;
+}
+.sk-segm.is-m .sk-segm-thumb {
+	height: 30px;
+}
+/* In dark themes the page is darker than the track: the thumb takes the raised button color so it
+   still reads as lifted, not sunken. */
+body.theme-dark .sk-segm-thumb {
+	background: var(--interactive-normal);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}

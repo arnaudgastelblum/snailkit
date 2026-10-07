@@ -160,9 +160,11 @@ export function scanTasks(lines: readonly string[], path: string, flags: Readonl
 		if (!fields.primary) continue;
 		const end = blockEnd(lines, i);
 		const subtasks: Subtask[] = [];
+		const description: string[] = [];
 		for (let j = i + 1; j <= end; j++) {
 			if (fence[j]) continue;
 			const sub = lines[j].match(TASK_RE);
+			if (!sub) description.push(lines[j]);
 			if (sub && " xX".includes(sub[3]) && !parseTaskText(sub[4], flags).primary) {
 				subtasks.push({ line: j, raw: lines[j], done: sub[3] !== " ", text: sub[4].trim() });
 			}
@@ -180,9 +182,27 @@ export function scanTasks(lines: readonly string[], path: string, flags: Readonl
 			baseKey,
 			key: baseKey,
 			subtasks,
+			description: unindentDescription(description),
 		});
 	}
 	return tasks;
+}
+
+/** Removes common indentation while preserving paragraph breaks and deeper indentation. */
+function unindentDescription(lines: string[]): string {
+	while (lines.length && !lines[0].trim()) lines.shift();
+	while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+	let common = Infinity;
+	for (const line of lines) {
+		if (line.trim()) common = Math.min(common, indentWidth(line.match(/^\s*/)![0]));
+	}
+	return lines.map((line) => {
+		if (!line.trim()) return "";
+		let width = 0;
+		let at = 0;
+		while (width < common) width += line[at++] === "\t" ? 4 : 1;
+		return " ".repeat(width - common) + line.slice(at);
+	}).join("\n");
 }
 
 export interface InlinePart {

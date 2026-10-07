@@ -1,0 +1,175 @@
+/* The Workbench (src/core/workbench): one view, its tabs in Obsidian's view header (or in a slim
+   row on top where that header is hidden), and the shown tab filling the rest. */
+.sk-wb-view {
+	display: flex;
+	flex-direction: column;
+	padding: 0 !important;
+	overflow: hidden !important;
+	outline: none;
+}
+.sk-wb-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+}
+/* Where a tab is mounted: it scrolls by itself unless the tab fills it (the Tasks tab does). */
+.sk-wb-tab {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+/* Tabs: a few quiet words in the view header, the active one underlined. */
+.sk-wb-tabs-header {
+	position: relative;
+	display: flex;
+	align-items: center;
+	flex: none;
+	min-width: 0;
+}
+.sk-wb-tabs-header:not(.is-in-header) {
+	padding: 6px 8px 4px;
+	border-bottom: 1px solid var(--sk-line);
+}
+.sk-wb-tabs-header.is-in-header {
+	margin-inline: 6px;
+	-webkit-app-region: no-drag;
+}
+.sk-wb-tabs-header[hidden] {
+	display: none;
+}
+/* The tabs already name the view: the title of the header (shown by the default theme) would repeat it. */
+.view-header:has(> .sk-wb-tabs-header.is-in-header:not([hidden])) > .view-header-title-container {
+	visibility: hidden;
+}
+.sk-wb-tabs {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+}
+.sk-wb-tabs button.sk-wb-tab-button {
+	min-width: 0;
+	height: 24px;
+	padding: 0 8px;
+	gap: 5px;
+	color: var(--text-faint);
+	font-size: 12.5px;
+}
+.sk-wb-tab-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+}
+.sk-wb-tabs button.sk-wb-tab-button svg {
+	width: 13px;
+	height: 13px;
+	stroke-width: 1.75;
+}
+.sk-wb-tabs button.sk-wb-tab-button:hover {
+	background: var(--sk-hover);
+	color: var(--text-muted);
+}
+.sk-wb-tabs button.sk-wb-tab-button[aria-selected="true"] {
+	color: var(--text-normal);
+}
+.sk-wb-tabs-line {
+	position: absolute;
+	left: 0;
+	bottom: -3px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--sk-accent);
+	pointer-events: none;
+	transition: transform var(--sk-slow) var(--sk-ease), width var(--sk-slow) var(--sk-ease);
+}
+.sk-wb-tab-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-wb-tab-count {
+	color: var(--text-faint);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+.sk-wb-tab-count.is-warn {
+	color: var(--sk-danger);
+	font-weight: 600;
+}
+.sk-wb-tabs-header button.sk-wb-tabs-hint {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 8px);
+	left: 0;
+	width: max-content;
+	max-width: 260px;
+	height: auto;
+	padding: 8px 12px;
+	box-shadow: var(--sk-shadow-pop);
+	background: var(--sk-surface);
+	white-space: normal;
+	text-align: left;
+	animation: sk-rise var(--sk-slow) var(--sk-ease);
+}
+/* Obsidian's view header is its own layer (z-index 1): lift it while the hint shows, so the hint
+   stays above the tab's content (the Home search field has its own layer). */
+.view-header:has(.sk-wb-tabs-hint) {
+	z-index: 40;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-wb-tabs-line {
+		transition: none;
+	}
+}
+
+/* No tab at all: one sentence and the way to the settings. */
+.sk-wb-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin: auto;
+	padding: 56px 24px;
+	color: var(--text-muted);
+	text-align: center;
+}
+.sk-wb-empty-icon {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	margin-bottom: 14px;
+	border-radius: var(--sk-radius);
+	background: var(--sk-hover);
+	color: var(--text-faint);
+}
+.sk-wb-empty-icon svg {
+	width: 22px;
+	height: 22px;
+}
+.sk-wb-empty-title {
+	margin-bottom: 4px;
+	color: var(--text-normal);
+	font-size: 14.5px;
+	font-weight: 600;
+}
+.sk-wb-empty-text {
+	max-width: 320px;
+	margin-bottom: 16px;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+/* Names for screen readers (an aria-label would show as Obsidian's tooltip over every tab). */
+.sk-wb-sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	pointer-events: none;
+}

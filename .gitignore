@@ -1,7 +1,7 @@
 node_modules/
 data.json
-main.js
-styles.css
+/main.js
+/styles.css
 release/
 *.map
 test/.out/

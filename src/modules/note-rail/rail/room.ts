@@ -28,6 +28,7 @@ export class RoomController {
 			if (s !== sizer) {
 				s.style.transform = "";
 				s.removeClass("sk-note-rail-room");
+				s.parentElement?.removeClass("sk-note-rail-room-clip");
 				this.sizers.delete(s);
 			}
 		}
@@ -40,6 +41,7 @@ export class RoomController {
 		if (shift === this.shift && sizer.style.transform === (shift ? `translateX(${shift}px)` : "")) return;
 		this.shift = shift;
 		sizer.style.transform = shift ? `translateX(${shift}px)` : "";
+		this.clip(sizer, shift !== 0);
 		this.remeasureEditorSoon(sizer);
 	}
 
@@ -47,10 +49,30 @@ export class RoomController {
 		for (const s of this.sizers) {
 			s.style.transform = "";
 			s.removeClass("sk-note-rail-room");
+			s.parentElement?.removeClass("sk-note-rail-room-clip");
 		}
 		this.sizers.clear();
 		this.shift = 0;
 		this.remeasureEditorSoon(null);
+	}
+
+	/**
+	 * A full-width column moved aside would give the note a sideways scrollbar: the scroller clips
+	 * while the column is moved, and until it has glided back.
+	 */
+	private clip(sizer: HTMLElement, on: boolean): void {
+		const scroller = sizer.parentElement;
+		if (!scroller) return;
+		if (on) {
+			scroller.addClass("sk-note-rail-room-clip");
+			return;
+		}
+		const done = () => {
+			if (!sizer.style.transform) scroller.removeClass("sk-note-rail-room-clip");
+		};
+		sizer.addEventListener("transitionend", done, { once: true });
+		// No transition (reduced motion, column already in place): the event never comes.
+		window.setTimeout(done, 700);
 	}
 
 	private visibleSizer(): HTMLElement | null {
@@ -71,12 +93,26 @@ export class RoomController {
 		// (mid-transition it is neither the old nor the new target).
 		const rect = sizer.getBoundingClientRect();
 		const tx = currentTranslateX(sizer);
-		const textLeft = rect.left - tx + padL;
-		const textRight = rect.right - tx - padR;
+		let textLeft = rect.left - tx + padL;
+		let textRight = rect.right - tx - padR;
+		// Readable line length is often a narrower text column inside a full-width sizer (Obsidian's
+		// default theme, where each line is centered): measure a line then.
+		const column = sizer.querySelector<HTMLElement>(":scope > .cm-contentContainer > .cm-content > .cm-line, :scope > .markdown-preview-section");
+		if (column) {
+			const c = column.getBoundingClientRect();
+			if (c.width > 0 && c.width < rect.width - padL - padR - 1) {
+				textLeft = c.left - tx;
+				textRight = c.right - tx;
+			}
+		}
 		const scrollRight = scrollRect.left + scroller.clientWidth;
 		// The card is positioned with offsets (its own transform animates, so do not use its rect).
-		const panelLeft = host.left + panel.offsetLeft;
-		const panelRight = panelLeft + panel.offsetWidth;
+		// Its width may be gliding to another panel's: the inner column already has the final width.
+		const inner = panel.firstElementChild as HTMLElement | null;
+		const width = inner ? inner.offsetWidth + 2 : panel.offsetWidth;
+		const anchor = host.left + panel.offsetLeft;
+		const panelLeft = side === "left" ? anchor : anchor + panel.offsetWidth - width;
+		const panelRight = panelLeft + width;
 
 		if (side === "left") {
 			const need = panelRight + GUTTER - textLeft;

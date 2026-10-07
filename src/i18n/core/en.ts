@@ -1,4 +1,5 @@
 // Core strings, English reference. Keys starting with `common.` are shared words any module may use.
+// `workbench.*` belongs to the Workbench view (src/core/workbench).
 export const en = {
 	"plugin.tagline": "Small, calm tools for your notes. Turn on only the ones you want.",
 	"plugin.welcome": "Snailkit is installed. Pick the tools you want in its settings.",
@@ -37,6 +38,12 @@ export const en = {
 	"page.reset-done": "Settings of {name} reset.",
 
 	"reason.desktop": "it needs the desktop app.",
+
+	"workbench.title": "Workbench",
+	"workbench.tabs-hint": "Your other tools live here: switch with these tabs.",
+	"workbench.empty.title": "Nothing here yet",
+	"workbench.empty.text": "The Workbench holds the tabs of Home, Tasks and Brainstorm. Turn one of these tools on in the settings of Snailkit.",
+	"workbench.empty.action": "Open the settings",
 
 	"common.cancel": "Cancel",
 	"common.confirm": "Confirm",

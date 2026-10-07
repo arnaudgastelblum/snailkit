@@ -101,13 +101,13 @@ class CalendarPanel implements PanelInstance {
 		this.rootEl = body.createDiv("sk-note-rail-cal");
 
 		const bar = this.rootEl.createDiv("sk-note-rail-cal-bar");
-		this.monthBtn = bar.createEl("button", { cls: "sk-note-rail-cal-month", attr: { type: "button", "aria-label": ctx.t("calendar.back-today") } });
+		this.monthBtn = bar.createEl("button", { cls: "sk-btn is-ghost sk-note-rail-cal-month", attr: { type: "button", "aria-label": ctx.t("calendar.back-today") } });
 		this.monthNameEl = this.monthBtn.createEl("b");
 		this.yearEl = this.monthBtn.createSpan();
-		const todayBtn = bar.createEl("button", { cls: "sk-note-rail-cal-today", text: ctx.t("calendar.today"), attr: { type: "button" } });
-		const prev = bar.createEl("button", { cls: "sk-note-rail-icon-btn sk-note-rail-cal-nav", attr: { type: "button", "aria-label": ctx.t("calendar.previous") } });
+		const todayBtn = bar.createEl("button", { cls: "sk-btn is-s sk-note-rail-cal-today", text: ctx.t("calendar.today"), attr: { type: "button" } });
+		const prev = bar.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-note-rail-cal-nav", attr: { type: "button", "aria-label": ctx.t("calendar.previous") } });
 		setIcon(prev, "chevron-left");
-		const next = bar.createEl("button", { cls: "sk-note-rail-icon-btn sk-note-rail-cal-nav", attr: { type: "button", "aria-label": ctx.t("calendar.next") } });
+		const next = bar.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-note-rail-cal-nav", attr: { type: "button", "aria-label": ctx.t("calendar.next") } });
 		setIcon(next, "chevron-right");
 
 		this.viewportEl = this.rootEl.createDiv("sk-note-rail-cal-viewport");
@@ -234,7 +234,7 @@ class CalendarPanel implements PanelInstance {
 			}
 			for (const day of week) {
 				const cell = row.createEl("button", {
-					cls: "sk-note-rail-day",
+					cls: "sk-btn is-ghost is-s sk-note-rail-day",
 					attr: { type: "button", role: "gridcell", tabindex: "-1", "data-key": day.key },
 				});
 				cell.toggleClass("is-out", !day.inMonth);
@@ -673,8 +673,8 @@ class CalendarPanel implements PanelInstance {
 		words.createEl("b", { text: new Intl.DateTimeFormat(this.ctx.lang, { weekday: "long", month: "long", day: "numeric" }).format(parseKey(key).toDate()) });
 		words.appendText(after ?? "");
 		const actions = el.createDiv("sk-note-rail-cal-confirm-actions");
-		const cancel = actions.createEl("button", { text: this.ctx.t("common.cancel"), attr: { type: "button" } });
-		const yes = actions.createEl("button", { cls: "mod-cta", text: this.ctx.t("common.create"), attr: { type: "button" } });
+		const cancel = actions.createEl("button", { cls: "sk-btn is-ghost is-s", text: this.ctx.t("common.cancel"), attr: { type: "button" } });
+		const yes = actions.createEl("button", { cls: "sk-btn is-primary is-s", text: this.ctx.t("common.create"), attr: { type: "button" } });
 		cancel.addEventListener("click", () => this.cancelConfirm(true));
 		yes.addEventListener("click", () => {
 			this.cancelConfirm(false);

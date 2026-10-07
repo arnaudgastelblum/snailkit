@@ -2,7 +2,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { TFile } from "obsidian";
-import { createTasksApi } from "../src/modules/tasks/api";
+import { moduleWorkbench, WorkbenchCore } from "../src/core/workbench";
+import { createTasksApi, resolveWorkbench, type ViewTab } from "../src/modules/tasks/api";
+import { TasksHub } from "../src/modules/tasks/hub";
 import {
 	insertTaskLine, insertToken, locateLine, minimalChange, newTaskPath, removeTag, retagText, retitleText,
 	setDoneLine, setDueText, setMarkerText, setPriorityText,
@@ -79,6 +81,72 @@ test("scanning a note skips frontmatter, code blocks, untagged and other statuse
 	assert.deepEqual(tasks[0].subtasks.map((s) => [s.text, s.done]), [["Step one", true], ["Step two", false]]);
 	assert.equal(tasks[0].raw, "- [ ] Open #home");
 	assert.equal(tasks[0].path, "Notes/A.md");
+});
+
+test("descriptions collect two lines and stop at the end of the task block", () => {
+	const [task] = scanTasks([
+		"- [ ] Reorganise the garage #home",
+		"\tClear the back shelf first.",
+		"\tCheck the wall brackets.",
+		"Next paragraph",
+		"\tOutside the block",
+	], "Notes/A.md", FLAGS);
+	assert.equal(task.description, "Clear the back shelf first.\nCheck the wall brackets.");
+});
+
+test("descriptions preserve empty paragraphs and remove only common indentation", () => {
+	const [task] = scanTasks([
+		"  - [ ] Plan #project/website",
+		"    ",
+		"    First paragraph.",
+		" \t ",
+		"      More detail.",
+		"\tLast paragraph.",
+		"    ",
+		"    - [ ] Final step",
+	], "Notes/A.md", FLAGS);
+	assert.equal(task.description, "First paragraph.\n\n  More detail.\nLast paragraph.");
+});
+
+test("descriptions exclude all checkbox lines among their text", () => {
+	const [task] = scanTasks([
+		"- [ ] Plan #home",
+		"\tFirst line.",
+		"\t- [ ] Step one",
+		"\t- [x] Step two",
+		"\t- [>] Deferred step",
+		"\t- [ ] Tagged step #project/website",
+		"\tLast line.",
+	], "Notes/A.md", FLAGS);
+	assert.equal(task.description, "First line.\nLast line.");
+	assert.equal(task.subtasks.length, 2);
+});
+
+test("descriptions are empty when there is no block text", () => {
+	const tasks = scanTasks([
+		"- [ ] No block #home",
+		"- [ ] Only subtasks #home",
+		"\t- [ ] Step",
+		"\t ",
+	], "Notes/A.md", FLAGS);
+	assert.deepEqual(tasks.map((task) => task.description), ["", ""]);
+});
+
+test("descriptions exclude fence delimiters and contents", () => {
+	const tasks = scanTasks([
+		"- [ ] Plan #home",
+		"\tBefore code.",
+		"\t```text",
+		"\tHidden text",
+		"\t- [ ] Hidden task #home",
+		"\t```",
+		"\tAfter code.",
+		"- [ ] Only code #home",
+		"\t~~~",
+		"\tHidden text",
+		"\t~~~",
+	], "Notes/A.md", FLAGS);
+	assert.deepEqual(tasks.map((task) => task.description), ["Before code.\nAfter code.", ""]);
 });
 
 test("lists in settings and folders", () => {
@@ -200,7 +268,7 @@ test("quick add reads priority and due date shortcuts in every language", () => 
 // ----- grouping -----
 
 function task(over: Partial<Task>): Task {
-	const base = { path: "A.md", line: 0, raw: "", indent: "", text: "", done: false, tags: [], primary: "home", priority: null, due: null, doneDate: null, title: "t", markers: {}, baseKey: "", key: "", subtasks: [] };
+	const base = { path: "A.md", line: 0, raw: "", indent: "", text: "", done: false, tags: [], primary: "home", priority: null, due: null, doneDate: null, title: "t", markers: {}, baseKey: "", key: "", subtasks: [], description: "" };
 	const t = { ...base, ...over } as Task;
 	t.key = t.key || `${t.primary}|${t.title}|${t.path}|${t.line}`;
 	if (!over.tags) t.tags = [t.primary];
@@ -299,6 +367,22 @@ function fakeVault(files: Record<string, string>, settings: Partial<TasksSetting
 	return { api, index, files, stop: () => (alive = false) };
 }
 
+test("the version 1 API returns descriptions when reading and updating tasks", async () => {
+	const { api, index } = fakeVault({
+		"Projects/Website.md": "- [ ] Fix the footer #project/website\n\tCheck the links.\n\t\n\tReview the layout.\n- [ ] Publish #project/website",
+	});
+	await index.build();
+	const [footer, publish] = api.getTasks();
+	const description = "Check the links.\n\nReview the layout.";
+	assert.equal(api.version, 1);
+	assert.equal(footer.description, description);
+	assert.equal(publish.description, "");
+	assert.equal(api.find(footer)?.description, description);
+	footer.description = "Changed copy";
+	assert.equal(api.find(footer)?.description, description);
+	assert.equal((await api.setPriority(footer, "high"))?.description, description);
+});
+
 test("the API reads tasks, writes them back, and refuses lines that moved away", async () => {
 	const { api, index, files, stop } = fakeVault({
 		"Projects/Website.md": "# Website\n- [ ] Fix the footer #project/website #urgent\n- [x] Old #project/website ✅ 2026-09-01",
@@ -365,7 +449,7 @@ test("identical tasks get their own keys, and the index keeps live edits made du
 });
 
 test("view actions: added, refreshed, removed, and refused once the module is off", () => {
-	const hub = { viewActions: new Set<() => null>(), refreshes: 0, refreshViews() { this.refreshes++; }, showTag: async () => true };
+	const hub = { openWorkbench: async () => {}, addViewTab: () => () => undefined, viewActions: new Set<() => null>(), refreshes: 0, refreshViews() { this.refreshes++; }, showTag: async () => true };
 	let alive = true;
 	const api = createTasksApi({} as TaskIndex, {} as TaskWriter, () => alive, hub);
 	const get = () => null;
@@ -382,10 +466,74 @@ test("view actions: added, refreshed, removed, and refused once the module is of
 	assert.equal(hub.viewActions.size, 0);
 });
 
+/** A running Tasks hub over a fake vault, with the core's Workbench registry; stop() stops the module. */
+function fakeHub() {
+	(globalThis as { window?: unknown }).window ??= globalThis;
+	const core = new WorkbenchCore();
+	const cleanups: Array<() => unknown> = [];
+	const { index } = fakeVault({});
+	const ctx = {
+		...(index as unknown as { ctx: Context }).ctx,
+		workbench: moduleWorkbench(core, (cleanup) => cleanups.push(cleanup)),
+		service: () => undefined,
+		translators: () => [],
+	} as unknown as Context;
+	const hub = new TasksHub(ctx);
+	let alive = true;
+	const api = createTasksApi(hub.index, hub.writer, () => alive, hub);
+	const stop = () => {
+		alive = false;
+		hub.dispose();
+		for (const cleanup of cleanups.splice(0)) cleanup();
+	};
+	return { core, hub, api, stop };
+}
+
+test("view tabs: registered in the core after Snailkit's tabs, unique ids, removal and a stopped module", () => {
+	const { core, api, stop } = fakeHub();
+	core.addTab({ id: "sessions", order: 30, icon: "zap", label: "Brainstorms", mount() {} });
+	core.addTab({ id: "home", order: 10, icon: "house", label: "Home", mount() {} });
+	const tab: ViewTab = { id: "example-tab", icon: "zap", label: "Example", mount() {} };
+	const remove = api.addViewTab(tab);
+	assert.equal(api.version, 1);
+	assert.equal(core.get(tab.id), tab);
+	assert.deepEqual(core.ids(), ["home", "sessions", "example-tab"]);
+	api.addViewTab({ ...tab })();
+	for (const id of ["", "tasks", "home", "sessions", "Bad", "two words", "tab1", "tab/thing", "tab_thing"]) api.addViewTab({ ...tab, id })();
+	assert.deepEqual(core.ids(), ["home", "sessions", "example-tab"]);
+	assert.equal(core.get("sessions")?.label, "Brainstorms", "a companion never replaces Snailkit's own tabs");
+	remove();
+	remove();
+	assert.equal(core.get(tab.id), undefined);
+	const removeAgain = api.addViewTab(tab);
+	remove();
+	assert.equal(core.get(tab.id), tab, "an old remover cannot remove a new registration");
+	stop();
+	assert.equal(core.get(tab.id), undefined, "the tab goes away when the Tasks module stops");
+	removeAgain();
+	api.addViewTab(tab)();
+	assert.equal(core.get(tab.id), undefined);
+	createTasksApi({} as TaskIndex, {} as TaskWriter, () => true).addViewTab(tab)();
+	core.dispose();
+});
+
+test("the Tasks tab joins the core Workbench in its place", () => {
+	const { core, hub, stop } = fakeHub();
+	core.addTab({ id: "sessions", order: 30, icon: "zap", label: "Brainstorms", mount() {} });
+	core.addTab({ id: "other", icon: "x", label: "Other", mount() {} });
+	hub.ctx.workbench.addTab(hub.tab());
+	core.addTab({ id: "home", order: 10, icon: "house", label: "Home", mount() {} });
+	assert.deepEqual(core.ids(), ["home", "tasks", "sessions", "other"]);
+	assert.equal(core.get("tasks")?.icon, "list-checks");
+	stop();
+	assert.deepEqual(core.ids(), ["home", "sessions", "other"]);
+	core.dispose();
+});
+
 test("openTag: opens the list on a clean tag, refuses bad ones and a stopped module", async () => {
 	const shown: string[] = [];
 	let alive = true;
-	const hub = { viewActions: new Set<() => null>(), refreshViews() {}, showTag: async (tag: string) => { shown.push(tag); return true; } };
+	const hub = { openWorkbench: async () => {}, addViewTab: () => () => undefined, viewActions: new Set<() => null>(), refreshViews() {}, showTag: async (tag: string) => { shown.push(tag); return true; } };
 	const api = createTasksApi({ flags: () => new Set() } as unknown as TaskIndex, {} as TaskWriter, () => alive, hub);
 	assert.equal(await api.openTag("#Project/Website"), true);
 	assert.deepEqual(shown, ["project/website"]);
@@ -393,4 +541,35 @@ test("openTag: opens the list on a clean tag, refuses bad ones and a stopped mod
 	alive = false;
 	assert.equal(await api.openTag("project"), false);
 	assert.equal(shown.length, 1);
+});
+
+
+test("Workbench destinations resolve tabs and only apply scopes to Tasks", () => {
+	const tabs = new Map<string, ViewTab>([["sessions", { id: "sessions", icon: "zap", label: "Sessions", mount() {} }]]);
+	assert.deepEqual(resolveWorkbench({ tab: "sessions" }, { has: (id) => id === "sessions" }), { tab: "sessions" }, "any registry with has()");
+	assert.deepEqual(resolveWorkbench(undefined, tabs), { tab: "tasks" });
+	assert.deepEqual(resolveWorkbench({ tab: "unknown" }, tabs), { tab: "tasks" });
+	assert.deepEqual(resolveWorkbench({ tab: "unknown", scope: "today" }, tabs), { tab: "tasks", scope: "today" });
+	assert.deepEqual(resolveWorkbench({ tab: "tasks", scope: "all" }, tabs), { tab: "tasks", scope: "all" });
+	assert.deepEqual(resolveWorkbench({ scope: "today" }, tabs), { tab: "tasks", scope: "today" });
+	assert.deepEqual(resolveWorkbench({ tab: "sessions", scope: "today" }, tabs), { tab: "sessions" });
+});
+
+test("the API opens the Workbench only while the module runs", async () => {
+	const shown: unknown[] = [];
+	let alive = true;
+	const hub = {
+		addViewTab: () => () => undefined, viewActions: new Set<() => null>(),
+		refreshViews() {}, showTag: async () => true,
+		openWorkbench: async (options?: { tab?: string; scope?: "all" | "today" }) => { shown.push(options); },
+	};
+	const api = createTasksApi({} as TaskIndex, {} as TaskWriter, () => alive, hub);
+	assert.equal(api.version, 1);
+	await api.openWorkbench({ tab: "sessions", scope: "today" });
+	await api.openWorkbench();
+	assert.deepEqual(shown, [{ tab: "sessions", scope: "today" }, undefined]);
+	alive = false;
+	await api.openWorkbench({ tab: "tasks", scope: "all" });
+	assert.equal(shown.length, 2);
+	await createTasksApi({} as TaskIndex, {} as TaskWriter, () => true).openWorkbench();
 });

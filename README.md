@@ -12,6 +12,7 @@ off, a tool leaves nothing behind: no command, no button, no background work.
 
 | Tool | What it does |
 | --- | --- |
+| [Brainstorm](docs/sessions.md) | Write your ideas freely in one note, then catch the tasks in it and close with a short summary. |
 | [Column select](docs/column-select.md) | Select a column of text and edit several rows at once (Alt+Shift+arrows, Alt+drag). |
 | [Move text](docs/move-text.md) | Extract a passage to a sub-note, archive it, or send it to the end of another note, without losing a line. |
 | [Slash menu](docs/slash-menu.md) | Type `/` to insert blocks, callouts, snippets or run any command from a menu at your cursor. |
@@ -21,7 +22,9 @@ off, a tool leaves nothing behind: no command, no button, no background work.
 
 | Tool | What it does |
 | --- | --- |
-| [Note rail](docs/note-rail.md) | A quiet row of icons on every note: contents, bookmarks, open tasks and a calendar of daily notes. |
+| [Home](docs/home.md) | The first tab of the [Workbench](docs/workbench.md): today, your pins, your domains, a map of your notes and what you opened lately, filled in from your notes. |
+| [Note rail](docs/note-rail.md) | A quiet row of icons on every note: search, where the note belongs, contents, bookmarks, open tasks and a calendar of daily notes. |
+| [Search](docs/search.md) | One search for everything: notes, sections, tasks, brainstorms, domains, tags and the text of your notes. |
 | [Tag colors](docs/tag-colors.md) | Recognize tag families at a glance with stable colors and compact capsules. |
 | [Tasks](docs/tasks.md) | Every task with a `#tag`, from all your notes, in one list grouped by tag: check, prioritize, schedule and move them without opening the notes. |
 

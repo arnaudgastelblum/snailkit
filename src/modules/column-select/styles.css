@@ -1,0 +1,15 @@
+.sk-column-select-alt .cm-content {
+	cursor: crosshair;
+}
+
+.sk-column-select-virtual > * {
+	position: absolute;
+}
+
+.sk-column-select-band {
+	background-color: var(--text-selection);
+}
+
+.sk-column-select-caret {
+	background-color: var(--caret-color, var(--text-normal));
+}

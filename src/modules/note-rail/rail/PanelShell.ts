@@ -1,5 +1,11 @@
 // The card every panel lives in: header (title, count, subtitle, pin), optional progress bar,
-// scrolling body, quiet footer. The rail creates one per opened panel and drops it once hidden.
+// scrolling body, quiet footer. The rail creates one when a panel opens and drops it once hidden;
+// going from one panel to another keeps the card and morphs it (size glides, content fades).
+//
+// The card (el) clips an inner column sized by its content alone (fixed width per panel, height
+// capped from the pane's size in pixels). A ResizeObserver on that column copies its height to the
+// card, which glides to it with a CSS transition: no layout read or write per frame, no loop (the
+// column never depends on the card's size).
 import { setIcon } from "obsidian";
 import type { PanelDefinition, RailEnv } from "../types";
 import { dur, replayClass, stagger } from "./motion";
@@ -10,7 +16,10 @@ let shellCount = 0;
 
 export class PanelShell {
 	readonly el: HTMLElement;
-	readonly bodyEl: HTMLElement;
+	private innerEl: HTMLElement;
+	bodyEl: HTMLElement;
+	private titleTextEl: HTMLElement;
+	private headTextEl: HTMLElement;
 	private countEl: HTMLElement;
 	private subEl: HTMLElement;
 	private pinEl: HTMLElement;
@@ -20,10 +29,11 @@ export class PanelShell {
 	private footMsgEl: HTMLElement;
 	private removeTimer = 0;
 	private pendingDone: (() => void) | null = null;
+	private sizer: ResizeObserver | null = null;
 
 	constructor(
 		parent: HTMLElement,
-		readonly def: PanelDefinition,
+		public def: PanelDefinition,
 		private env: RailEnv,
 		pinned: boolean,
 		onPinToggle: () => void,
@@ -31,16 +41,18 @@ export class PanelShell {
 		// Labelled by its title (an aria-label would make Obsidian show a tooltip over the card).
 		const titleId = `sk-note-rail-title-${++shellCount}`;
 		this.el = parent.createEl("section", { cls: "sk-note-rail-panel", attr: { "data-panel": def.id, role: "dialog", "aria-labelledby": titleId } });
+		this.innerEl = this.el.createDiv("sk-note-rail-panel-inner");
 
-		const head = this.el.createEl("header", { cls: "sk-note-rail-head" });
+		const head = this.innerEl.createEl("header", { cls: "sk-note-rail-head" });
 		const text = head.createDiv("sk-note-rail-head-text");
+		this.headTextEl = text;
 		const title = text.createDiv({ cls: "sk-note-rail-title", attr: { id: titleId } });
-		title.createSpan({ text: env.t(`panel.${def.id}`) });
+		this.titleTextEl = title.createSpan({ text: env.t(`panel.${def.id}`) });
 		this.countEl = title.createSpan({ cls: "sk-note-rail-count" });
 		this.subEl = text.createDiv("sk-note-rail-sub");
 		this.subEl.hide();
 
-		this.pinEl = head.createEl("button", { cls: "sk-note-rail-icon-btn sk-note-rail-pin" });
+		this.pinEl = head.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-note-rail-pin" });
 		setIcon(this.pinEl, "pin");
 		this.pinEl.addEventListener("click", (e) => {
 			e.stopPropagation();
@@ -48,14 +60,59 @@ export class PanelShell {
 		});
 		this.setPinned(pinned);
 
-		this.progressEl = this.el.createDiv("sk-note-rail-progress");
+		this.progressEl = this.innerEl.createDiv("sk-note-rail-progress");
 		this.barEl = this.progressEl.createEl("i");
 		this.progressEl.hide();
 
-		this.bodyEl = this.el.createDiv("sk-note-rail-body");
-		this.footEl = this.el.createEl("footer", { cls: "sk-note-rail-foot" });
+		this.bodyEl = this.innerEl.createDiv("sk-note-rail-body");
+		this.footEl = this.innerEl.createEl("footer", { cls: "sk-note-rail-foot" });
 		this.footMsgEl = this.footEl.createDiv("sk-note-rail-foot-msg");
 		this.footEl.hide();
+
+		const RO = this.el.doc.defaultView?.ResizeObserver;
+		if (RO) {
+			this.sizer = new RO((entries: ResizeObserverEntry[]) => {
+				const entry = entries[entries.length - 1];
+				const box = entry?.borderBoxSize?.[0];
+				const height = box ? box.blockSize : this.innerEl.offsetHeight;
+				// + the card's border (1px each side).
+				this.el.style.setProperty("--sk-note-rail-panel-h", `${Math.ceil(height) + 2}px`);
+			});
+			this.sizer.observe(this.innerEl);
+		}
+	}
+
+	/** Largest size the card may take in its pane (pixels), so the inner column never depends on the card. */
+	setBounds(width: number, height: number): void {
+		if (width > 0) this.el.style.setProperty("--sk-note-rail-max-w", `${Math.floor(width)}px`);
+		if (height > 0) this.el.style.setProperty("--sk-note-rail-max-h", `${Math.floor(height)}px`);
+	}
+
+	/** Where the card grows from (the middle of the active rail button, from the top of the card). */
+	setOrigin(y: number): void {
+		this.el.style.setProperty("--sk-note-rail-origin-y", `${Math.max(0, Math.round(y))}px`);
+	}
+
+	/**
+	 * Another panel takes over the open card: new title, empty body, header and footer reset. The
+	 * caller fills the new body; the card then glides to its new size and the content fades in.
+	 */
+	morph(def: PanelDefinition, pinned: boolean): HTMLElement {
+		this.def = def;
+		this.el.setAttribute("data-panel", def.id);
+		this.titleTextEl.setText(this.env.t(`panel.${def.id}`));
+		this.setCount(null);
+		this.setSubtitle("");
+		this.setProgress(null);
+		this.setFooter("");
+		this.setPinned(pinned);
+		const body = this.el.doc.createElement("div");
+		body.className = "sk-note-rail-body";
+		this.bodyEl.replaceWith(body);
+		this.bodyEl = body;
+		replayClass(this.headTextEl, "is-swap");
+		replayClass(body, "is-swap");
+		return body;
 	}
 
 	setPinned(pinned: boolean): void {
@@ -123,6 +180,8 @@ export class PanelShell {
 	/** Finish a pending exit right now (module turned off during the close animation). */
 	flush(): void {
 		window.clearTimeout(this.removeTimer);
+		this.sizer?.disconnect();
+		this.sizer = null;
 		this.el.remove();
 		const done = this.pendingDone;
 		this.pendingDone = null;

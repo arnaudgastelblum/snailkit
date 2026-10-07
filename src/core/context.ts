@@ -14,6 +14,9 @@ import type { Lang, Translator, Vars } from "../i18n";
 import type SnailkitPlugin from "../main";
 import { showToast, type ToastOptions } from "../ui/toast";
 import type { ModuleHandle } from "./host";
+import type { PlacesOptions, PlacesService } from "./places/types";
+import { moduleWorkbench } from "./workbench";
+import type { ModuleWorkbench } from "./workbench/types";
 
 interface Ribbon {
 	addRibbonItemButton(id: string, icon: string, title: string, callback: (event: MouseEvent) => unknown): HTMLElement;
@@ -206,6 +209,28 @@ export class ModuleContext<S extends object = object> extends Component {
 		const workspace = this.app.workspace as unknown as { on(name: string, cb: () => void): import("obsidian").EventRef };
 		this.registerEvent(workspace.on("snailkit:services-changed", callback));
 	}
+
+	private moduleBench: ModuleWorkbench | null = null;
+
+	/** The Workbench of the core: tabs this module adds go away when it stops (see core/workbench/types.ts). */
+	get workbench(): ModuleWorkbench {
+		return (this.moduleBench ??= moduleWorkbench(this.plugin.workbench, (cleanup) => this.register(cleanup)));
+	}
+
+	/** Where notes belong (parents, areas, domains): the rule shared by the rail, Home, the Map and Search. */
+	get places(): PlacesService {
+		return this.plugin.places;
+	}
+
+	/** Options of the places rule (the Home module's settings). Back to the defaults when this module stops. */
+	configurePlaces(options: Partial<PlacesOptions>): void {
+		this.plugin.places.configure(options);
+		if (this.placesConfigured) return;
+		this.placesConfigured = true;
+		this.register(() => this.plugin.places.configure({ home: "", ignoredFolders: [] }));
+	}
+
+	private placesConfigured = false;
 
 	/** A short message at the bottom of the window, with an optional action such as Undo. */
 	toast(message: string, options?: ToastOptions): void {

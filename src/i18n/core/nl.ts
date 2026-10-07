@@ -40,6 +40,12 @@ export const nl: StringsOf<typeof en> = {
 
 	"reason.desktop": "hij heeft de desktop-app nodig.",
 
+	"workbench.title": "Werkbank",
+	"workbench.tabs-hint": "Je andere tools vind je hier: wissel met deze tabbladen.",
+	"workbench.empty.title": "Hier staat nog niets",
+	"workbench.empty.text": "De werkbank bundelt de tabbladen van Start, Taken en Brainstorm. Zet een van die tools aan in de instellingen van Snailkit.",
+	"workbench.empty.action": "Instellingen openen",
+
 	"common.cancel": "Annuleren",
 	"common.confirm": "Bevestigen",
 	"common.create": "Aanmaken",

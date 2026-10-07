@@ -152,7 +152,7 @@ class BookmarksPanel implements PanelInstance {
 		lists.createEl("code", { text: pinsKey(this.ctx.settings) });
 		lists.appendText(after ?? "");
 		text.createDiv({ text: Platform.isMobile ? t("bookmarks.tip-move-touch") : t("bookmarks.tip-move", { mod: Platform.isMacOS ? "Cmd" : "Ctrl" }) });
-		const ok = tip.createEl("button", { cls: "sk-note-rail-tip-ok", text: t("bookmarks.tip-ok"), attr: { type: "button" } });
+		const ok = tip.createEl("button", { cls: "sk-btn is-ghost is-s sk-note-rail-tip-ok", text: t("bookmarks.tip-ok"), attr: { type: "button" } });
 		ok.addEventListener("click", () => {
 			void this.ctx.updateSettings((s) => {
 				s.bookmarksTips = TIP_OPENINGS;
@@ -171,7 +171,7 @@ class BookmarksPanel implements PanelInstance {
 	}
 
 	private createAdd(icon: string, label: string): HTMLElement {
-		const el = this.rootEl.createEl("button", { cls: "sk-note-rail-add", attr: { type: "button" } });
+		const el = this.rootEl.createEl("button", { cls: "sk-btn is-s sk-note-rail-add", attr: { type: "button" } });
 		setIcon(el.createSpan("sk-note-rail-add-icon"), icon);
 		el.createSpan({ text: label });
 		return el;
@@ -186,7 +186,7 @@ class BookmarksPanel implements PanelInstance {
 		row.createSpan("sk-note-rail-row-meta");
 		this.fillRow(row, file);
 		const remove = row.createEl("button", {
-			cls: "sk-note-rail-icon-btn sk-note-rail-row-action",
+			cls: "sk-btn is-ghost is-icon is-s sk-note-rail-row-action",
 			attr: { type: "button", "aria-label": this.ctx.t(list.kind === "note" ? "bookmarks.unpin-note" : "bookmarks.unpin-vault") },
 		});
 		setIcon(remove, "x");

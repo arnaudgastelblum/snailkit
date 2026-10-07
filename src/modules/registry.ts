@@ -10,5 +10,8 @@ import { tasks } from "./tasks";
 import { slashMenu } from "./slash-menu";
 import { columnSelect } from "./column-select";
 import { slidesExport } from "./slides-export";
+import { sessions } from "./sessions";
+import { home } from "./home";
+import { search } from "./search";
 
-export const MODULES: AnyModule[] = [moveText, pdfExport, noteRail, tagColors, tables, tasks, slashMenu, columnSelect, slidesExport];
+export const MODULES: AnyModule[] = [moveText, pdfExport, noteRail, tagColors, tables, tasks, slashMenu, columnSelect, slidesExport, sessions, home, search];

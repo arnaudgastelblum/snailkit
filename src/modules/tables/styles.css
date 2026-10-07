@@ -1,0 +1,693 @@
+/* Tables: table styles drawn through Obsidian's own --table-* variables (so selection and the
+   native handles keep working), then the toolbar, panels and handles. */
+
+/* ----- Table styles: table.sk-tables-styled[data-sk-style|header|banding|first-col|total] ----- */
+table.sk-tables-styled {
+	--sk-tables-accent: var(--interactive-accent);
+	--sk-tables-tint: color-mix(in srgb, var(--sk-tables-accent) 12%, var(--background-primary));
+	--sk-tables-band: color-mix(in srgb, var(--background-secondary) 65%, var(--background-primary));
+	--sk-tables-rule: var(--background-modifier-border);
+	--sk-tables-total: var(--background-secondary);
+	--table-background: transparent;
+	--table-border-width: 1px;
+	--table-border-color: transparent;
+	--table-header-background: transparent;
+	--table-header-border-width: 1px;
+	--table-header-border-color: transparent;
+	--table-header-weight: 600;
+	--table-header-color: var(--text-normal);
+	--table-header-font: inherit;
+	--table-column-first-border-width: 1px;
+	--table-column-last-border-width: 1px;
+	--table-row-last-border-width: 1px;
+	--table-row-alt-background: transparent;
+	--table-column-alt-background: transparent;
+	--table-row-background-hover: transparent;
+	--table-row-alt-background-hover: var(--table-row-alt-background);
+	--table-header-background-hover: var(--table-header-background);
+	border-collapse: collapse;
+}
+table.sk-tables-styled :is(th, td) {
+	font-variant-numeric: tabular-nums;
+}
+table.sk-tables-styled thead th {
+	position: relative;
+}
+table.sk-tables-styled thead tr > th {
+	border-bottom: 1px solid var(--sk-tables-rule);
+}
+table.sk-tables-styled tbody tr > :is(td, th) {
+	border-top-width: 1px;
+}
+
+/* Plain and Ledger: the accent draws a rule under the header. Positioned, so it adds weight
+   without resizing the header or its cells. */
+table.sk-tables-styled:is([data-sk-style="plain"], [data-sk-style="ledger"]) thead tr > th::before {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	bottom: -1px;
+	height: 2px;
+	background: var(--sk-tables-accent);
+	pointer-events: none;
+}
+table.sk-tables-styled:is([data-sk-style="plain"], [data-sk-style="ledger"]) {
+	--sk-tables-rule: var(--sk-tables-accent);
+}
+/* Ledger and Report: a line between rows. */
+table.sk-tables-styled:is([data-sk-style="ledger"], [data-sk-style="report"]) {
+	--table-border-color: var(--background-modifier-border);
+	--table-header-border-color: var(--background-modifier-border);
+}
+/* Grid and Report: the accent tints the header. Grid boxes every cell. */
+table.sk-tables-styled:is([data-sk-style="grid"], [data-sk-style="report"]) {
+	--table-header-background: var(--sk-tables-tint);
+}
+table.sk-tables-styled[data-sk-style="grid"] {
+	--table-border-color: var(--background-modifier-border);
+	--table-header-border-color: var(--background-modifier-border);
+}
+table.sk-tables-styled[data-sk-style="report"] {
+	--sk-tables-total: var(--sk-tables-tint);
+	--sk-tables-rule: var(--sk-tables-accent);
+}
+/* No vertical rules outside Grid: transparent borders left white seams between tinted cells. */
+table.sk-tables-styled:not([data-sk-style="grid"]) tr > :is(th, td) {
+	border-inline-color: transparent;
+}
+table.sk-tables-styled:not([data-sk-style="grid"]) thead tr > th {
+	border-top-color: transparent;
+}
+.markdown-rendered table.sk-tables-styled:not([data-sk-style="grid"]) :is(th, td) {
+	border-left-width: 0;
+	border-right-width: 0;
+}
+
+table.sk-tables-styled[data-sk-banding="rows"] {
+	--table-row-alt-background: var(--sk-tables-band);
+}
+table.sk-tables-styled[data-sk-banding="columns"] {
+	--table-column-alt-background: var(--sk-tables-band);
+}
+/* Header row "off": drawn like any other row. */
+table.sk-tables-styled[data-sk-header="off"] {
+	--table-header-weight: 400;
+	--table-header-background: transparent;
+}
+table.sk-tables-styled[data-sk-header="off"] thead {
+	--table-column-alt-background: transparent;
+}
+table.sk-tables-styled[data-sk-header="off"] thead tr > th {
+	border-bottom-color: var(--table-border-color);
+}
+table.sk-tables-styled[data-sk-header="off"] thead tr > th::before {
+	display: none;
+}
+table.sk-tables-styled[data-sk-first-col="on"] tbody tr > :first-child {
+	font-weight: 600;
+}
+table.sk-tables-styled[data-sk-total="on"] tbody tr:last-child > :is(td, th) {
+	border-top-width: 2px;
+	border-top-color: var(--sk-tables-rule);
+	font-weight: 600;
+	background-color: var(--sk-tables-total);
+}
+
+/* Header row "hide", any style including the theme's look. */
+table[data-sk-hide-header] > thead {
+	display: none;
+}
+
+/* Text size, any style including the theme's look. "note" matches the text around the table. */
+table[data-sk-size="small"] {
+	--table-text-size: calc(var(--font-text-size) * 0.875);
+}
+table[data-sk-size="note"] {
+	--table-text-size: var(--font-text-size);
+}
+table[data-sk-size="large"] {
+	--table-text-size: calc(var(--font-text-size) * 1.125);
+}
+.markdown-rendered table[data-sk-size] :is(th, td) {
+	font-size: var(--table-text-size);
+}
+
+/* Column widths: set on the table (--sk-tables-wN), applied to every cell of the column (the
+   header row may be hidden). Widths are minimums: a long word still widens its column. */
+table[data-sk-widths] tr > :nth-child(1) { width: var(--sk-tables-w1, auto); min-width: var(--sk-tables-w1, 0); }
+table[data-sk-widths] tr > :nth-child(2) { width: var(--sk-tables-w2, auto); min-width: var(--sk-tables-w2, 0); }
+table[data-sk-widths] tr > :nth-child(3) { width: var(--sk-tables-w3, auto); min-width: var(--sk-tables-w3, 0); }
+table[data-sk-widths] tr > :nth-child(4) { width: var(--sk-tables-w4, auto); min-width: var(--sk-tables-w4, 0); }
+table[data-sk-widths] tr > :nth-child(5) { width: var(--sk-tables-w5, auto); min-width: var(--sk-tables-w5, 0); }
+table[data-sk-widths] tr > :nth-child(6) { width: var(--sk-tables-w6, auto); min-width: var(--sk-tables-w6, 0); }
+table[data-sk-widths] tr > :nth-child(7) { width: var(--sk-tables-w7, auto); min-width: var(--sk-tables-w7, 0); }
+table[data-sk-widths] tr > :nth-child(8) { width: var(--sk-tables-w8, auto); min-width: var(--sk-tables-w8, 0); }
+table[data-sk-widths] tr > :nth-child(9) { width: var(--sk-tables-w9, auto); min-width: var(--sk-tables-w9, 0); }
+table[data-sk-widths] tr > :nth-child(10) { width: var(--sk-tables-w10, auto); min-width: var(--sk-tables-w10, 0); }
+table[data-sk-widths] tr > :nth-child(11) { width: var(--sk-tables-w11, auto); min-width: var(--sk-tables-w11, 0); }
+table[data-sk-widths] tr > :nth-child(12) { width: var(--sk-tables-w12, auto); min-width: var(--sk-tables-w12, 0); }
+table[data-sk-widths] tr > :nth-child(13) { width: var(--sk-tables-w13, auto); min-width: var(--sk-tables-w13, 0); }
+table[data-sk-widths] tr > :nth-child(14) { width: var(--sk-tables-w14, auto); min-width: var(--sk-tables-w14, 0); }
+table[data-sk-widths] tr > :nth-child(15) { width: var(--sk-tables-w15, auto); min-width: var(--sk-tables-w15, 0); }
+table[data-sk-widths] tr > :nth-child(16) { width: var(--sk-tables-w16, auto); min-width: var(--sk-tables-w16, 0); }
+table[data-sk-widths] tr > :nth-child(17) { width: var(--sk-tables-w17, auto); min-width: var(--sk-tables-w17, 0); }
+table[data-sk-widths] tr > :nth-child(18) { width: var(--sk-tables-w18, auto); min-width: var(--sk-tables-w18, 0); }
+table[data-sk-widths] tr > :nth-child(19) { width: var(--sk-tables-w19, auto); min-width: var(--sk-tables-w19, 0); }
+table[data-sk-widths] tr > :nth-child(20) { width: var(--sk-tables-w20, auto); min-width: var(--sk-tables-w20, 0); }
+table[data-sk-widths] tr > :nth-child(21) { width: var(--sk-tables-w21, auto); min-width: var(--sk-tables-w21, 0); }
+table[data-sk-widths] tr > :nth-child(22) { width: var(--sk-tables-w22, auto); min-width: var(--sk-tables-w22, 0); }
+table[data-sk-widths] tr > :nth-child(23) { width: var(--sk-tables-w23, auto); min-width: var(--sk-tables-w23, 0); }
+table[data-sk-widths] tr > :nth-child(24) { width: var(--sk-tables-w24, auto); min-width: var(--sk-tables-w24, 0); }
+table[data-sk-widths] tr > :nth-child(25) { width: var(--sk-tables-w25, auto); min-width: var(--sk-tables-w25, 0); }
+table[data-sk-widths] tr > :nth-child(26) { width: var(--sk-tables-w26, auto); min-width: var(--sk-tables-w26, 0); }
+table[data-sk-widths] tr > :nth-child(27) { width: var(--sk-tables-w27, auto); min-width: var(--sk-tables-w27, 0); }
+table[data-sk-widths] tr > :nth-child(28) { width: var(--sk-tables-w28, auto); min-width: var(--sk-tables-w28, 0); }
+table[data-sk-widths] tr > :nth-child(29) { width: var(--sk-tables-w29, auto); min-width: var(--sk-tables-w29, 0); }
+table[data-sk-widths] tr > :nth-child(30) { width: var(--sk-tables-w30, auto); min-width: var(--sk-tables-w30, 0); }
+
+/* Miniatures of the style panel, also outside a rendered note. */
+table.sk-tables-mini {
+	--table-text-size: 10px;
+	--table-header-size: 10px;
+	--table-column-min-width: 0;
+	width: 100%;
+	margin: 0;
+	font-size: 10px;
+	line-height: 1.3;
+	pointer-events: none;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+table.sk-tables-mini :where(th, td) {
+	padding: 3px 6px;
+	min-width: 0;
+	font-size: 10px;
+	border: var(--table-border-width, 1px) solid var(--table-border-color, transparent);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-align: start;
+}
+table.sk-tables-mini th {
+	font-weight: var(--table-header-weight, 600);
+	color: var(--table-header-color, var(--text-normal));
+}
+table.sk-tables-mini thead tr { background-color: var(--table-header-background); }
+table.sk-tables-mini tbody tr { background-color: var(--table-background); }
+table.sk-tables-mini tbody tr:nth-child(odd) { background-color: var(--table-row-alt-background); }
+table.sk-tables-mini tr > :nth-child(even) { background-color: var(--table-column-alt-background); }
+
+/* Flash after a sort or a row action, also on unstyled tables. */
+.cm-table-widget :is(table.sk-tables-flash, tr.sk-tables-flash) {
+	animation: sk-tables-flash 700ms ease-out;
+}
+@keyframes sk-tables-flash {
+	from { outline: 2px solid var(--sk-tables-accent, var(--sk-accent)); outline-offset: -2px; }
+	to { outline: 2px solid transparent; outline-offset: -2px; }
+}
+
+/* ----- Shared controls ----- */
+.sk-tables-ui {
+	--sk-tables-control: 32px;
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	line-height: 1.4;
+	box-sizing: border-box;
+}
+.sk-tables-ui *,
+.sk-tables-ui *::before,
+.sk-tables-ui *::after {
+	box-sizing: border-box;
+}
+.sk-tables-ui :is(button, input) {
+	font-family: inherit;
+}
+.sk-tables-ui :is(.sk-tables-action, .sk-tables-icon-btn, .sk-tables-preset, .sk-tables-swatch, .sk-tables-segment, .sk-tables-link-btn, .sk-tables-grid-cell) {
+	box-shadow: none;
+	color: var(--text-normal);
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--sk-radius-s);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	transition: background-color var(--sk-fast) var(--sk-ease), border-color var(--sk-fast) var(--sk-ease), color var(--sk-fast) var(--sk-ease);
+}
+.sk-tables-ui :is(button, input, [tabindex]):focus-visible,
+.sk-tables-ui:focus-visible {
+	outline: 2px solid var(--sk-accent);
+	outline-offset: 2px;
+}
+.sk-tables-ui :is(.sk-tables-action, .sk-tables-icon-btn, .sk-tables-link-btn, .sk-tables-segment):hover {
+	background-color: var(--sk-hover);
+}
+.sk-tables-ui svg {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+}
+.sk-tables-ui :is(.sk-tables-action-icon, .sk-tables-action-chevron, .sk-tables-preset-check, .sk-tables-chip-icon) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.sk-tables-ui .sk-tables-icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	flex-shrink: 0;
+	color: var(--text-muted);
+}
+
+/* ----- Floating toolbar and popovers ----- */
+.sk-tables-ui:is(.sk-tables-toolbar, .sk-tables-popover) {
+	position: fixed;
+	z-index: var(--layer-popover, 30);
+	background: var(--sk-surface);
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+	box-shadow: var(--sk-shadow);
+}
+.sk-tables-ui:is(.sk-tables-toolbar, .sk-tables-popover).is-entering {
+	animation: sk-rise var(--sk-fast) var(--sk-ease) both;
+}
+.sk-tables-ui.sk-tables-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px;
+	max-width: calc(100vw - 16px);
+}
+.sk-tables-ui .sk-tables-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: var(--sk-tables-control);
+	padding: 0 8px;
+	white-space: nowrap;
+}
+.sk-tables-ui .sk-tables-action[aria-expanded="true"] {
+	background: var(--sk-accent-wash);
+}
+.sk-tables-ui .sk-tables-action-icon {
+	color: var(--text-muted);
+}
+.sk-tables-ui .sk-tables-action-chevron {
+	color: var(--text-faint);
+}
+.sk-tables-ui .sk-tables-action-chevron svg {
+	width: 12px;
+	height: 12px;
+}
+.sk-tables-ui .sk-tables-sep {
+	width: 1px;
+	height: 16px;
+	background: var(--sk-line);
+	margin: 0 4px;
+}
+.sk-tables-ui.sk-tables-toolbar.is-collapsed .sk-tables-action {
+	width: var(--sk-tables-control);
+	padding: 0;
+}
+.sk-tables-ui.sk-tables-toolbar.is-collapsed :is(.sk-tables-action-label, .sk-tables-action-chevron, .sk-tables-sep),
+.sk-tables-ui.sk-tables-toolbar.is-collapsed .sk-tables-action ~ .sk-tables-action {
+	display: none;
+}
+.sk-tables-ui.sk-tables-toolbar.is-hidden {
+	visibility: hidden;
+}
+/* Phones: docked at the bottom, above the keyboard and the mobile toolbar. */
+.sk-tables-ui.sk-tables-toolbar.is-docked {
+	inset-inline: 8px;
+	top: auto;
+	bottom: calc(8px + var(--sk-tables-dock-offset, 0px) + env(safe-area-inset-bottom, 0px));
+	width: calc(100% - 16px);
+}
+.sk-tables-ui.sk-tables-toolbar.is-docked .sk-tables-action {
+	flex: 1;
+	flex-direction: column;
+	gap: 4px;
+	height: auto;
+	min-height: 44px;
+	padding: 4px 8px;
+}
+.sk-tables-ui.sk-tables-toolbar.is-docked .sk-tables-action-label {
+	font-size: var(--font-ui-smaller);
+}
+.sk-tables-ui.sk-tables-toolbar.is-docked :is(.sk-tables-action-chevron, .sk-tables-sep) {
+	display: none;
+}
+
+/* ----- Style panel ----- */
+.sk-tables-ui.sk-tables-popover {
+	width: 320px;
+	max-width: calc(100vw - 16px);
+	max-height: calc(100dvh - 24px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 16px;
+}
+.sk-tables-ui .sk-tables-popover-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+.sk-tables-ui .sk-tables-popover-title {
+	font-weight: 600;
+	font-size: var(--font-ui-medium);
+}
+.sk-tables-ui .sk-tables-section + .sk-tables-section {
+	margin-top: 20px;
+}
+.sk-tables-ui .sk-tables-section-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	margin-bottom: 8px;
+}
+.sk-tables-ui .sk-tables-preset-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+}
+.sk-tables-ui .sk-tables-preset {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	height: auto;
+	min-width: 0;
+	padding: 8px;
+	gap: 8px;
+	border-color: var(--sk-line);
+	text-align: start;
+}
+.sk-tables-ui .sk-tables-preset:hover {
+	background: var(--sk-surface-sunken);
+}
+.sk-tables-ui .sk-tables-preset[aria-pressed="true"] {
+	border-color: var(--sk-accent-line);
+	background: var(--sk-accent-soft);
+}
+.sk-tables-ui .sk-tables-preset-preview {
+	overflow: hidden;
+	border-radius: 2px;
+}
+.sk-tables-ui .sk-tables-preset-name {
+	font-size: var(--font-ui-smaller);
+	padding-inline-end: 16px;
+}
+.sk-tables-ui .sk-tables-preset-check {
+	position: absolute;
+	bottom: 8px;
+	right: 8px;
+	color: var(--sk-accent-text);
+	visibility: hidden;
+}
+.sk-tables-ui .sk-tables-preset[aria-pressed="true"] .sk-tables-preset-check {
+	visibility: visible;
+	animation: sk-pop var(--sk-slow) var(--sk-spring);
+}
+.sk-tables-ui .sk-tables-swatches {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.sk-tables-ui .sk-tables-swatch {
+	position: relative;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border-radius: 50%;
+	background: var(--sk-tables-swatch, var(--background-secondary));
+	border-color: var(--sk-line);
+	flex-shrink: 0;
+}
+.sk-tables-ui .sk-tables-swatch[aria-pressed="true"] {
+	outline: 2px solid var(--text-normal);
+	outline-offset: 2px;
+}
+.sk-tables-ui .sk-tables-swatch-custom {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.sk-tables-ui .sk-tables-swatch-custom svg {
+	background: var(--sk-surface);
+	border-radius: 50%;
+}
+.sk-tables-ui .sk-tables-option-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: var(--sk-tables-control);
+	margin-top: 8px;
+}
+.sk-tables-ui .sk-tables-option-label {
+	flex: 1;
+}
+.sk-tables-ui .sk-tables-segmented {
+	display: inline-flex;
+	padding: 2px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-s);
+}
+.sk-tables-ui .sk-tables-segment {
+	height: calc(var(--sk-tables-control) - 4px);
+	padding: 0 8px;
+	font-size: var(--font-ui-smaller);
+}
+.sk-tables-ui .sk-tables-segment[aria-checked="true"] {
+	background: var(--sk-accent-wash);
+	color: var(--sk-accent-text);
+	font-weight: 600;
+}
+.sk-tables-ui .sk-tables-popover-footer {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 8px;
+	border-top: 1px solid var(--sk-line);
+	margin-top: 16px;
+	padding-top: 8px;
+}
+.sk-tables-ui .sk-tables-link-btn {
+	height: var(--sk-tables-control);
+	padding: 0 4px;
+	color: var(--text-muted);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+.sk-tables-ui .sk-tables-link-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+/* Phones: a sheet at the bottom. */
+.sk-tables-ui.sk-tables-popover.is-sheet {
+	inset-inline: 0;
+	top: auto;
+	bottom: var(--sk-tables-dock-offset, 0px);
+	width: 100%;
+	max-width: 100%;
+	max-height: 70vh;
+	max-height: 70dvh;
+	border-radius: var(--sk-radius-l) var(--sk-radius-l) 0 0;
+	padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ----- Insert dialog ----- */
+.modal.sk-tables-insert-modal {
+	width: 340px;
+	max-width: calc(100vw - 24px);
+}
+.sk-tables-ui.sk-tables-insert {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.sk-tables-ui .sk-tables-insert-size {
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+.sk-tables-ui .sk-tables-grid {
+	display: grid;
+	grid-template-columns: repeat(8, 24px);
+	gap: 4px;
+	align-self: center;
+}
+.sk-tables-ui .sk-tables-grid-cell {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border-color: var(--sk-line);
+	border-radius: 4px;
+	background: var(--sk-surface-sunken);
+}
+.sk-tables-ui .sk-tables-grid-cell[data-preview="true"] {
+	background: var(--sk-accent-wash);
+	border-color: var(--sk-accent-line);
+}
+.sk-tables-ui .sk-tables-dims {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+.sk-tables-ui .sk-tables-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	color: var(--text-muted);
+}
+.sk-tables-ui .sk-tables-field input {
+	width: 100%;
+	height: var(--sk-tables-control);
+	color: var(--text-normal);
+}
+.sk-tables-ui .sk-tables-modal-actions {
+	display: flex;
+	justify-content: flex-end;
+	border-top: 1px solid var(--sk-line);
+	padding-top: 16px;
+}
+.sk-tables-ui .sk-tables-modal-actions button {
+	min-height: var(--sk-tables-control);
+}
+
+/* ----- Style chip in place of the comment line (Live Preview) ----- */
+.sk-tables-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 4px;
+	max-height: 1em;
+	vertical-align: baseline;
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-smaller);
+	line-height: 1;
+	color: var(--text-faint);
+	background: transparent;
+	border-radius: var(--sk-radius-s);
+	cursor: pointer;
+	transition: color var(--sk-fast) var(--sk-ease), background-color var(--sk-fast) var(--sk-ease);
+}
+.sk-tables-chip:is(:hover, :focus-visible) {
+	color: var(--text-muted);
+	background: var(--sk-hover);
+}
+.sk-tables-chip:focus-visible {
+	outline: 2px solid var(--sk-accent);
+	outline-offset: 1px;
+}
+.sk-tables-chip-icon {
+	display: inline-flex;
+}
+.sk-tables-chip-icon svg {
+	width: 12px;
+	height: 12px;
+}
+.sk-tables-chip-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--sk-tables-accent, var(--sk-accent));
+}
+
+/* ----- Column resize handle and header button (Live Preview, desktop) ----- */
+.sk-tables-ui.sk-tables-col-resizer {
+	position: fixed;
+	z-index: var(--layer-popover, 30);
+	width: 9px;
+	cursor: col-resize;
+}
+.sk-tables-ui.sk-tables-col-resizer::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 4px;
+	width: 2px;
+	border-radius: 1px;
+	background: var(--sk-accent);
+	opacity: 0.45;
+	transition: opacity var(--sk-fast) var(--sk-ease);
+}
+.sk-tables-ui.sk-tables-col-resizer.is-dragging::after {
+	opacity: 1;
+}
+body.sk-tables-resizing,
+body.sk-tables-resizing * {
+	cursor: col-resize !important;
+	user-select: none;
+}
+.sk-tables-ui.sk-tables-col-btn {
+	position: fixed;
+	z-index: var(--layer-popover, 30);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 1px solid var(--sk-line);
+	border-radius: 50%;
+	background: var(--sk-surface);
+	box-shadow: var(--sk-shadow);
+	color: var(--text-muted);
+	cursor: pointer;
+	animation: sk-rise var(--sk-fast) var(--sk-ease) both;
+}
+.sk-tables-ui.sk-tables-col-btn:hover {
+	color: var(--sk-accent-text);
+	border-color: var(--sk-accent-line);
+}
+.sk-tables-ui.sk-tables-col-btn svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* Screen reader only text. */
+.sk-tables-sr-only,
+.sk-tables-ui .sk-tables-swatch-custom input[type="color"] {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* Touch screens: bigger targets, no size grid (the number fields are enough). */
+body.is-mobile .sk-tables-ui {
+	--sk-tables-control: 44px;
+}
+body.is-mobile .sk-tables-ui .sk-tables-grid {
+	display: none;
+}
+body.is-mobile .sk-tables-ui :is(.sk-tables-icon-btn, .sk-tables-swatch) {
+	min-width: 44px;
+	min-height: 44px;
+}
+@media (pointer: coarse) {
+	.sk-tables-ui {
+		--sk-tables-control: 44px;
+	}
+	.sk-tables-ui .sk-tables-grid {
+		display: none;
+	}
+	.sk-tables-ui :is(.sk-tables-icon-btn, .sk-tables-swatch) {
+		min-width: 44px;
+		min-height: 44px;
+	}
+}

@@ -8,11 +8,11 @@ import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const out = path.join(dir, ".out");
+// One output folder per run: several runs (agents working in parallel) never clear each other.
+const out = path.join(dir, ".out", String(process.pid));
 const filter = process.argv[2] || "";
 const files = fs.readdirSync(dir).filter((f) => f.endsWith(".test.ts") && f.includes(filter));
-fs.rmSync(out, { recursive: true, force: true });
-fs.mkdirSync(out);
+fs.mkdirSync(out, { recursive: true });
 
 await esbuild.build({
 	entryPoints: files.map((f) => path.join(dir, f)),
@@ -28,4 +28,5 @@ await esbuild.build({
 
 const built = fs.readdirSync(out).map((f) => path.join(out, f));
 const result = spawnSync(process.execPath, ["--test", ...built], { stdio: "inherit" });
+fs.rmSync(out, { recursive: true, force: true });
 process.exit(result.status ?? 1);

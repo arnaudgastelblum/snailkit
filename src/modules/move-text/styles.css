@@ -1,0 +1,21 @@
+/* Dialog layout scoped to Move text. */
+.sk-move-text-keep-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+}
+
+.sk-move-text-suggest-path {
+	opacity: 0.7;
+}
+
+.sk-move-text-title-input {
+	width: 100%;
+}
+
+.sk-move-text-btn-row {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: var(--size-4-4);
+}

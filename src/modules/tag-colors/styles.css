@@ -1,0 +1,315 @@
+.sk-tag-colors-tag,
+.sk-tag-colors-tag .sk-tag-colors-cap,
+.sk-tag-colors-tag .sk-tag-colors-body,
+.sk-tag-colors-tag .sk-tag-colors-mid,
+.sk-tag-colors-tag .sk-tag-colors-chev,
+.sk-tag-colors-tag .sk-tag-colors-leaf {
+	display: inline;
+	line-height: inherit;
+}
+
+.sk-tag-colors-tag { font-size: .9em; white-space: nowrap; cursor: pointer; }
+.sk-tag-colors-tag .sk-tag-colors-cap {
+	font-size: .78em;
+	font-weight: 600;
+	letter-spacing: .06em;
+	padding: .4em .5em .13em;
+	border-radius: 5px;
+	background: var(--sk-tag-r-bg);
+	color: var(--sk-tag-r-fg);
+}
+
+.sk-tag-colors-upper .sk-tag-colors-tag .sk-tag-colors-cap { text-transform: uppercase; }
+.sk-tag-colors-tag.sk-tag-colors-nested .sk-tag-colors-cap { border-radius: 5px 0 0 5px; }
+.sk-tag-colors-tag .sk-tag-colors-body {
+	font-size: 1em;
+	padding: 1px .4em;
+	border-radius: 0 5px 5px 0;
+	background: var(--sk-tag-l-bg);
+	color: var(--sk-tag-l-fg);
+}
+
+.sk-tag-colors-tag .sk-tag-colors-mid { opacity: .7; }
+.sk-tag-colors-tag .sk-tag-colors-chev { opacity: .45; padding: 0 .3em; }
+.sk-tag-colors-tag .sk-tag-colors-leaf { font-weight: 600; }
+.markdown-preview-view a.tag:has(> .sk-tag-colors-tag) {
+	display: inline;
+	font-size: 1em;
+	line-height: inherit;
+	padding: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	text-decoration: none;
+}
+
+.sk-tag-colors-raw,
+.sk-tag-colors-property {
+	background: var(--sk-tag-l-bg) !important;
+	color: var(--sk-tag-l-fg) !important;
+	border-radius: 5px;
+}
+
+.sk-tag-colors-raw { padding: 1px 0; border-radius: 0; }
+.cm-hashtag:has(> .sk-tag-colors-raw) { background: none !important; padding: 0 !important; border: 0 !important; }
+.cm-hashtag-begin > .sk-tag-colors-raw { padding-left: .4em; border-radius: 5px 0 0 5px; }
+.cm-hashtag-end > .sk-tag-colors-raw { padding-right: .4em; border-radius: 0 5px 5px 0; }
+.sk-tag-colors-pane { color: var(--sk-tag-l-fg) !important; }
+.sk-tag-colors-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.sk-tag-colors-swatches button,
+.sk-tag-colors-tag-button { height: auto; padding: 4px; background: none; box-shadow: none; }
+.sk-tag-colors-confirm { border: 1px solid var(--sk-line); padding: 8px; border-radius: 5px; }
+
+.sk-tag-colors-modal { background: var(--sk-surface); border-radius: var(--sk-radius); }
+.sk-tag-colors-swatches button:hover { background: var(--sk-hover); }
+.sk-tag-colors-modal input[type="color"] { border: 1px solid var(--sk-line); border-radius: var(--sk-radius-s); }
+
+/* Tag card: what a click on a tag opens (see card.ts). */
+.sk-tag-card {
+	position: fixed;
+	z-index: var(--layer-popover, 30);
+	width: min(340px, calc(100vw - 12px));
+	max-height: min(70vh, 520px);
+	overflow-y: auto;
+	padding: 8px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-l, 12px);
+	background: var(--sk-surface, var(--background-primary));
+	box-shadow: var(--sk-shadow-pop);
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: 13px;
+	animation: sk-pop 180ms var(--sk-ease, ease);
+}
+.sk-tag-card button {
+	all: unset;
+	box-sizing: border-box;
+	cursor: pointer;
+}
+.sk-tag-card-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 2px 6px 4px;
+}
+.sk-tag-card-crumbs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px 4px;
+	flex: 1;
+	min-width: 0;
+	font-weight: 600;
+}
+.sk-tag-card .sk-tag-card-crumb {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 1px 4px;
+	border-radius: 5px;
+	color: var(--text-muted);
+}
+.sk-tag-card .sk-tag-card-crumb:hover:not(:disabled) {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+.sk-tag-card .sk-tag-card-crumb.is-current {
+	color: var(--text-normal);
+	cursor: default;
+}
+.sk-tag-card-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--sk-tag-l-fg, var(--sk-accent));
+}
+.sk-tag-card-sep {
+	color: var(--text-faint);
+}
+.sk-tag-card .sk-tag-card-close {
+	display: grid;
+	place-items: center;
+	padding: 3px;
+	border-radius: 5px;
+	color: var(--text-faint);
+	--icon-size: 14px;
+}
+.sk-tag-card .sk-tag-card-close:hover {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+.sk-tag-card-subs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 0 4px 6px;
+}
+.sk-tag-card .sk-tag-card-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--sk-tag-l-bg, var(--sk-hover));
+	color: var(--sk-tag-l-fg, var(--text-normal));
+	font-size: 12px;
+}
+.sk-tag-card .sk-tag-card-chip:hover {
+	filter: brightness(0.96);
+}
+.sk-tag-card-n {
+	font-size: 11px;
+	opacity: 0.7;
+}
+.sk-tag-card-section {
+	padding-top: 6px;
+	border-top: 1px solid var(--sk-line);
+	margin-top: 2px;
+}
+.sk-tag-card-section-head {
+	display: flex;
+	justify-content: space-between;
+	padding: 2px 6px 4px;
+	color: var(--text-faint);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+.sk-tag-card-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 6px;
+	border-radius: 7px;
+}
+.sk-tag-card-row:hover {
+	background: var(--sk-hover);
+}
+.sk-tag-card-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+.sk-tag-card-meta {
+	color: var(--text-faint);
+	font-size: 11.5px;
+	white-space: nowrap;
+}
+.sk-tag-card-meta.is-today {
+	color: var(--sk-accent-text);
+}
+.sk-tag-card-meta.is-late {
+	color: var(--text-error);
+}
+.sk-tag-card .sk-tag-card-check {
+	width: 14px;
+	height: 14px;
+	flex: none;
+	border: 1.5px solid var(--text-faint);
+	border-radius: 4px;
+}
+.sk-tag-card .sk-tag-card-check:hover {
+	border-color: var(--sk-accent);
+}
+.sk-tag-card-task.is-done .sk-tag-card-check {
+	background: var(--sk-accent);
+	border-color: var(--sk-accent);
+}
+.sk-tag-card-task.is-done .sk-tag-card-title {
+	text-decoration: line-through;
+	color: var(--text-faint);
+}
+.sk-tag-card-note {
+	cursor: pointer;
+	align-items: flex-start;
+}
+.sk-tag-card-area {
+	width: 8px;
+	height: 8px;
+	flex: none;
+	margin-top: 6px;
+	border-radius: 50%;
+	background: var(--background-modifier-border);
+}
+.sk-tag-card-area.has-area {
+	background: hsl(var(--sk-tag-card-hue) 60% 45%);
+}
+.sk-tag-card-text {
+	flex: 1;
+	min-width: 0;
+}
+.sk-tag-card-snippet {
+	color: var(--text-muted);
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-tag-card-snippet:empty {
+	display: none;
+}
+.sk-tag-card .sk-tag-card-more {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	margin-top: 2px;
+	padding: 5px 6px;
+	border-radius: 7px;
+	color: var(--sk-accent-text);
+	font-size: 12.5px;
+	--icon-size: 14px;
+}
+.sk-tag-card .sk-tag-card-more:hover {
+	background: var(--sk-hover);
+}
+.sk-tag-card-more-n,
+.sk-tag-card-empty {
+	padding: 4px 6px 2px;
+	color: var(--text-faint);
+	font-size: 12px;
+}
+
+/* Tag suggestions (see suggest.ts). */
+.sk-tag-suggest {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+.sk-tag-suggest-tag {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+.sk-tag-suggest-new {
+	font-size: 11px;
+	color: var(--text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+.sk-tag-suggest-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--text-faint);
+	font-size: 11.5px;
+	white-space: nowrap;
+}
+.sk-tag-suggest-origin {
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+}
+.sk-tag-suggest-origin.is-note {
+	color: var(--text-accent);
+}
+.sk-tag-suggest-touch {
+	padding: 4px;
+	--icon-size: 16px;
+}

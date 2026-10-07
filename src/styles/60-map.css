@@ -1,0 +1,111 @@
+.sk-map {
+	--sk-map-ink: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l));
+	--sk-map-dot: hsl(var(--sk-hue) var(--sk-dot-s) var(--sk-dot-l));
+	position: relative;
+	min-width: 0;
+	color: var(--text-normal);
+}
+.sk-map-crumbs {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: 26px;
+	overflow: hidden;
+	font-size: 12.5px;
+	white-space: nowrap;
+	color: var(--text-muted);
+}
+.sk-map-crumbs > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.sk-map-crumb-separator svg { width: 12px; height: 12px; }
+.sk-map-viewport { overflow-x: auto; overflow-y: hidden; }
+.sk-map-stage { position: relative; height: 340px; isolation: isolate; }
+.sk-map-branches { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 0; }
+.sk-map-branches path {
+	fill: none;
+	stroke: var(--sk-line);
+	stroke-width: 1.25px;
+	stroke-linecap: round;
+	transition: d var(--sk-slow) var(--sk-ease), stroke var(--sk-mid) var(--sk-ease), stroke-width var(--sk-mid) var(--sk-ease);
+}
+.sk-map-branches path.is-active { stroke: hsl(var(--sk-hue) var(--sk-dot-s) var(--sk-dot-l)); stroke-width: 1.75px; }
+.sk-map-group { position: absolute; }
+.sk-map-group.is-overflow { overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.sk-map-group-label {
+	position: absolute;
+	left: 8px;
+	height: 18px;
+	max-width: calc(100% - 8px);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.075em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	pointer-events: none;
+}
+.sk-map .sk-map-node {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	box-sizing: border-box;
+	height: 28px;
+	padding: 0 8px;
+	border-radius: 8px;
+	font-size: 13px;
+	line-height: 1;
+	font-weight: 400;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+	-webkit-user-select: none;
+	color: var(--text-normal);
+	transition: color var(--sk-mid) var(--sk-ease), transform var(--sk-fast) var(--sk-ease);
+}
+.sk-map-node.is-domain, .sk-map-node.is-root { font-size: 13.5px; font-weight: 600; }
+.sk-map-node.is-sub { font-size: 13.5px; font-weight: 500; }
+.sk-map-node.is-dim, .sk-map-node.is-more { color: var(--text-muted); }
+.sk-map-node.is-path:not(.is-gray), .sk-map-node.is-hi:not(.is-gray) { color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l)); }
+.sk-map-node.is-pressed { transform: scale(0.97); }
+.sk-map-node:focus-visible { outline: 1px solid var(--sk-accent-line); outline-offset: 1px; }
+.sk-map-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sk-map-head { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; color: var(--text-faint); }
+.sk-map-head svg { width: 13px; height: 13px; stroke-width: 1.75px; }
+.sk-map-node.is-home .sk-map-head { width: 22px; height: 22px; border-radius: 50%; background: var(--sk-surface-sunken); color: var(--text-muted); }
+.sk-map-node.is-domain .sk-map-head { width: 18px; height: 18px; border-radius: 6px; font-size: 10px; background: hsl(var(--sk-hue) var(--sk-pill-s) var(--sk-pill-l)); color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l)); }
+.sk-map-node:is(.is-note, .is-drawing) .sk-map-head { width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--sk-hue) var(--sk-dot-s) var(--sk-dot-l)); }
+.sk-map-node.is-drawing .sk-map-head { border-radius: 1.5px; }
+.sk-map-node.is-gray .sk-map-head { color: var(--text-muted); }
+.sk-map-node.is-gray:is(.is-domain, .is-note, .is-drawing) .sk-map-head { background: var(--sk-hover); }
+.sk-map-node.is-current .sk-map-head { outline: 2px solid currentColor; outline-offset: 2px; }
+.sk-map-node.is-current:not(.is-gray) .sk-map-head { outline-color: hsl(var(--sk-hue) var(--sk-dot-s) var(--sk-dot-l)); }
+.sk-map-chevron { display: inline-flex; flex: none; width: 12px; height: 12px; margin-left: auto; color: var(--text-faint); transition: transform var(--sk-mid) var(--sk-ease), opacity var(--sk-fast); }
+.sk-map-chevron svg { width: 12px; height: 12px; }
+.sk-map-node.is-expanded .sk-map-chevron { opacity: 0; }
+.sk-map-node .sk-map-action.sk-btn { position: absolute; right: 1px; width: 22px; height: 22px; opacity: 0; pointer-events: none; transition: opacity var(--sk-fast); }
+.sk-map-node:is(:hover, :focus-within) .sk-map-action { opacity: 1; pointer-events: auto; }
+.sk-map-node:is(:hover, :focus-within) .sk-map-chevron { opacity: 0; }
+.sk-map-tooltip { position: fixed; z-index: 1000; max-width: min(340px, calc(100vw - 12px)); padding: 6px 9px; border: 1px solid var(--sk-line); border-radius: var(--sk-radius-s); background: var(--sk-surface); box-shadow: var(--sk-shadow-pop); color: var(--text-normal); font-size: 12px; pointer-events: none; overflow-wrap: anywhere; }
+.sk-map .is-leaving { pointer-events: none; }
+.sk-map-stage.is-tree { height: auto; min-height: 44px; }
+.sk-map-stage.is-tree .sk-map-node { position: relative; left: auto; top: auto; max-width: none; width: 100%; height: 44px; padding-left: calc(8px + var(--sk-map-level, 0) * 20px); }
+.sk-map-stage.is-tree .sk-map-label { flex: 1; }
+.sk-map-stage.is-tree .sk-map-group { position: relative; display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--sk-mid) var(--sk-ease); }
+.sk-map-stage.is-tree .sk-map-group.is-open { grid-template-rows: 1fr; }
+.sk-map-tree-inner { min-height: 0; overflow: hidden; }
+.sk-map-stage.is-tree .sk-map-group::before { content: ""; position: absolute; top: 0; bottom: 0; left: 17px; border-left: 1px solid var(--sk-line); pointer-events: none; }
+.sk-map-stage.is-tree .sk-map-group.is-active::before { border-color: hsl(var(--sk-hue) var(--sk-dot-s) var(--sk-dot-l) / 45%); }
+.sk-map-stage.is-tree .sk-map-group .sk-map-group::before { left: 37px; }
+.sk-map-stage.is-tree .sk-map-group .sk-map-group .sk-map-group::before { left: 57px; }
+.sk-map-stage.is-tree .sk-map-chevron { opacity: 1; }
+.sk-map-stage.is-tree .sk-map-node.is-expanded .sk-map-chevron { transform: rotate(90deg); }
+.sk-map-stage.is-tree .sk-map-node .sk-map-action { position: relative; right: auto; flex: none; width: 44px; height: 44px; opacity: 1; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+	.sk-map-branches path { transition: none; }
+	.sk-map .sk-map-node, .sk-map .sk-map-chevron, .sk-map-stage.is-tree .sk-map-group { transition: opacity 120ms; }
+	.sk-map-node.is-pressed { transform: none; }
+}
+/* Names for screen readers (an aria-label would show as Obsidian's tooltip on hover). */
+.sk-map-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; pointer-events: none; }

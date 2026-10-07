@@ -1,19 +1,12 @@
-// Daily notes engine of the Calendar panel: where daily notes are, the month grid, the template,
-// and a lazy index of existing daily notes. Everything but the index and creation is pure.
-import { moment, TFile, TFolder } from "obsidian";
+// Daily notes engine of the Calendar panel: the month grid and a lazy index of existing daily notes.
+// Where daily notes are, their names, the template and creating them now live in the core
+// (src/core/daily.ts), shared with Home and Search; they are re-exported here unchanged.
+import { moment, TFile } from "obsidian";
 import type { App, EventRef } from "obsidian";
 import type { Locale } from "moment";
-import type { NoteRailSettings } from "../../types";
+import { parseDailyPath, type DailyConfig } from "../../../../core/daily";
 
-/** Where daily notes live and how they are named. */
-export interface DailyConfig {
-	/** Folder path without leading/trailing slash, "" = vault root. */
-	folder: string;
-	/** moment format of the note name (may contain "/" for nested folders, like YYYY/MM/YYYY-MM-DD). */
-	format: string;
-	/** Template note path ("" = none), as written in the settings (with or without ".md"). */
-	template: string;
-}
+export { applyDailyTemplate, dailyPath, getDailyConfig, getOrCreateDailyNote, parseDailyPath, type DailyConfig } from "../../../../core/daily";
 
 /** One cell of the month grid. */
 export interface CalendarDay {
@@ -31,44 +24,6 @@ export interface CalendarDay {
 	isToday: boolean;
 	/** ISO 8601 week number of this day. */
 	isoWeek: number;
-}
-
-type DailySettings = Pick<NoteRailSettings, "calendarFolder" | "calendarFormat" | "calendarTemplate">;
-
-/** Options of the core Daily notes plugin, when Obsidian exposes them (even with the plugin off). */
-function coreDailyOptions(app: App): Record<string, unknown> | undefined {
-	try {
-		const internal = (app as unknown as { internalPlugins?: { getPluginById?(id: string): { instance?: { options?: Record<string, unknown> } } | null } }).internalPlugins;
-		return internal?.getPluginById?.("daily-notes")?.instance?.options;
-	} catch {
-		return undefined;
-	}
-}
-
-/** Settings overrides first, then the core Daily notes plugin options, then defaults (root folder, YYYY-MM-DD). */
-export function getDailyConfig(app: App, settings: DailySettings): DailyConfig {
-	const core = coreDailyOptions(app);
-	const nonEmpty = (value: unknown): string => typeof value === "string" ? value.trim() : "";
-	return {
-		folder: (nonEmpty(settings.calendarFolder) || nonEmpty(core?.folder)).replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").replace(/\/{2,}/g, "/"),
-		format: nonEmpty(settings.calendarFormat) || nonEmpty(core?.format) || "YYYY-MM-DD",
-		template: nonEmpty(settings.calendarTemplate) || nonEmpty(core?.template),
-	};
-}
-
-/** Vault path ("Daily/2026-10-02.md") of the daily note of `key` ("YYYY-MM-DD"). */
-export function dailyPath(key: string, cfg: DailyConfig): string {
-	const name = moment(key, "YYYY-MM-DD", true).format(cfg.format);
-	return `${cfg.folder ? cfg.folder + "/" : ""}${name}.md`;
-}
-
-/** "YYYY-MM-DD" when `path` is a daily note under cfg (strict parse), else null. Pure. */
-export function parseDailyPath(path: string, cfg: DailyConfig): string | null {
-	const prefix = cfg.folder ? cfg.folder + "/" : "";
-	if (!path.endsWith(".md") || !path.startsWith(prefix)) return null;
-	const name = path.slice(prefix.length, -3);
-	const date = moment(name, cfg.format, true);
-	return date.isValid() && date.format(cfg.format) === name ? date.format("YYYY-MM-DD") : null;
 }
 
 /** Always 6 rows x 7 days covering `month` of `year`, starting on `weekStart` (0 = Sunday, 1 = Monday). Pure. */
@@ -96,16 +51,6 @@ export function weekStartOf(setting: string, lang: string): number {
 /** moment's data for `lang` (falls back to moment's current locale when that language is not bundled). */
 export function localeData(lang: string): Locale {
 	return moment.localeData(lang) ?? moment.localeData();
-}
-
-/** Template text with {{title}}, {{date}}, {{date:FMT}}, {{time}}, {{time:FMT}} replaced (Obsidian core rules). Pure given `now`. */
-export function applyDailyTemplate(text: string, key: string, title: string, now: Date): string {
-	const day = moment(key, "YYYY-MM-DD", true);
-	const time = moment(now);
-	return text.replace(/\{\{\s*(title|date|time)(?:\s*:\s*([^{}]*?))?\s*\}\}/g, (token, kind: string, format?: string) => {
-		if (kind === "title") return format === undefined ? title : token;
-		return kind === "date" ? day.format(format?.trim() || "YYYY-MM-DD") : time.format(format?.trim() || "HH:mm");
-	});
 }
 
 /**
@@ -175,36 +120,5 @@ export class DailyIndex {
 		this.timer = null;
 		this.listeners.clear();
 		this.files.clear();
-	}
-}
-
-/** Existing daily note of `key`, or a new one (folders created, template applied). Never overwrites. */
-export async function getOrCreateDailyNote(app: App, key: string, cfg: DailyConfig): Promise<TFile> {
-	const path = dailyPath(key, cfg);
-	const existing = app.vault.getAbstractFileByPath(path);
-	if (existing instanceof TFile) return existing;
-	const parts = path.split("/");
-	for (let i = 1; i < parts.length; i++) {
-		const folder = parts.slice(0, i).join("/");
-		if (app.vault.getAbstractFileByPath(folder) instanceof TFolder) continue;
-		try {
-			await app.vault.createFolder(folder);
-		} catch (error) {
-			if (!(app.vault.getAbstractFileByPath(folder) instanceof TFolder)) throw error;
-		}
-	}
-	let text = "";
-	if (cfg.template) {
-		const template = app.vault.getAbstractFileByPath(cfg.template.endsWith(".md") ? cfg.template : cfg.template + ".md");
-		if (template instanceof TFile) text = await app.vault.read(template);
-		else console.warn(`[Snailkit] note-rail: daily note template not found: ${cfg.template}`);
-	}
-	const title = parts[parts.length - 1].slice(0, -3);
-	try {
-		return await app.vault.create(path, applyDailyTemplate(text, key, title, new Date()));
-	} catch (error) {
-		const raced = app.vault.getAbstractFileByPath(path);
-		if (raced instanceof TFile) return raced;
-		throw error;
 	}
 }

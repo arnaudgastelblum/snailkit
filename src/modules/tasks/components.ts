@@ -21,7 +21,15 @@ export function checkbox(parent: HTMLElement, cls?: string): HTMLElement {
 }
 
 export function kbd(parent: HTMLElement, text: string): HTMLElement {
-	return parent.createEl("kbd", { cls: "sk-tasks-kbd", text });
+	return parent.createEl("kbd", { cls: parent.hasClass("sk-btn") ? undefined : "sk-tasks-kbd", text });
+}
+
+/** A single line of plain description text, styled like row metadata. */
+export function descriptionPreview(parent: HTMLElement, description: string): void {
+	if (!description) return;
+	const preview = parent.createDiv({ cls: "sk-tasks-row-description" });
+	icon(preview, "align-left");
+	preview.createSpan({ text: description.split("\n", 1)[0] });
 }
 
 /** Draws the inline Markdown of a title (code, bold, italic, highlight, strike, link names). */

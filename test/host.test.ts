@@ -119,3 +119,157 @@ test("a failing cleanup does not keep the other cleanups from running", async ()
 	await host.setEnabled("mod", false);
 	assert.deepEqual(ran.sort(), ["first", "last"]);
 });
+
+test("saving keeps the settings keys this version does not know", async () => {
+	const { plugin } = fakePlugin();
+	const mod = defineModule({ id: "mod", icon: "x", category: "write", strings, defaults: { a: 1 }, activate() {} });
+	plugin.data.modules.mod = { enabled: false, settings: { a: 2, newer: true } };
+	const host = new ModuleHost(plugin, [mod]);
+	const handle = host.get("mod")!;
+	(handle.settings as { a: number }).a = 3;
+	await handle.save();
+	assert.deepEqual(plugin.data.modules.mod.settings, { a: 3, newer: true });
+});
+
+test("settings changed on another device reach the modules instead of being overwritten", async () => {
+	const { plugin } = fakePlugin();
+	const seen: number[] = [];
+	const mod = defineModule({
+		id: "mod",
+		icon: "x",
+		category: "write",
+		strings,
+		defaults: { a: 1 },
+		activate(ctx) {
+			ctx.onSettingsChange((s) => seen.push(s.a));
+		},
+	});
+	const other = defineModule({ id: "other", icon: "x", category: "write", strings, defaults: {}, activate() {} });
+	plugin.data.modules.mod = { enabled: true, settings: { a: 1 } };
+	const host = new ModuleHost(plugin, [mod, other] as AnyModule[]);
+	await host.startEnabled();
+	const fresh = defaultData();
+	fresh.modules.mod = { enabled: true, settings: { a: 5 } };
+	fresh.modules.other = { enabled: true, settings: {} };
+	host.get("mod")!.localAt = 0;
+	await host.applyExternal(async () => fresh);
+	assert.deepEqual(seen, [5]);
+	assert.equal(host.get("other")!.state, "on", "turned on elsewhere, so on here too");
+	const off = defaultData();
+	off.modules.mod = { enabled: false, settings: { a: 5 } };
+	for (const handle of host.handles) handle.localAt = 0;
+	await host.applyExternal(async () => off);
+	assert.equal(host.get("mod")!.state, "off");
+	assert.equal(host.get("other")!.state, "off");
+});
+
+test("an unreadable file from another device changes nothing", async () => {
+	const { plugin } = fakePlugin();
+	const mod = defineModule({ id: "mod", icon: "x", category: "write", strings, defaults: { a: 1 }, activate() {} });
+	plugin.data.modules.mod = { enabled: true, settings: { a: 2 } };
+	const host = new ModuleHost(plugin, [mod]);
+	await host.startEnabled();
+	await host.applyExternal(async () => null);
+	assert.equal(host.get("mod")!.state, "on");
+	assert.equal((host.get("mod")!.settings as { a: number }).a, 2);
+});
+
+test("a module just changed on this device keeps its local values over an older file", async () => {
+	const { plugin } = fakePlugin();
+	const mod = defineModule({ id: "mod", icon: "x", category: "write", strings, defaults: { a: 1 }, activate() {} });
+	const host = new ModuleHost(plugin, [mod]);
+	const older = defaultData();
+	older.modules.mod = { enabled: false, settings: { a: 1 } };
+	// The user turns the module on while the older file is waiting in the queue.
+	const applied = host.applyExternal(async () => older);
+	const on = host.setEnabled("mod", true);
+	await Promise.all([applied, on]);
+	assert.equal(host.get("mod")!.state, "on");
+	assert.equal(plugin.data.modules.mod.enabled, true);
+});
+
+test("a language change from another device restarts the running modules", async () => {
+	const { plugin } = fakePlugin();
+	let starts = 0;
+	let resets = 0;
+	(plugin as unknown as { resetTranslator(): void }).resetTranslator = () => void resets++;
+	const mod = defineModule({ id: "mod", icon: "x", category: "write", strings, defaults: {}, activate() { starts++; } });
+	plugin.data.modules.mod = { enabled: true, settings: {} };
+	const host = new ModuleHost(plugin, [mod]);
+	await host.startEnabled();
+	const fresh = defaultData();
+	fresh.language = "fr";
+	fresh.modules.mod = { enabled: true, settings: {} };
+	await host.applyExternal(async () => fresh);
+	assert.equal(resets, 1);
+	assert.equal(starts, 2);
+	assert.equal(plugin.data.language, "fr");
+});
+
+test("the plugin unloading while a file from another device is read starts nothing again", async () => {
+	const { plugin, commands } = fakePlugin();
+	const mod = defineModule({
+		id: "mod",
+		icon: "x",
+		category: "write",
+		strings,
+		defaults: {},
+		activate(ctx) {
+			ctx.addCommand({ id: "run", name: "Run", callback() {} });
+		},
+	});
+	plugin.data.modules.mod = { enabled: true, settings: {} };
+	const host = new ModuleHost(plugin, [mod]);
+	await host.startEnabled();
+	assert.equal(commands.size, 1);
+	const fresh = defaultData();
+	fresh.modules.mod = { enabled: true, settings: {} };
+	fresh.language = "fr";
+	host.get("mod")!.localAt = 0;
+	(plugin as unknown as { resetTranslator(): void }).resetTranslator = () => undefined;
+	const applied = host.applyExternal(async () => {
+		host.stopAll();
+		await tick();
+		return fresh;
+	});
+	await applied;
+	assert.equal(host.get("mod")!.context, null);
+	assert.equal(commands.size, 0, "nothing left registered after the unload");
+	assert.equal(await host.setEnabled("mod", true), "off", "a later toggle starts nothing either");
+	await host.relocalize();
+	assert.equal(host.get("mod")!.context, null);
+});
+
+test("the plugin unloading during the first start leaves the next modules off", async () => {
+	const { plugin, commands } = fakePlugin();
+	let hostRef: ModuleHost | null = null;
+	const first = defineModule({
+		id: "first",
+		icon: "x",
+		category: "write",
+		strings,
+		defaults: {},
+		async activate(ctx) {
+			ctx.addCommand({ id: "a", name: "A", callback() {} });
+			hostRef!.stopAll();
+			await tick();
+		},
+	});
+	const second = defineModule({
+		id: "second",
+		icon: "x",
+		category: "write",
+		strings,
+		defaults: {},
+		activate(ctx) {
+			ctx.addCommand({ id: "b", name: "B", callback() {} });
+		},
+	});
+	plugin.data.modules = { first: { enabled: true, settings: {} }, second: { enabled: true, settings: {} } };
+	const host = new ModuleHost(plugin, [first, second] as AnyModule[]);
+	hostRef = host;
+	await host.startEnabled();
+	assert.equal(host.get("first")!.context, null);
+	assert.equal(host.get("second")!.context, null);
+	assert.equal(commands.size, 0);
+});

@@ -1,20 +1,19 @@
-// The running module: index, writer, open views and the actions they share (with toasts).
-import { moment } from "obsidian";
+// The running module: index, writer, the Tasks tabs shown in the Workbench and the actions they
+// share (with toasts). The Workbench itself belongs to the core (ctx.workbench).
+import { moment, TFile } from "obsidian";
+import { isSideLeaf } from "../../core/workbench/state";
+import { TAB_ORDER, WORKBENCH_VIEW_TYPE, type WorkbenchTab } from "../../core/workbench/types";
 import { dueLabel } from "./group";
 import { plainTitle } from "./parse";
 import type { DayWords } from "./quick-add";
-import type { ViewAction } from "./api";
+import { resolveWorkbench, type TasksApi, type ViewAction, type ViewTab } from "./api";
+import { TasksTab } from "./tab";
 import { TaskIndex } from "./task-index";
-import { VIEW_TYPE, type Context, type Priority, type Task } from "./types";
+import type { Context, Priority, Task } from "./types";
 import { TaskWriter, type Undo } from "./writer";
 
-/** What the hub needs from an open view. */
-export interface HubView {
-	refresh(): void;
-	build(): void;
-	startAdd(tag: string | null): void;
-	showTag(tag: string): void;
-}
+/** Ids of Snailkit's own tabs: a companion plugin cannot take them (see addViewTab in api.ts). */
+const RESERVED_TABS = ["tasks", "home", "sessions"];
 
 interface TagColors {
 	version: number;
@@ -24,7 +23,6 @@ interface TagColors {
 export class TasksHub {
 	readonly index: TaskIndex;
 	readonly writer: TaskWriter;
-	private refreshTimer = 0;
 	private lastUndo: { run: Undo; until: number } | null = null;
 	private disposed = false;
 	/** Buttons other plugins put in the header of the lists (see ViewAction in api.ts). */
@@ -40,53 +38,77 @@ export class TasksHub {
 		return !this.disposed;
 	}
 
-	views(): HubView[] {
-		return this.ctx.app.workspace
-			.getLeavesOfType(VIEW_TYPE)
-			.map((leaf) => leaf.view as unknown as Partial<HubView>)
-			.filter((view): view is HubView => typeof view.refresh === "function" && typeof view.build === "function");
+	/** The Tasks tab, as the Workbench registers it. */
+	tab(): WorkbenchTab {
+		return {
+			id: "tasks",
+			order: TAB_ORDER.tasks,
+			icon: "list-checks",
+			label: this.ctx.t("view.tasks"),
+			count: () => this.index.open().length,
+			mount: (el, host) => new TasksTab(this, el, host),
+		};
 	}
 
-	/** Redraws every open list soon (many changes in a row draw once). */
+	/** The Tasks tabs shown right now (one per Workbench showing Tasks). */
+	views(): TasksTab[] {
+		return this.ctx.workbench.instances("tasks").filter((instance): instance is TasksTab => instance instanceof TasksTab);
+	}
+
+	/** Redraws every open Workbench soon: tab counts, then the shown tabs (many changes in a row draw once). */
 	refreshViews(): void {
 		if (this.disposed) return;
-		window.clearTimeout(this.refreshTimer);
-		this.refreshTimer = window.setTimeout(() => {
-			for (const view of this.views()) view.refresh();
-		}, 60);
+		this.ctx.workbench.refresh();
 	}
 
-	rebuildViews(): void {
-		for (const view of this.views()) view.build();
+	/** A companion plugin's tab (Tasks API addViewTab), after Brainstorm. Removed when this module stops. */
+	addViewTab(tab: ViewTab): () => void {
+		if (this.disposed || RESERVED_TABS.includes(tab.id)) return () => undefined;
+		return this.ctx.workbench.addTab(tab);
 	}
 
-	/** Shows the list as a page (main area) or in the right side panel, reusing an open one. */
-	async activate(where: "page" | "side"): Promise<HubView | null> {
-		const workspace = this.ctx.app.workspace;
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE).find((l) => (l.getRoot() === workspace.rootSplit) === (where === "page")) ?? null;
-		if (!leaf) {
-			leaf = where === "page" ? workspace.getLeaf("tab") : workspace.getRightLeaf(false);
-			if (!leaf) return null;
-			await leaf.setViewState({ type: VIEW_TYPE, active: true });
-		}
-		await workspace.revealLeaf(leaf);
-		const view = leaf.view as unknown as Partial<HubView>;
-		return typeof view.startAdd === "function" ? (view as HubView) : null;
+	/** Whether a Workbench tab is registered (Tasks, Home, Brainstorm, a companion's). */
+	hasTab(id: string): boolean {
+		return this.ctx.workbench.hasTab(id);
 	}
 
-	/** Shows the list as a page, on the tasks of one tag (and its sub-tags). */
+	/**
+	 * Shows the Workbench as a page (main area) or in the right side panel: an open one keeps its
+	 * tab, a new one opens on Tasks. `tasks`: on the Tasks tab in any case (the list's own "Open as
+	 * a page" button: the list is what should grow, not the tab the page happens to show).
+	 */
+	async activate(where: "page" | "side", options: { tasks?: boolean } = {}): Promise<TasksTab | null> {
+		if (this.disposed) return null;
+		const app = this.ctx.app;
+		const exists = !options.tasks && app.workspace.getLeavesOfType(WORKBENCH_VIEW_TYPE).some((leaf) => isSideLeaf(app, leaf) === (where === "side"));
+		const shown = await this.ctx.workbench.open({ tab: exists ? undefined : "tasks", where });
+		return !this.disposed && shown instanceof TasksTab ? shown : null;
+	}
+
+	/** Reveals an existing Workbench or opens a page, then selects its destination. */
+	async openWorkbench(options?: Parameters<TasksApi["openWorkbench"]>[0]): Promise<void> {
+		if (this.disposed) return;
+		const target = resolveWorkbench(options, { has: (id) => this.hasTab(id) });
+		await this.ctx.workbench.open({ tab: target.tab, state: target.scope ? { scope: target.scope } : undefined });
+	}
+
+	/** Shows the Workbench as a page, on the tasks of one tag (and its sub-tags). */
 	async showTag(tag: string): Promise<boolean> {
-		const view = await this.activate("page");
-		view?.showTag(tag);
-		return !!view;
+		if (this.disposed) return false;
+		const shown = await this.ctx.workbench.open({ tab: "tasks", where: "page" });
+		if (this.disposed || !(shown instanceof TasksTab)) return false;
+		shown.showTag(tag);
+		return true;
 	}
 
-	/** Opens the quick add row: in an open list, else in the side panel. */
+	/** Opens the quick add row: in an open Workbench, else in the side panel. */
 	async newTask(): Promise<void> {
-		const workspace = this.ctx.app.workspace;
-		const open = workspace.getLeavesOfType(VIEW_TYPE)[0];
-		const view = open ? await this.activate(open.getRoot() === workspace.rootSplit ? "page" : "side") : await this.activate("side");
-		view?.startAdd(null);
+		if (this.disposed) return;
+		const app = this.ctx.app;
+		const open = app.workspace.getLeavesOfType(WORKBENCH_VIEW_TYPE)[0];
+		const where = open ? (isSideLeaf(app, open) ? "side" : "page") : "side";
+		const shown = await this.ctx.workbench.open({ tab: "tasks", where });
+		if (!this.disposed && shown instanceof TasksTab) shown.startAdd(null);
 	}
 
 	/** Classes from the Tag colors module when it runs, else "" (the fallback colors apply). */
@@ -97,6 +119,12 @@ export class TasksHub {
 		} catch {
 			return "";
 		}
+	}
+
+	isSession(path: string): boolean {
+		const file = this.ctx.app.vault.getAbstractFileByPath(path);
+		const service = this.ctx.service<{ version: 1; isSession(file: TFile): boolean }>("sessions");
+		return file instanceof TFile && service?.version === 1 && service.isSession(file);
 	}
 
 	today(): string {
@@ -183,7 +211,6 @@ export class TasksHub {
 
 	dispose(): void {
 		this.disposed = true;
-		window.clearTimeout(this.refreshTimer);
 		this.lastUndo = null;
 		this.index.dispose();
 	}

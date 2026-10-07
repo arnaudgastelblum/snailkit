@@ -1,0 +1,475 @@
+/* Slash menu: floating panel near the cursor. Colors come from Obsidian's theme variables only. */
+
+.sk-slash-menu-menu {
+	position: fixed;
+	z-index: var(--layer-menu, 65);
+	width: 340px;
+	max-width: calc(100vw - 16px);
+	max-height: 420px;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background: var(--sk-surface);
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-l);
+	box-shadow: var(--sk-shadow-pop);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	transform-origin: top left;
+	user-select: none;
+}
+
+.sk-slash-menu-menu.is-above {
+	transform-origin: bottom left;
+}
+
+/* Entrance: soft drop with a tiny scale, rows cascade in. */
+.sk-slash-menu-menu.sk-slash-menu-entering {
+	animation: sk-slash-menu-menu-in 170ms var(--sk-ease) both;
+}
+
+.sk-slash-menu-menu.is-above.sk-slash-menu-entering {
+	animation-name: sk-slash-menu-menu-in-above;
+}
+
+.sk-slash-menu-menu.sk-slash-menu-entering .sk-slash-menu-menu-item {
+	animation: sk-slash-menu-row-in 220ms var(--sk-ease) both;
+	animation-delay: calc(var(--sk-slash-menu-i, 12) * 14ms);
+}
+
+/* Exit after a choice: the chosen row pulses, then the panel folds away. */
+.sk-slash-menu-menu.sk-slash-menu-closing {
+	animation: sk-slash-menu-menu-out 150ms ease-in both;
+	pointer-events: none;
+}
+
+@keyframes sk-slash-menu-menu-in {
+	from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+	to { opacity: 1; transform: none; }
+}
+
+@keyframes sk-slash-menu-menu-in-above {
+	from { opacity: 0; transform: translateY(6px) scale(0.97); }
+	to { opacity: 1; transform: none; }
+}
+
+@keyframes sk-slash-menu-menu-out {
+	from { opacity: 1; transform: none; }
+	to { opacity: 0; transform: translateY(-3px) scale(0.975); }
+}
+
+@keyframes sk-slash-menu-row-in {
+	from { opacity: 0; transform: translateX(-6px); }
+	to { opacity: 1; transform: none; }
+}
+
+/* Search line */
+
+.sk-slash-menu-menu-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 9px 12px 8px;
+	border-bottom: 1px solid var(--sk-line);
+	color: var(--text-muted);
+}
+
+.sk-slash-menu-menu-search-icon {
+	display: flex;
+	color: var(--text-faint);
+}
+
+.sk-slash-menu-menu-search-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.sk-slash-menu-menu-search-trigger {
+	font-family: var(--font-monospace);
+	font-weight: 600;
+	color: var(--sk-accent-text);
+}
+
+.sk-slash-menu-menu-search-query {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: pre;
+	color: var(--text-normal);
+	font-weight: 500;
+}
+
+.sk-slash-menu-menu-search-query.is-empty::before {
+	content: attr(data-placeholder);
+	color: var(--text-faint);
+	font-weight: 400;
+}
+
+/* List */
+
+.sk-slash-menu-menu-list {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 4px 6px 6px;
+	scroll-behavior: auto;
+}
+
+/* The selection pill glides between rows instead of jumping. */
+.sk-slash-menu-menu-highlight {
+	position: absolute;
+	top: 0;
+	left: 6px;
+	right: 6px;
+	border-radius: var(--sk-radius);
+	background: var(--sk-hover);
+	box-shadow: inset 0 0 0 1px var(--sk-accent-wash);
+	transition: transform 130ms var(--sk-ease), height 130ms var(--sk-ease), background-color 130ms ease;
+	pointer-events: none;
+	will-change: transform;
+}
+
+.sk-slash-menu-menu-highlight::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 8px;
+	bottom: 8px;
+	width: 3px;
+	border-radius: 3px;
+	background: var(--sk-accent);
+	animation: sk-slash-menu-bar-in 200ms var(--sk-ease);
+}
+
+.sk-slash-menu-menu-highlight.is-unavailable::before {
+	background: var(--text-faint);
+}
+
+.sk-slash-menu-menu-highlight.is-instant {
+	transition: none;
+}
+
+@keyframes sk-slash-menu-bar-in {
+	from { transform: scaleY(0); }
+	to { transform: scaleY(1); }
+}
+
+.sk-slash-menu-menu-section + .sk-slash-menu-menu-section {
+	margin-top: 4px;
+}
+
+.sk-slash-menu-menu-section-title {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 8px 8px 4px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.sk-slash-menu-menu-section-icon {
+	display: flex;
+}
+
+.sk-slash-menu-menu-section-icon svg {
+	width: 11px;
+	height: 11px;
+}
+
+/* Rows */
+
+.sk-slash-menu-menu-item {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px 6px 10px;
+	border-radius: var(--sk-radius);
+	cursor: pointer;
+}
+
+.sk-slash-menu-menu-item-icon {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border-radius: var(--sk-radius-s);
+	background: var(--sk-surface);
+	border: 1px solid var(--sk-line);
+	color: var(--text-muted);
+	transition: color 130ms ease, background-color 130ms ease, border-color 130ms ease, transform 160ms var(--sk-ease);
+}
+
+.sk-slash-menu-menu-item-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.sk-slash-menu-menu-item.is-selected .sk-slash-menu-menu-item-icon {
+	color: var(--sk-accent-text);
+	border-color: var(--sk-accent-line);
+	background: var(--sk-accent-wash);
+	transform: scale(1.06);
+}
+
+.sk-slash-menu-menu-item-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.sk-slash-menu-menu-item-title {
+	color: var(--text-normal);
+	font-weight: 500;
+	line-height: 1.3;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sk-slash-menu-match {
+	color: var(--sk-accent-text);
+	font-weight: 700;
+}
+
+.sk-slash-menu-menu-item-desc {
+	margin-top: 1px;
+	font-size: 12px;
+	line-height: 1.3;
+	color: var(--text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sk-slash-menu-menu-item-meta {
+	flex: none;
+	font-size: 11px;
+	color: var(--text-faint);
+	opacity: 0;
+	transition: opacity 130ms ease;
+}
+
+.sk-slash-menu-menu-item.is-selected .sk-slash-menu-menu-item-meta,
+.sk-slash-menu-menu-item:hover .sk-slash-menu-menu-item-meta {
+	opacity: 1;
+}
+
+.sk-slash-menu-menu-item-badge {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: var(--sk-radius-s);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--text-faint);
+	background: var(--sk-surface-sunken);
+	border: 1px solid var(--sk-line);
+}
+
+.sk-slash-menu-menu-item.is-unavailable .sk-slash-menu-menu-item-icon,
+.sk-slash-menu-menu-item.is-unavailable .sk-slash-menu-menu-item-title {
+	opacity: 0.5;
+}
+
+.sk-slash-menu-menu-item.is-unavailable {
+	cursor: not-allowed;
+}
+
+/* Chosen: a quick accent pulse on the row and a pop on its icon. */
+.sk-slash-menu-menu-item.is-chosen {
+	animation: sk-slash-menu-chosen 240ms ease-out both;
+}
+
+.sk-slash-menu-menu-item.is-chosen .sk-slash-menu-menu-item-icon {
+	animation: sk-slash-menu-pop 240ms var(--sk-spring) both;
+	color: var(--text-on-accent);
+	background: var(--sk-accent);
+	border-color: var(--sk-accent);
+}
+
+@keyframes sk-slash-menu-chosen {
+	0% { background: transparent; }
+	35% { background: var(--sk-accent-line); }
+	100% { background: var(--sk-accent-wash); }
+}
+
+@keyframes sk-slash-menu-pop {
+	0% { transform: scale(1.06); }
+	45% { transform: scale(1.22); }
+	100% { transform: scale(1); }
+}
+
+/* Unavailable entry chosen: a small "no" shake. */
+.sk-slash-menu-menu-item.is-shaking {
+	animation: sk-slash-menu-shake 320ms ease-in-out;
+}
+
+@keyframes sk-slash-menu-shake {
+	0%, 100% { transform: none; }
+	20% { transform: translateX(-4px); }
+	40% { transform: translateX(4px); }
+	60% { transform: translateX(-3px); }
+	80% { transform: translateX(2px); }
+}
+
+/* Empty state */
+
+.sk-slash-menu-menu-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 22px 12px;
+	color: var(--text-faint);
+	animation: sk-slash-menu-menu-in 160ms var(--sk-ease) both;
+}
+
+.sk-slash-menu-menu-empty-icon svg {
+	width: 22px;
+	height: 22px;
+}
+
+/* Footer hints */
+
+.sk-slash-menu-menu-footer {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	padding: 6px 12px;
+	border-top: 1px solid var(--sk-line);
+	background: var(--sk-surface-sunken);
+	font-size: 11px;
+	color: var(--text-faint);
+}
+
+.sk-slash-menu-menu-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.sk-slash-menu-menu-hint kbd {
+	padding: 0 4px;
+	min-width: 16px;
+	text-align: center;
+	border-radius: 4px;
+	border: 1px solid var(--sk-line);
+	background: var(--sk-surface);
+	font-family: var(--font-interface);
+	font-size: 10px;
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.sk-slash-menu-menu.sk-slash-menu-no-icons .sk-slash-menu-menu-item {
+	padding-left: 12px;
+}
+
+/* Inserted content glows briefly in the editor. */
+.sk-slash-menu-flash {
+	border-radius: 3px;
+	animation: sk-slash-menu-flash 1100ms ease-out both;
+}
+
+@keyframes sk-slash-menu-flash {
+	0% { background-color: var(--sk-accent-wash); }
+	100% { background-color: transparent; }
+}
+
+/* Animations off (setting or OS preference). */
+.sk-slash-menu-menu.sk-slash-menu-no-anim,
+.sk-slash-menu-menu.sk-slash-menu-no-anim * {
+	animation: none !important;
+	transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sk-slash-menu-menu,
+	.sk-slash-menu-menu *,
+	.sk-slash-menu-flash {
+		animation: none !important;
+		transition: none !important;
+	}
+}
+
+/* Touch screens: bigger rows, no keyboard hints. */
+.is-mobile .sk-slash-menu-menu-item {
+	padding-top: 9px;
+	padding-bottom: 9px;
+}
+
+.is-mobile .sk-slash-menu-menu-footer {
+	display: none;
+}
+
+.sk-slash-menu-entries {
+	max-height: 560px;
+	overflow: auto;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+}
+
+.sk-slash-menu-group {
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--sk-line);
+}
+
+.sk-slash-menu-group > .setting-item:first-child {
+	background: var(--sk-surface-sunken);
+	border-radius: var(--sk-radius-s);
+	padding: 8px;
+}
+
+.sk-slash-menu-group .setting-item-control,
+.sk-slash-menu-editor .setting-item-control {
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.sk-slash-menu-entry .setting-item-info {
+	min-width: 100px;
+}
+
+.sk-slash-menu-entry:hover {
+	background: var(--sk-accent-soft);
+}
+
+.sk-slash-menu-editor:not(:empty) {
+	margin-top: 16px;
+	padding: 12px;
+	border: 1px solid var(--sk-accent-line);
+	border-radius: var(--sk-radius);
+	box-shadow: var(--sk-shadow);
+	animation: sk-rise var(--sk-fast) var(--sk-ease);
+}
+
+.sk-slash-menu-editor textarea {
+	min-height: 120px;
+	width: min(360px, 100%);
+	font-family: var(--font-monospace);
+}
+
+.sk-slash-menu-help {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+	.sk-slash-menu-group .setting-item,
+	.sk-slash-menu-editor .setting-item {
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.sk-slash-menu-group .setting-item-control,
+	.sk-slash-menu-editor .setting-item-control {
+		max-width: 100%;
+	}
+}

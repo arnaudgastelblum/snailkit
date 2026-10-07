@@ -1,8 +1,11 @@
-// The task list. One view for both places: a compact list in a side panel, and navigator +
-// list + details when it gets a page-wide leaf. Everything it changes is written in the notes.
-import { ItemView, Menu, type WorkspaceLeaf } from "obsidian";
+// The Tasks tab of the Workbench: the task list. One tab for both places: a compact list in a side
+// panel, and navigator + list + details when the Workbench is a page. Everything it changes is
+// written in the notes. The Workbench (src/core/workbench) owns the view, the tab bar and the
+// layout; this tab owns everything inside its root, div.sk-tasks-view.
+import { Menu, Scope, type WorkspaceLeaf } from "obsidian";
+import type { TabState, WorkbenchTabHost, WorkbenchTabInstance } from "../../core/workbench/types";
 import { richText } from "../../ui/settings-page";
-import { capsule, checkbox, colorFor, icon, kbd, renderInline, tagDot, TagSuggestModal } from "./components";
+import { capsule, checkbox, colorFor, descriptionPreview, icon, kbd, renderInline, tagDot, TagSuggestModal } from "./components";
 import {
 	addDays, buildTree, countTasks, dueState, findNode, inScope, matchesQuery, nextWeek, passesPriority,
 	sortTasks, todayGroups, upcomingGroups, type TagNode,
@@ -11,9 +14,8 @@ import type { ViewAction } from "./api";
 import type { TasksHub } from "./hub";
 import { PRIORITIES } from "./parse";
 import { parseQuickAdd } from "./quick-add";
-import { VIEW_TYPE, type Priority, type Task } from "./types";
+import type { Priority, Task } from "./types";
 
-const PAGE_MIN_WIDTH = 760;
 const SORT_MODES = ["notes", "priority", "due"] as const;
 
 type Layout = "page" | "side";
@@ -28,6 +30,8 @@ interface ViewState {
 	open: string | null;
 	/** Quick add row: null = closed, "" = at the top, else the tag of its group. */
 	adding: string | null;
+	/** Text typed in the quick add row and not added yet (kept through redraws and tab changes). */
+	draft: string;
 	/** Property of the details whose choices are unfolded. */
 	editProp: string | null;
 	propsFor: string | null;
@@ -41,15 +45,27 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-export class TasksView extends ItemView {
-	private layout: Layout | null = null;
-	private readonly st: ViewState = { scope: "all", query: "", sel: null, open: null, adding: null, editProp: null, propsFor: null };
+/** What a Workbench leaf's list showed (search, selection, quick add) when its tab was last mounted. */
+type Memory = Pick<ViewState, "scope" | "query" | "sel" | "open" | "adding" | "draft" | "editProp" | "propsFor"> & {
+	/** Where the cursor was in the quick add row, and whether that row had the focus. */
+	caret: { start: number; end: number; focused: boolean } | null;
+};
+const memories = new WeakMap<WorkspaceLeaf, Memory>();
+
+export class TasksTab implements WorkbenchTabInstance {
+	private closed = false;
+	private readonly layout: Layout;
+	/** The root of the tab (it used to be the view's content element). */
+	private readonly rootEl: HTMLElement;
+	private readonly st: ViewState = { scope: "all", query: "", sel: null, open: null, adding: null, draft: "", editProp: null, propsFor: null };
 	private pending = false;
-	private pendingLayout = false;
 	private animating = 0;
 	private freshKey: string | null = null;
 	private dragKey: string | null = null;
-	private observer: ResizeObserver | null = null;
+	private readonly cleanups: Array<() => void> = [];
+	/** F2 is Obsidian's "Rename file": while the list has the focus, it renames the selected task. */
+	private readonly keyScope: Scope;
+	private scoped = false;
 	private navEl: HTMLElement | null = null;
 	private headEl: HTMLElement | null = null;
 	private listEl: HTMLElement | null = null;
@@ -69,22 +85,105 @@ export class TasksView extends ItemView {
 	private shownProp: string | null = null;
 
 	constructor(
-		leaf: WorkspaceLeaf,
 		private readonly hub: TasksHub,
+		el: HTMLElement,
+		private readonly host: WorkbenchTabHost,
 	) {
-		super(leaf);
+		this.layout = host.layout;
+		const scope = host.state.scope;
+		if (typeof scope === "string" && scope) this.st.scope = scope;
+		const memory = memories.get(host.leaf);
+		let caret: Memory["caret"] = null;
+		if (memory) {
+			const { scope: was, caret: kept, ...rest } = memory;
+			Object.assign(this.st, rest);
+			// Shown again on another scope: the quick add row closes, as when the scope changes here.
+			if (was === this.st.scope) caret = kept;
+			else {
+				this.st.adding = null;
+				this.st.draft = "";
+			}
+		}
+		this.rootEl = el.createDiv({ cls: "sk-tasks-view" });
+		this.rootEl.tabIndex = -1;
+		this.listen(this.rootEl, "keydown", (event) => void this.onKey(event));
+		this.keyScope = new Scope(hub.ctx.app.scope);
+		this.keyScope.register([], "F2", (event) => {
+			const target = event.target as HTMLElement | null;
+			const t = this.hub.index.get(this.st.sel);
+			if (!t || target?.matches?.("input, textarea") || target?.isContentEditable) return;
+			this.inlineRename(t);
+			return false;
+		});
+		this.listen(this.rootEl, "focusin", () => this.syncScope());
+		// A refresh waits while a field has the focus; it runs when the focus leaves.
+		this.listen(this.rootEl, "focusout", () => {
+			window.setTimeout(() => {
+				this.syncScope();
+				if (this.closed || !this.rootEl.isConnected || this.isEditing()) return;
+				if (this.pending) this.refresh();
+			}, 0);
+		});
+		this.build();
+		if (caret) this.restoreCaret(caret);
 	}
 
-	getViewType(): string {
-		return VIEW_TYPE;
+	private listen<K extends keyof HTMLElementEventMap>(el: HTMLElement, type: K, handler: (event: HTMLElementEventMap[K]) => void): void {
+		el.addEventListener(type, handler);
+		this.cleanups.push(() => el.removeEventListener(type, handler));
 	}
 
-	getDisplayText(): string {
-		return this.t("module.name");
+	/** Opens the note at the task line; from a transient Workbench (a new tab), in its place. */
+	private openTask(t: Task, event?: MouseEvent | KeyboardEvent): Promise<void> {
+		return this.hub.writer.openTask(t, event, this.host.transient ? this.host.leaf : null);
 	}
 
-	getIcon(): string {
-		return "list-checks";
+	// ----- the Workbench's side (WorkbenchTabInstance) -----
+
+	getState(): TabState {
+		return { scope: this.st.scope };
+	}
+
+	setState(state: TabState): void {
+		if (typeof state.scope === "string" && state.scope && state.scope !== this.st.scope) this.setScope(state.scope);
+	}
+
+	update(): void {
+		this.refresh();
+	}
+
+	/** Typing in a field of the list: a layout change of the Workbench waits. */
+	busy(): boolean {
+		return this.isEditing();
+	}
+
+	/** The Workbench was revealed or this tab chosen: the keyboard acts on the list. */
+	focus(): void {
+		if (this.closed) return;
+		const active = this.rootEl.doc.activeElement;
+		if (active && this.rootEl.contains(active)) return;
+		this.rootEl.focus({ preventScroll: true });
+	}
+
+	/** Our keys go first while the focus is in the list. */
+	private syncScope(): void {
+		const want = !this.closed && this.rootEl.isConnected && this.rootEl.contains(this.rootEl.doc.activeElement);
+		if (want === this.scoped) return;
+		this.scoped = want;
+		if (want) this.hub.ctx.app.keymap.pushScope(this.keyScope);
+		else this.hub.ctx.app.keymap.popScope(this.keyScope);
+	}
+
+	destroy(): void {
+		if (this.closed) return;
+		this.closed = true;
+		if (this.scoped) this.hub.ctx.app.keymap.popScope(this.keyScope);
+		this.scoped = false;
+		const { scope, query, sel, open, adding, draft, editProp, propsFor } = this.st;
+		memories.set(this.host.leaf, { scope, query, sel, open, adding, draft, editProp, propsFor, caret: this.caret() });
+		for (const cleanup of this.cleanups.splice(0)) cleanup();
+		this.rootEl.doc.body.removeClass("sk-tasks-dnd");
+		this.rootEl.remove();
 	}
 
 	private t(key: string, vars?: Record<string, string | number>): string {
@@ -95,52 +194,11 @@ export class TasksView extends ItemView {
 		return this.hub.ctx.settings;
 	}
 
-	async onOpen(): Promise<void> {
-		this.contentEl.addClass("sk-tasks-view");
-		this.contentEl.tabIndex = -1;
-		this.observer = new ResizeObserver(() => this.checkLayout(false));
-		this.observer.observe(this.contentEl);
-		this.registerDomEvent(this.contentEl, "keydown", (event) => void this.onKey(event));
-		// A refresh waits while a field has the focus; it runs when the focus leaves.
-		this.registerDomEvent(this.contentEl, "focusout", () => {
-			window.setTimeout(() => {
-				if (!this.contentEl.isConnected || this.isEditing()) return;
-				if (this.pendingLayout) {
-					this.pendingLayout = false;
-					this.checkLayout(false);
-				}
-				if (this.pending) this.refresh();
-			}, 0);
-		});
-		this.checkLayout(true);
-	}
-
-	async onClose(): Promise<void> {
-		this.observer?.disconnect();
-		this.observer = null;
-		this.contentEl.doc.body.removeClass("sk-tasks-dnd");
-		this.contentEl.empty();
-	}
-
-	private checkLayout(force: boolean): void {
-		const width = this.contentEl.clientWidth;
-		if (!width && !force) return;
-		const layout: Layout = width >= PAGE_MIN_WIDTH ? "page" : "side";
-		if (layout !== this.layout && !force && this.isEditing()) {
-			this.pendingLayout = true;
-			return;
-		}
-		if (layout !== this.layout || force) {
-			this.layout = layout;
-			this.build();
-		}
-	}
-
 	private isEditing(): boolean {
-		const active = this.contentEl.doc.activeElement as HTMLElement | null;
+		const active = this.rootEl.doc.activeElement as HTMLElement | null;
 		return (
 			!!active &&
-			this.contentEl.contains(active) &&
+			this.rootEl.contains(active) &&
 			active !== this.searchInput &&
 			!active.closest(".sk-tasks-add") &&
 			(active.matches("input, textarea") || active.isContentEditable)
@@ -163,7 +221,7 @@ export class TasksView extends ItemView {
 	}
 
 	private visibleKeys(): string[] {
-		return Array.from(this.contentEl.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]"), (row) => row.dataset.key!);
+		return Array.from(this.rootEl.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]"), (row) => row.dataset.key!);
 	}
 
 	private rowOf(key: string): HTMLElement | null {
@@ -173,7 +231,10 @@ export class TasksView extends ItemView {
 	// ----- skeleton -----
 
 	build(): void {
-		const el = this.contentEl;
+		if (this.closed) return;
+		this.pending = false;
+		this.navEl = this.headEl = this.listEl = this.footEl = this.detailEl = this.searchInput = this.extEl = null;
+		const el = this.rootEl;
 		el.empty();
 		el.toggleClass("is-page", this.layout === "page");
 		el.toggleClass("is-side", this.layout === "side");
@@ -199,6 +260,7 @@ export class TasksView extends ItemView {
 	}
 
 	refresh(): void {
+		if (this.closed) return;
 		if (!this.listEl) return;
 		// Wait for an edit or a completion animation to finish.
 		if (this.isEditing() || this.animating) {
@@ -208,7 +270,7 @@ export class TasksView extends ItemView {
 		this.pending = false;
 		const scroll = this.listEl.scrollTop;
 		const addInput = this.listEl.querySelector<HTMLInputElement>(".sk-tasks-add input");
-		const adding = addInput && this.contentEl.doc.activeElement === addInput ? { value: addInput.value, pos: addInput.selectionStart ?? 0 } : null;
+		const adding = addInput && this.rootEl.doc.activeElement === addInput ? { value: addInput.value, pos: addInput.selectionStart ?? 0 } : null;
 		if (this.st.sel && !this.hub.index.get(this.st.sel)) this.st.sel = null;
 		if (this.st.open && !this.hub.index.get(this.st.open)) this.st.open = null;
 		if (!(this.layout === "page" ? this.st.sel : this.st.open)) this.shownDetail = null;
@@ -233,7 +295,7 @@ export class TasksView extends ItemView {
 	// ----- header -----
 
 	private iconButton(parent: HTMLElement, name: string, label: string, onClick: (event: MouseEvent) => void): HTMLElement {
-		const button = parent.createEl("button", { cls: "sk-tasks-icon-btn clickable-icon", attr: { "aria-label": label } });
+		const button = parent.createEl("button", { cls: "sk-btn is-ghost is-icon is-s", attr: { "aria-label": label } });
 		icon(button, name);
 		button.addEventListener("click", onClick);
 		return button;
@@ -246,13 +308,13 @@ export class TasksView extends ItemView {
 		if (this.layout === "side") {
 			const top = head.createDiv({ cls: "sk-tasks-side-top" });
 			const title = top.createDiv({ cls: "sk-tasks-title" });
-			title.createSpan({ text: this.t("module.name") });
+			title.createSpan({ text: this.t("view.title") });
 			this.countEl = title.createSpan({ cls: "sk-tasks-count" });
 			this.iconButton(top, "arrow-up-down", this.t("sort.label"), (e) => this.sortMenu(e));
 			this.filterBtn = this.iconButton(top, "list-filter", this.t("filter.label"), (e) => this.filterMenu(e));
 			this.filterBtn.addClass("sk-tasks-filter-btn");
 			this.extEl = top.createDiv({ cls: "sk-tasks-ext" });
-			this.iconButton(top, "maximize-2", this.t("action.page"), () => void this.hub.activate("page"));
+			this.iconButton(top, "maximize-2", this.t("action.page"), () => void this.hub.activate("page", { tasks: true }));
 			this.iconButton(top, "plus", this.t("action.new-key"), () => this.startAdd(null));
 			this.searchBox(head);
 			this.scopeEl = head.createDiv({ cls: "sk-tasks-scopes" });
@@ -264,18 +326,18 @@ export class TasksView extends ItemView {
 			this.searchBox(tools);
 			const chips = tools.createDiv({ cls: "sk-tasks-fchips" });
 			for (const p of [...PRIORITIES, "none"]) {
-				const chip = chips.createEl("button", { cls: "sk-tasks-fchip" + (this.settings.priorityFilter.includes(p) ? " is-on" : "") });
+				const chip = chips.createEl("button", { cls: "sk-btn is-s sk-tasks-fchip" + (this.settings.priorityFilter.includes(p) ? " is-on" : "") });
 				chip.dataset.prio = p;
 				icon(chip, p === "none" ? "flag-off" : "flag", "sk-tasks-fl-" + p);
 				chip.createSpan({ text: this.t("prio." + p) });
 				chip.addEventListener("click", () => void this.togglePriorityFilter(p));
 			}
 			this.extEl = tools.createDiv({ cls: "sk-tasks-ext" });
-			const sort = tools.createEl("button", { cls: "sk-tasks-btn-ghost" });
+			const sort = tools.createEl("button", { cls: "sk-btn is-ghost" });
 			icon(sort, "arrow-up-down");
 			this.sortLabel = sort.createSpan();
 			sort.addEventListener("click", (e) => this.sortMenu(e));
-			const add = tools.createEl("button", { cls: "sk-tasks-btn-accent" });
+			const add = tools.createEl("button", { cls: "sk-btn is-primary" });
 			icon(add, "plus");
 			add.createSpan({ text: this.t("action.new") });
 			kbd(add, "N");
@@ -298,11 +360,11 @@ export class TasksView extends ItemView {
 				input.value = "";
 				this.st.query = "";
 				this.refresh();
-				this.contentEl.focus();
+				this.rootEl.focus();
 			}
 			if (e.key === "Enter" || e.key === "ArrowDown") {
 				e.preventDefault();
-				this.contentEl.focus();
+				this.rootEl.focus();
 				this.moveSel(1);
 			}
 		});
@@ -325,8 +387,8 @@ export class TasksView extends ItemView {
 			const state = action.state ? " is-" + action.state : "";
 			const button =
 				this.layout === "page"
-					? box.createEl("button", { cls: "sk-tasks-btn-ghost sk-tasks-ext-btn" + state, attr: { "aria-label": action.label } })
-					: box.createEl("button", { cls: "sk-tasks-icon-btn clickable-icon sk-tasks-ext-btn" + state, attr: { "aria-label": action.label } });
+					? box.createEl("button", { cls: "sk-btn is-ghost sk-tasks-ext-btn" + (action.text ? "" : " is-icon") + state, attr: { "aria-label": action.label } })
+					: box.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-tasks-ext-btn" + state, attr: { "aria-label": action.label } });
 			icon(button, action.icon);
 			if (this.layout === "page" && action.text) button.createSpan({ text: action.text });
 			button.addEventListener("click", () => {
@@ -414,9 +476,11 @@ export class TasksView extends ItemView {
 		this.setScope("tag:" + tag.replace(/^#/, "").toLowerCase());
 	}
 
-	private setScope(scope: string): void {
+	setScope(scope: string): void {
 		this.st.scope = scope;
+		this.host.saveState();
 		this.st.adding = null;
+		this.st.draft = "";
 		this.refresh();
 	}
 
@@ -546,7 +610,7 @@ export class TasksView extends ItemView {
 		icon(box.createDiv({ cls: "sk-tasks-empty-ic" }), iconName);
 		box.createDiv({ cls: "sk-tasks-empty-t", text: this.t(key + ".title") });
 		box.createDiv({ cls: "sk-tasks-empty-s", text: this.t(key + ".sub") });
-		if (onClear) box.createEl("button", { cls: "sk-tasks-link", text: this.t("empty.clear") }).addEventListener("click", onClear);
+		if (onClear) box.createEl("button", { cls: "sk-btn is-ghost is-s", text: this.t("empty.clear") }).addEventListener("click", onClear);
 	}
 
 	private smartGroup(parent: HTMLElement, kind: string, label: string, iconName: string, tasks: Task[], sub?: string): void {
@@ -646,6 +710,7 @@ export class TasksView extends ItemView {
 		const main = row.createDiv({ cls: "sk-tasks-row-main" });
 		const title = main.createDiv({ cls: "sk-tasks-row-title" });
 		renderInline(title.createSpan({ cls: "sk-tasks-txt" }), t.title);
+		descriptionPreview(main, t.description);
 		const meta = (this.layout === "page" ? row : main).createDiv({ cls: "sk-tasks-row-meta" });
 		const state = dueState(t.due, today);
 		if (this.layout === "page") {
@@ -653,6 +718,7 @@ export class TasksView extends ItemView {
 			this.subtaskCount(meta.createSpan({ cls: "sk-tasks-m-icons" }), t);
 			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
 			icon(note, "file-text");
+			this.sessionMarker(note, t.path);
 			note.createEl("b", { text: noteName(t.path) });
 			const due = meta.createSpan({ cls: "sk-tasks-m-due" + (state ? " is-" + state : "") });
 			if (t.due) due.appendText(this.hub.dueText(t.due));
@@ -666,12 +732,13 @@ export class TasksView extends ItemView {
 			this.subtaskCount(meta, t);
 			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
 			icon(note, "file-text");
+			this.sessionMarker(note, t.path);
 			note.createEl("b", { text: noteName(t.path) });
 		}
 		const actions = row.createDiv({ cls: "sk-tasks-row-act" });
 		this.iconButton(actions, "arrow-up-right", this.t("row.open"), (e) => {
 			e.stopPropagation();
-			void this.hub.writer.openTask(t);
+			void this.openTask(t, e);
 		});
 		this.iconButton(actions, "more-horizontal", this.t("row.more"), (e) => {
 			e.stopPropagation();
@@ -680,7 +747,7 @@ export class TasksView extends ItemView {
 		row.addEventListener("click", () => this.select(t.key, true));
 		row.addEventListener("dblclick", (e) => {
 			if ((e.target as HTMLElement).closest(".sk-tasks-row-title")) this.inlineRename(t);
-			else void this.hub.writer.openTask(t);
+			else void this.openTask(t, e);
 		});
 		row.addEventListener("contextmenu", (e) => {
 			e.preventDefault();
@@ -705,7 +772,7 @@ export class TasksView extends ItemView {
 		if (this.layout === "side" && toggleOpen) this.st.open = this.st.open === key && was === key ? null : key;
 		this.refresh();
 		this.rowOf(key)?.scrollIntoView({ block: "nearest" });
-		if (!this.isEditing()) this.contentEl.focus({ preventScroll: true });
+		if (!this.isEditing()) this.rootEl.focus({ preventScroll: true });
 	}
 
 	private moveSel(delta: number): void {
@@ -720,7 +787,7 @@ export class TasksView extends ItemView {
 	private taskMenu(event: MouseEvent, t: Task): void {
 		const today = this.today();
 		const menu = new Menu();
-		menu.addItem((item) => item.setTitle(this.t("menu.open")).setIcon("arrow-up-right").onClick(() => void this.hub.writer.openTask(t)));
+		menu.addItem((item) => item.setTitle(this.t("menu.open")).setIcon("arrow-up-right").onClick(() => void this.openTask(t)));
 		menu.addItem((item) => item.setTitle(this.t("menu.done")).setIcon("check").onClick(() => void this.complete(t)));
 		menu.addSeparator();
 		for (const p of [...PRIORITIES, null]) {
@@ -858,6 +925,10 @@ export class TasksView extends ItemView {
 		checkbox(row);
 		const main = row.createDiv({ cls: "sk-tasks-row-main" });
 		const input = main.createEl("input", { type: "text", attr: { placeholder: this.t(tag ? "add.placeholder" : "add.placeholder-tag") } });
+		input.value = this.st.draft;
+		input.addEventListener("input", () => {
+			this.st.draft = input.value;
+		});
 		const target = this.hub.writer.newTaskTarget();
 		const hint = main.createDiv({ cls: "sk-tasks-add-hint" });
 		hint.append(richText(this.t(tag ? "add.hint" : "add.hint-tag", { note: noteName(target.path), tomorrow: this.t("quick.tomorrow") })));
@@ -867,14 +938,16 @@ export class TasksView extends ItemView {
 			if (e.key === "Escape") {
 				e.preventDefault();
 				this.st.adding = null;
+				this.st.draft = "";
 				input.blur();
 				this.refresh();
-				this.contentEl.focus();
+				this.rootEl.focus();
 			}
 			if (e.key === "Enter" && input.value.trim()) {
 				e.preventDefault();
 				const q = parseQuickAdd(input.value, this.today(), this.hub.dayWords());
 				input.value = "";
+				this.st.draft = "";
 				if (!q.text) return;
 				void this.hub.writer
 					.addTask(q.text, tag ?? "inbox", q.priority, q.due ?? scopeDue)
@@ -892,14 +965,33 @@ export class TasksView extends ItemView {
 		input.addEventListener("blur", () => {
 			if (input.value.trim()) return;
 			window.setTimeout(() => {
-				const active = this.contentEl.doc.activeElement as HTMLElement | null;
+				const active = this.rootEl.doc.activeElement as HTMLElement | null;
 				if (this.st.adding !== null && !active?.closest(".sk-tasks-add") && !this.isEditing()) {
 					this.st.adding = null;
+					this.st.draft = "";
 					this.refresh();
 				}
 			}, 150);
 		});
 		return row;
+	}
+
+	/** The cursor of the quick add row, kept when the tab goes away (another tab, a layout change). */
+	private caret(): Memory["caret"] {
+		const input = this.listEl?.querySelector<HTMLInputElement>(".sk-tasks-add input");
+		if (!input || this.st.adding === null) return null;
+		const end = input.value.length;
+		return { start: input.selectionStart ?? end, end: input.selectionEnd ?? end, focused: this.rootEl.doc.activeElement === input };
+	}
+
+	/** Puts the cursor back in the quick add row, and the focus when the row had it. */
+	private restoreCaret(caret: NonNullable<Memory["caret"]>): void {
+		const input = this.listEl?.querySelector<HTMLInputElement>(".sk-tasks-add input");
+		if (!input) return;
+		const length = input.value.length;
+		const start = Math.min(caret.start, length);
+		input.setSelectionRange(start, Math.max(start, Math.min(caret.end, length)));
+		if (caret.focused) input.focus({ preventScroll: true });
 	}
 
 	// ----- details -----
@@ -921,10 +1013,10 @@ export class TasksView extends ItemView {
 		capsule(crumbs, t.primary, this.hub, "sk-tasks-cap-sm");
 		crumbs.createSpan({ text: "/" });
 		crumbs.createEl("b", { text: noteName(t.path) });
-		const open = head.createEl("button", { cls: "sk-tasks-btn-ghost" });
+		const open = head.createEl("button", { cls: "sk-btn is-ghost" });
 		icon(open, "arrow-up-right");
 		open.createSpan({ text: this.t("menu.open") });
-		open.addEventListener("click", () => void this.hub.writer.openTask(t));
+		open.addEventListener("click", () => void this.openTask(t));
 		this.iconButton(head, "x", this.t("detail.close"), () => {
 			this.st.sel = null;
 			this.refresh();
@@ -977,6 +1069,14 @@ export class TasksView extends ItemView {
 			else if (this.pending) this.refresh();
 		});
 
+		if (t.description) {
+			const description = body.createDiv({ cls: "sk-tasks-det-description" });
+			const label = description.createDiv({ cls: "sk-tasks-prop-l" });
+			icon(label, "align-left");
+			label.createSpan({ text: this.t("detail.description") });
+			description.createDiv({ cls: "sk-tasks-description-text", text: t.description });
+		}
+
 		// Properties: the current value; a click unfolds the choices in place.
 		const props = body.createDiv({ cls: "sk-tasks-props" });
 		const prop = (id: string, iconName: string, showValue: (el: HTMLElement) => void, editor?: (el: HTMLElement) => void) => {
@@ -1025,7 +1125,7 @@ export class TasksView extends ItemView {
 			(editor) => {
 				const seg = editor.createDiv({ cls: "sk-tasks-pseg" });
 				for (const p of [...PRIORITIES, null] as Array<Priority | null>) {
-					const button = seg.createEl("button", { cls: t.priority === p ? "is-on" : "" });
+					const button = seg.createEl("button", { cls: "sk-btn is-s sk-tasks-chip" + (t.priority === p ? " is-on" : "") });
 					icon(button, p ? "flag" : "flag-off", "sk-tasks-fl-" + (p ?? "none"));
 					button.createSpan({ text: this.t("prio." + (p ?? "none")) });
 					button.addEventListener("click", choose(() => hub.setPriority(t, p)));
@@ -1049,7 +1149,7 @@ export class TasksView extends ItemView {
 			(editor) => {
 				const quick = editor.createDiv({ cls: "sk-tasks-due-quick" });
 				const chip = (label: string, due: string) => {
-					const button = quick.createEl("button", { cls: "sk-tasks-chip" + (t.due === due ? " is-on" : ""), text: label });
+					const button = quick.createEl("button", { cls: "sk-btn is-s sk-tasks-chip" + (t.due === due ? " is-on" : ""), text: label });
 					button.addEventListener("click", choose(() => hub.setDue(t, due)));
 				};
 				chip(this.t("due.today"), today);
@@ -1061,7 +1161,7 @@ export class TasksView extends ItemView {
 					if (picker.value) choose(() => hub.setDue(t, picker.value))();
 				});
 				if (t.due) {
-					const clear = quick.createEl("button", { cls: "sk-tasks-chip sk-tasks-chip-ghost" });
+					const clear = quick.createEl("button", { cls: "sk-btn is-ghost is-s" });
 					icon(clear, "x");
 					clear.appendText(this.t("due.clear"));
 					clear.addEventListener("click", choose(() => hub.setDue(t, null)));
@@ -1070,11 +1170,11 @@ export class TasksView extends ItemView {
 		);
 
 		prop("note", "file-text", (value) => {
-			const link = value.createEl("button", { cls: "sk-tasks-src-link" });
+			const link = value.createEl("button", { cls: "sk-btn is-ghost is-s sk-tasks-src-link" });
 			link.createEl("b", { text: noteName(t.path) });
 			link.createSpan({ cls: "sk-tasks-ln", text: this.t("detail.line", { line: t.line + 1 }) });
 			icon(link, "arrow-up-right");
-			link.addEventListener("click", () => void hub.writer.openTask(t));
+			link.addEventListener("click", () => void this.openTask(t));
 		});
 
 		if (t.subtasks.length) {
@@ -1101,11 +1201,11 @@ export class TasksView extends ItemView {
 			e.dataTransfer?.setData("text/plain", t.title);
 			if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
 			window.setTimeout(() => row.addClass("is-dragging"), 0);
-			this.contentEl.doc.body.addClass("sk-tasks-dnd");
+			this.rootEl.doc.body.addClass("sk-tasks-dnd");
 		});
 		row.addEventListener("dragend", () => {
 			row.removeClass("is-dragging");
-			this.contentEl.doc.body.removeClass("sk-tasks-dnd");
+			this.rootEl.doc.body.removeClass("sk-tasks-dnd");
 			this.clearDrop();
 			this.dragKey = null;
 		});
@@ -1142,10 +1242,17 @@ export class TasksView extends ItemView {
 	}
 
 	private clearDrop(): void {
-		this.contentEl.querySelectorAll(".is-drop-into").forEach((el) => el.removeClass("is-drop-into"));
+		this.rootEl.querySelectorAll(".is-drop-into").forEach((el) => el.removeClass("is-drop-into"));
 	}
 
 	// ----- keyboard -----
+
+	private sessionMarker(parent: HTMLElement, path: string): void {
+		if (!this.hub.isSession(path)) return;
+		const marker = icon(parent, "zap", "sk-tasks-session");
+		marker.setAttr("aria-label", this.t("row.session"));
+		marker.setAttr("title", this.t("row.session"));
+	}
 
 	private async onKey(e: KeyboardEvent): Promise<void> {
 		const target = e.target as HTMLElement;
@@ -1190,13 +1297,13 @@ export class TasksView extends ItemView {
 					return this.complete(t);
 				};
 			case "Enter":
-				if (this.layout === "page") return () => this.hub.writer.openTask(t);
+				if (this.layout === "page") return () => this.openTask(t);
 				return () => {
 					this.st.open = this.st.open === t.key ? null : t.key;
 					this.refresh();
 				};
 			case "o":
-				return () => this.hub.writer.openTask(t);
+				return () => this.openTask(t);
 			case "m":
 				return () => this.pickTag(t);
 			case "F2":

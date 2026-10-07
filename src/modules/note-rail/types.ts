@@ -1,10 +1,12 @@
 // Settings of the module and the contract between the rail and its panels.
-import type { App, MarkdownView } from "obsidian";
+import type { App, MarkdownView, TFile } from "obsidian";
 import type { Lang, Vars } from "../../i18n";
 
 /** Every panel the rail can host, in their default order. */
 export type PanelId = "toc" | "bookmarks" | "tasks" | "calendar";
 export const PANEL_IDS: PanelId[] = ["toc", "bookmarks", "tasks", "calendar"];
+/** Every panel the rail can open: the four above, plus the idea sessions panel (its own button, above them). */
+export type RailPanelId = PanelId | "session";
 
 export interface NoteRailSettings {
 	/** Which rail buttons are shown. */
@@ -22,6 +24,8 @@ export interface NoteRailSettings {
 	restOpacity: number;
 	/** Slide the text column aside when an open panel would cover it. */
 	makeRoom: boolean;
+	/** On a computer, resting the pointer on a rail button opens its panel (a click keeps it open). */
+	openOnHover: boolean;
 
 	/** Contents: scroll the note to a heading while hovering it, return on leave. */
 	tocHoverPreview: boolean;
@@ -38,6 +42,8 @@ export interface NoteRailSettings {
 	showPlace: boolean;
 	/** Rail: a button opening today's daily note. */
 	showToday: boolean;
+	/** Rail: the idea sessions button and its panel. Needs the Idea sessions module. */
+	showSession: boolean;
 	/** Bookmarks: how many times the tip card was shown (3 = never again). */
 	bookmarksTips: number;
 
@@ -73,6 +79,55 @@ export interface RailEnv {
 	updateSettings(mutate: (settings: NoteRailSettings) => void): Promise<void>;
 	/** Source name for Obsidian's page preview (Ctrl or Cmd hover). */
 	readonly hoverSource: string;
+	/** Another module's shared object (see ModuleContext.service), or undefined while it is off. */
+	service<T>(name: string): T | undefined;
+	/** Overdue and today's open tasks of the vault, while the Tasks module is on; null otherwise. */
+	vaultTasks(): VaultTaskCounts | null;
+	/** Opens the Workbench of the Tasks module (a tab, a scope). False when the Tasks module is off. */
+	openWorkbench(options?: WorkbenchOptions): boolean;
+}
+
+export interface VaultTaskCounts {
+	overdue: number;
+	today: number;
+}
+
+export interface WorkbenchOptions {
+	tab?: string;
+	scope?: "all" | "today";
+}
+
+/** What the rail uses of the Tasks module's "tasks" service (newer parts are optional). */
+export interface TasksService {
+	version: 1;
+	getTasks(options?: { includeDone?: boolean }): Array<{ due: string | null; done: boolean }>;
+	on(event: "change", callback: () => void): () => void;
+	openWorkbench?(options?: WorkbenchOptions): Promise<void>;
+}
+
+/** One idea session as the "sessions" service lists it. */
+export interface SessionEntry {
+	path: string;
+	title: string;
+	created: number;
+	state: "open" | "to-sort" | "closed";
+	tasks: number;
+	undecided: number;
+}
+
+/** What the rail uses of the Idea sessions module's "sessions" service. */
+export interface SessionsService {
+	version: 1;
+	isSession(file: TFile): boolean;
+	isClosed(file: TFile): boolean;
+	start(): Promise<void>;
+	close(file: TFile): void;
+	reopen(file: TFile): void;
+	pending(): number;
+	/** Every session with its state and counts (newer modules only). */
+	list?(): SessionEntry[];
+	/** Called when sessions change; returns an unsubscribe function (newer modules only). */
+	onChange?(callback: () => void): () => void;
 }
 
 /**
@@ -101,17 +156,21 @@ export interface PanelInstance {
 	onHide?(reason: HideReason): void;
 	/** A mouse pointer left the card (it stays open). */
 	onPointerLeave?(): void;
+	/** The overdue and today's tasks of the vault changed (Tasks module). */
+	onVaultTasks?(): void;
 	destroy(): void;
 }
 
 export interface PanelDefinition {
-	id: PanelId;
+	id: RailPanelId;
 	/** Lucide icon of the rail button. The title is the string `panel.<id>`. */
 	icon: string;
 	/** False hides the rail button for this note. */
 	isAvailable(env: RailEnv, view: MarkdownView): boolean;
 	/** Optional small number shown as a badge on the rail button. */
 	badge?(env: RailEnv, view: MarkdownView): number | null;
+	/** "warn" paints the badge orange. */
+	badgeTone?(env: RailEnv, view: MarkdownView): "warn" | null;
 	/** Builds the panel content inside `body`. Called each time the panel opens. */
 	create(ctx: PanelContext, body: HTMLElement): PanelInstance;
 }

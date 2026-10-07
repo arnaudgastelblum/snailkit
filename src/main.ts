@@ -3,7 +3,9 @@
 import type { Extension } from "@codemirror/state";
 import { Notice, Plugin, getLanguage } from "obsidian";
 import { ModuleHost } from "./core/host";
+import { createPlaces, type PlacesCore } from "./core/places";
 import { normalizeData, type SnailkitData } from "./core/settings";
+import { WorkbenchCore } from "./core/workbench";
 import { Translator, resolveLanguage, type Lang, type LanguageSetting, type Vars } from "./i18n";
 import { CORE_STRINGS } from "./i18n/core";
 import { MODULES } from "./modules/registry";
@@ -19,6 +21,10 @@ export default class SnailkitPlugin extends Plugin {
 	readonly editorExtensions: Extension[] = [];
 	/** Objects that running modules share with each other and with companion plugins (see ModuleContext.provide). */
 	readonly services = new Map<string, unknown>();
+	/** The Workbench's tabs and entry points (core/workbench); modules reach it as ctx.workbench. */
+	readonly workbench = new WorkbenchCore();
+	/** Where notes belong (core/places); modules reach it as ctx.places. */
+	places!: PlacesCore;
 	/** Public entry point for companion plugins: `app.plugins.plugins.snailkit.api`. */
 	readonly api = {
 		version: 1,
@@ -34,21 +40,36 @@ export default class SnailkitPlugin extends Plugin {
 	}
 
 	async onload(): Promise<void> {
+		// Loaded while Obsidian starts, or into a running Obsidian (an update, the plugin turned on again).
+		const startup = !this.app.workspace.layoutReady;
 		this.data = normalizeData(await this.loadData());
 		this.translator = new Translator(resolveLanguage(this.data.language, this.obsidianLanguage()), [CORE_STRINGS]);
 		registerIcons();
 		this.registerEditorExtension(this.editorExtensions);
+		this.places = createPlaces(this.app);
+		// Where notes belong is shared with every module and companion plugin, whatever is on.
+		this.services.set("places", this.places.service);
+		this.app.workspace.trigger("snailkit:services-changed");
+		// The Workbench view exists before the modules start and before the workspace is restored.
+		this.workbench.start(this, startup);
 
 		this.host = new ModuleHost(this, MODULES);
 		this.settingTab = new SnailkitSettingTab(this);
 		this.addSettingTab(this.settingTab);
 		await this.host.startEnabled();
+		this.app.workspace.onLayoutReady(() => this.workbench.ready());
 
 		if (!this.data.welcomed) this.app.workspace.onLayoutReady(() => this.welcome());
 	}
 
 	onunload(): void {
 		this.host?.stopAll();
+		this.workbench.dispose();
+		if (this.places && this.services.get("places") === this.places.service) {
+			this.services.delete("places");
+			this.app.workspace.trigger("snailkit:services-changed");
+		}
+		this.places?.dispose();
 		clearToast();
 	}
 
@@ -71,8 +92,30 @@ export default class SnailkitPlugin extends Plugin {
 	async setLanguage(language: LanguageSetting): Promise<void> {
 		this.data.language = language;
 		await this.saveData(this.data);
-		this.translator = new Translator(resolveLanguage(language, this.obsidianLanguage()), [CORE_STRINGS]);
+		this.resetTranslator();
 		await this.host.relocalize();
+	}
+
+	/**
+	 * Obsidian calls this when data.json changed on disk (Obsidian Sync from another device).
+	 * Without it, this device would keep its older copy in memory and write it back on its next
+	 * save, erasing what the other device changed.
+	 */
+	async onExternalSettingsChange(): Promise<void> {
+		await this.host.applyExternal(async () => {
+			try {
+				const raw = await this.loadData();
+				// A file caught half written reads as nothing: keep what we have.
+				return raw && typeof raw === "object" ? normalizeData(raw) : null;
+			} catch {
+				return null;
+			}
+		});
+	}
+
+	/** Builds the translator again from the language setting. */
+	resetTranslator(): void {
+		this.translator = new Translator(resolveLanguage(this.data.language, this.obsidianLanguage()), [CORE_STRINGS]);
 	}
 
 	/** Opens Snailkit's settings, on a tool's page when `moduleId` is given. */

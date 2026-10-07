@@ -1,17 +1,19 @@
 // Keeps one rail on every Markdown view (every tab, split and popout window) in sync with the
 // layout, the open file, its metadata and the settings, and owns the module's commands.
 import { MarkdownView, moment, Notice, TFile, type TAbstractFile } from "obsidian";
-import { hueOf, placeFinder, type PlacesService } from "./parents";
 import type { ModuleContext } from "../../core/context";
+import type { NoteRailService } from "../../core/services";
 import type { Vars } from "../../i18n";
+import { getVaultPins } from "./pins";
 import { PinNoteModal } from "./panels/bookmarks/candidates";
 import { getDailyConfig, getOrCreateDailyNote } from "./panels/calendar/daily";
 import { tocEditorExtension } from "./panels/toc/highlight";
 import { cancelAllScrolls } from "./panels/toc/scroll";
 import { clearAllFlashes } from "./panels/toc/surface";
+import { countDue } from "./panels/tasks/summary";
 import { Rail } from "./rail/Rail";
 import { cleanVaultPins, remapVaultPins } from "./settings";
-import type { NoteRailSettings, PanelId, RailEnv } from "./types";
+import type { NoteRailSettings, PanelId, RailEnv, TasksService, VaultTaskCounts, WorkbenchOptions } from "./types";
 
 type Context = ModuleContext<NoteRailSettings>;
 
@@ -22,6 +24,9 @@ interface HoverLinkSources {
 	registerHoverLinkSource?(id: string, info: { display: string; defaultMod: boolean }): void;
 	unregisterHoverLinkSource?(id: string): void;
 }
+
+/** Vault task changes come in bursts (typing in a note): counted again after a short pause. */
+const VAULT_TASKS_DELAY = 250;
 
 const PANEL_COMMANDS: { id: string; panel: PanelId; icon: string }[] = [
 	{ id: "open-contents", panel: "toc", icon: "list-tree" },
@@ -36,6 +41,16 @@ export class NoteRailController {
 	private disposed = false;
 	private modals = new Set<PinNoteModal>();
 	private readonly env: RailEnv;
+	/** The Tasks module's service we listen to, and what it says is due (null while it is off). */
+	private tasks: TasksService | null = null;
+	private tasksOff: (() => void) | null = null;
+	private vault: { day: string; counts: VaultTaskCounts } | null = null;
+	private vaultTimer = 0;
+	/** Fires just after local midnight: what was "today" becomes overdue. */
+	private midnightTimer = 0;
+	/** Listeners of the "note-rail" service's onPinsChange, and the pins they last heard of. */
+	private pinListeners = new Set<() => void>();
+	private pinsSeen = "";
 
 	constructor(private ctx: Context) {
 		this.env = {
@@ -45,6 +60,9 @@ export class NoteRailController {
 			},
 			lang: ctx.lang,
 			hoverSource: HOVER_SOURCE,
+			service: <T>(name: string) => ctx.service<T>(name),
+			vaultTasks: () => this.vaultTasks(),
+			openWorkbench: (options?: WorkbenchOptions) => this.openWorkbench(options),
 			t: (key: string, vars?: Vars) => ctx.t(key, vars),
 			tn: (key: string, count: number, vars?: Vars) => ctx.tn(key, count, vars),
 			updateSettings: async (mutate) => {
@@ -60,12 +78,21 @@ export class NoteRailController {
 		const ws = ctx.app.workspace;
 		ctx.register(() => this.stop());
 		ctx.registerEditorExtension(tocEditorExtension);
-		// Where a note belongs (its area and parents), for other modules: the tag card colors notes with it.
-		const finder = placeFinder(ctx.app);
-		ctx.provide<PlacesService>("places", { version: 1, placeOf: (file) => finder.placeOf(file), hueOf });
+		// Where a note belongs ("places") is published by the core now. This module shares its vault
+		// pins and its daily notes settings (Home, Search).
+		this.pinsSeen = JSON.stringify(cleanVaultPins(ctx.settings.vaultPins));
+		ctx.provide<NoteRailService>("note-rail", this.service());
 		ctx.onSettingsChange(() => {
 			for (const rail of this.rails.values()) rail.sync(true);
+			this.pinsChanged();
 		});
+		// The session button, the Search magnifier and the pill's click follow their modules as they come and go.
+		ctx.onServicesChange(() => {
+			this.followTasks();
+			for (const rail of this.rails.values()) rail.sync(false);
+		});
+		this.followTasks();
+		this.armMidnight();
 
 		ctx.registerEvent(ws.on("layout-change", () => this.queueSync()));
 		ctx.registerEvent(ws.on("active-leaf-change", () => this.queueSync()));
@@ -83,6 +110,8 @@ export class NoteRailController {
 			this.queueSync();
 		}));
 		ctx.registerEvent(ctx.app.vault.on("create", () => this.queueSync()));
+		// The rule of parents changed (a home page or ignored folders set in the Home module): pills follow.
+		ctx.register(ctx.places.onChange(() => this.queueSync()));
 
 		// Ctrl/Cmd hover shows Obsidian's page preview (core plugin Page preview), listed under our name.
 		const sources = ws as unknown as HoverLinkSources;
@@ -147,9 +176,56 @@ export class NoteRailController {
 		});
 	}
 
+	/** The "note-rail" service (src/core/services.ts): the vault pins of the Bookmarks panel, and where daily notes are. */
+	private service(): NoteRailService {
+		const { ctx } = this;
+		return {
+			version: 1,
+			vaultPins: () => (this.disposed ? [] : getVaultPins(ctx.app, ctx.settings).map((file) => file.path)),
+			isPinned: (path) => !this.disposed && cleanVaultPins(ctx.settings.vaultPins).includes(path),
+			setPinned: async (path, pinned) => {
+				if (this.disposed || typeof path !== "string" || !path) return;
+				const pins = cleanVaultPins(ctx.settings.vaultPins);
+				if (pins.includes(path) === !!pinned) return;
+				await this.env.updateSettings((s) => {
+					const now = cleanVaultPins(s.vaultPins);
+					s.vaultPins = pinned ? (now.includes(path) ? now : [...now, path]) : now.filter((p) => p !== path);
+				});
+			},
+			onPinsChange: (callback) => {
+				if (this.disposed || typeof callback !== "function") return () => undefined;
+				this.pinListeners.add(callback);
+				return () => {
+					this.pinListeners.delete(callback);
+				};
+			},
+			dailyConfig: () => getDailyConfig(ctx.app, ctx.settings),
+		};
+	}
+
+	/** Tells the service's listeners when the vault pins changed (here, from another device, or by a rename). */
+	private pinsChanged(): void {
+		const now = JSON.stringify(cleanVaultPins(this.ctx.settings.vaultPins));
+		if (now === this.pinsSeen) return;
+		this.pinsSeen = now;
+		for (const callback of [...this.pinListeners]) {
+			try {
+				callback();
+			} catch (err) {
+				console.error("[Snailkit] note-rail: a pins listener failed", err);
+			}
+		}
+	}
+
 	/** Everything the module put on screen goes away: rails, panels, marks, scroll animations, modals. */
 	private stop(): void {
 		this.disposed = true;
+		this.pinListeners.clear();
+		window.clearTimeout(this.vaultTimer);
+		window.clearTimeout(this.midnightTimer);
+		this.safeOff();
+		this.tasks = null;
+		this.vault = null;
 		for (const modal of Array.from(this.modals)) modal.close();
 		this.modals.clear();
 		if (this.syncFrame) window.cancelAnimationFrame(this.syncFrame);
@@ -158,6 +234,89 @@ export class NoteRailController {
 		this.rails.clear();
 		cancelAllScrolls();
 		clearAllFlashes();
+	}
+
+	// ---- the Tasks module ----------------------------------------------------------
+
+	/** Listen to the Tasks module while it is on (it comes and goes with its module). */
+	private followTasks(): void {
+		const raw = this.ctx.service<TasksService>("tasks");
+		const next = raw && raw.version === 1 && typeof raw.getTasks === "function" && typeof raw.on === "function" ? raw : null;
+		if (next === this.tasks) return;
+		this.safeOff();
+		this.tasks = next;
+		this.vault = null;
+		if (next) {
+			try {
+				this.tasksOff = next.on("change", () => this.vaultTasksSoon());
+			} catch (err) {
+				console.error("[Snailkit] note-rail: tasks service", err);
+			}
+		}
+		this.vaultTasksSoon(0);
+	}
+
+	/** At the next local midnight (and every hour at most), badges and summaries count again if the day turned. */
+	private armMidnight(): void {
+		window.clearTimeout(this.midnightTimer);
+		if (this.disposed) return;
+		const next = new Date();
+		next.setHours(24, 0, 5, 0);
+		// Capped at an hour: a sleeping computer or a clock change never leaves it far off.
+		const wait = Math.min(Math.max(1000, next.getTime() - Date.now()), 3_600_000);
+		this.midnightTimer = window.setTimeout(() => {
+			if (this.disposed) return;
+			if (this.vault && this.vault.day !== moment().format("YYYY-MM-DD")) this.vaultTasksSoon(0);
+			this.armMidnight();
+		}, wait);
+	}
+
+	private safeOff(): void {
+		try {
+			this.tasksOff?.();
+		} catch {
+			/* the Tasks module is already gone */
+		}
+		this.tasksOff = null;
+	}
+
+	private vaultTasksSoon(delay = VAULT_TASKS_DELAY): void {
+		if (this.disposed) return;
+		window.clearTimeout(this.vaultTimer);
+		this.vaultTimer = window.setTimeout(() => {
+			if (this.disposed) return;
+			this.vault = null;
+			for (const rail of this.rails.values()) rail.vaultTasksChanged();
+		}, delay);
+	}
+
+	/** Overdue and today's tasks of the vault, counted once per change (and again when the day turns). */
+	private vaultTasks(): VaultTaskCounts | null {
+		const tasks = this.tasks;
+		if (!tasks) return null;
+		const day = moment().format("YYYY-MM-DD");
+		if (this.vault && this.vault.day === day) return this.vault.counts;
+		try {
+			this.vault = { day, counts: countDue(tasks.getTasks(), day) };
+		} catch (err) {
+			console.error("[Snailkit] note-rail: could not count the vault tasks", err);
+			this.vault = { day, counts: { overdue: 0, today: 0 } };
+		}
+		return this.vault.counts;
+	}
+
+	/**
+	 * The Workbench (a view of the core) on a tab (Tasks when missing), with a scope for Tasks.
+	 * False when that tab is not there (its module is off) and Tasks neither.
+	 */
+	private openWorkbench(options?: WorkbenchOptions): boolean {
+		const workbench = this.ctx.workbench;
+		const wanted = options?.tab ?? "tasks";
+		const tab = workbench.hasTab(wanted) ? wanted : workbench.hasTab("tasks") ? "tasks" : null;
+		if (!tab) return false;
+		const state = tab === "tasks" && options?.scope ? { scope: options.scope } : undefined;
+		workbench.open({ tab, state }).catch((err) => console.error("[Snailkit] note-rail: could not open the Workbench", err));
+		return true;
 	}
 
 	/** Toggle a panel on the active note's rail. */
