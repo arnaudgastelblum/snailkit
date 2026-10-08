@@ -146,17 +146,69 @@ export interface LineChange {
  * and text. Returns the new lines and what changed, or null when nothing did (no write needed).
  */
 export function setDueLines(lines: readonly string[], refs: ReadonlyArray<{ line: number; raw: string }>, due: string | null): { lines: string[]; changes: LineChange[] } | null {
+	return editLines(lines, refs.map((ref) => ({ ...ref, fn: (line: string) => mapTaskText(line, (text) => setDueText(text, due)) })));
+}
+
+/**
+ * Rewrites several task lines of one note, each found again by its line and text, each with its
+ * own change (`fn` returns the new line, or null to leave it). Returns the new lines and what
+ * changed, or null when nothing did.
+ */
+export function editLines(lines: readonly string[], items: ReadonlyArray<{ line: number; raw: string; fn: (line: string) => string | null }>): { lines: string[]; changes: LineChange[] } | null {
 	const out = [...lines];
 	const changes: LineChange[] = [];
-	for (const ref of refs) {
-		const at = locateLine(lines, ref.line, ref.raw);
+	for (const item of items) {
+		const at = locateLine(lines, item.line, item.raw);
 		if (at < 0 || changes.some((c) => c.at === at)) continue;
-		const next = mapTaskText(out[at], (text) => setDueText(text, due));
+		const next = item.fn(out[at]);
 		if (next === null || next === out[at]) continue;
 		changes.push({ at, before: out[at], after: next });
 		out[at] = next;
 	}
 	return changes.length ? { lines: out, changes } : null;
+}
+
+/**
+ * Removes several tasks of one note with their blocks, the lowest first (the others keep their
+ * place). `ends(at)` gives the last line of the block at `at`. The blocks are returned in the order
+ * they were removed: Undo puts them back in the reverse order.
+ */
+export function removeBlocks(lines: readonly string[], refs: ReadonlyArray<{ line: number; raw: string }>, ends: (lines: readonly string[], at: number) => number): { lines: string[]; blocks: RemovedBlock[] } | null {
+	// The blocks as the note reads now; one inside another goes with it (a task and its subtask both picked).
+	const ranges = [...new Set(refs.map((ref) => locateLine(lines, ref.line, ref.raw)).filter((at) => at >= 0))]
+		.sort((a, b) => a - b)
+		.map((at) => ({ at, end: ends(lines, at) }));
+	const outer: Array<{ at: number; end: number }> = [];
+	for (const r of ranges) {
+		const last = outer[outer.length - 1];
+		if (last && r.at <= last.end) last.end = Math.max(last.end, r.end);
+		else outer.push({ ...r });
+	}
+	// The lowest first: the lines above keep their place.
+	let out = [...lines];
+	const blocks: RemovedBlock[] = [];
+	for (const r of outer.reverse()) {
+		const result = removeBlock(out, r.at, r.end);
+		out = result.lines;
+		blocks.push(result.block);
+	}
+	return blocks.length ? { lines: out, blocks } : null;
+}
+
+/**
+ * Puts back blocks removed by `removeBlocks`, the last removed first. A block whose place cannot be
+ * found is left out; the others still come back. Returns the lines and how many came back.
+ */
+export function restoreBlocks(lines: readonly string[], blocks: readonly RemovedBlock[]): { lines: string[]; restored: number } {
+	let out = [...lines];
+	let restored = 0;
+	for (let i = blocks.length - 1; i >= 0; i--) {
+		const back = restoreBlock(out, blocks[i]);
+		if (!back) continue;
+		out = back;
+		restored++;
+	}
+	return { lines: out, restored };
 }
 
 /**
@@ -187,6 +239,41 @@ export function revertLines(lines: readonly string[], changes: readonly LineChan
 	}
 	for (const [c, i] of place) out[i] = c.before;
 	return { lines: out, restored: place.size };
+}
+
+/** A task removed with its block (subtasks, description), and the lines around it, to put it back. */
+export interface RemovedBlock {
+	at: number;
+	removed: string[];
+	before: string | null;
+	after: string | null;
+}
+
+/**
+ * Removes the task at `at` with its child block (the indented lines under it: subtasks and
+ * description). `end` is the last line of that block (see `blockEnd` in parse.ts).
+ */
+export function removeBlock(lines: readonly string[], at: number, end: number): { lines: string[]; block: RemovedBlock } {
+	const removed = lines.slice(at, end + 1);
+	const block = { at, removed, before: at > 0 ? lines[at - 1] : null, after: end + 1 < lines.length ? lines[end + 1] : null };
+	return { lines: [...lines.slice(0, at), ...lines.slice(end + 1)], block };
+}
+
+/**
+ * Puts a removed block back: at its place when the lines around it are still the same, else after
+ * the only line that still reads as the one before it. Null when its place cannot be found.
+ */
+export function restoreBlock(lines: readonly string[], block: RemovedBlock): string[] | null {
+	// The block was the whole note: an emptied note reads as one empty line.
+	if (block.before === null && block.after === null) return lines.length === 0 || (lines.length === 1 && lines[0] === "") ? [...block.removed] : null;
+	const fits = (i: number) => (i > 0 ? lines[i - 1] : null) === block.before && (i < lines.length ? lines[i] : null) === block.after;
+	let at = block.at <= lines.length && fits(block.at) ? block.at : -1;
+	if (at < 0 && block.before !== null) {
+		const hits = lines.flatMap((l, i) => (l === block.before && fits(i + 1) ? [i + 1] : []));
+		if (hits.length === 1) at = hits[0];
+	}
+	if (at < 0) return null;
+	return [...lines.slice(0, at), ...block.removed, ...lines.slice(at)];
 }
 
 export function locateLine(lines: readonly string[], line: number, raw: string): number {

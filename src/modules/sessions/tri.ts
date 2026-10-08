@@ -3,10 +3,10 @@
 // as an idea, Delete. Keys 1 to 4, Backspace takes the last decision back (in the note too),
 // Escape leaves. A bar moves on, the card flies to its choice, and a warm screen closes the round.
 // Every change is made on the line found again just before (never on a line that changed).
-import { Platform, Scope, setIcon } from "obsidian";
+import { moment, Platform, Scope, setIcon } from "obsidian";
 import { TagPicker } from "../../ui/tag-picker";
 import { compareSessions } from "./atelier";
-import { CHOICES, decide, emptyTally, holdsFence, keptPrints, leftover, linesOf, mapLine, prunePrints, revertOf, sortItems, type Choice, type LineEdit, type SortItem, type Tally } from "./flow";
+import { choicesFor, decide, emptyTally, holdsFence, keptPrints, leftover, linesOf, mapLine, prunePrints, revertOf, sortItems, type Choice, type LineEdit, type SortItem, type Tally } from "./flow";
 import { suggestion } from "./logic";
 import type { Flow } from "./flow";
 import type { SessionsRuntime } from "./runtime";
@@ -34,7 +34,7 @@ interface Step {
 
 const KIND_LABEL: Record<SortItem["kind"], string> = { task: "tri.untagged", decide: "tri.undecided", likely: "tri.likely", question: "tri.question" };
 
-const ICONS: Record<Choice, string> = { task: "tag", decide: "circle-help", idea: "lightbulb", delete: "trash-2" };
+const ICONS: Record<Choice, string> = { task: "tag", decide: "circle-help", done: "check-circle-2", idea: "lightbulb", delete: "trash-2", later: "clock" };
 
 export class Sorter {
 	private i = 0;
@@ -51,7 +51,7 @@ export class Sorter {
 	/** Where the sorted note stands at the closing screen, read from its text as it is now. */
 	private endFlow: Flow | null = null;
 
-	private constructor(private rt: SessionsRuntime, private scopePath: string | null, private queue: Item[], private returnFocus: HTMLElement | null) {
+	private constructor(private rt: SessionsRuntime, private scopePath: string | null, private queue: Item[], private returnFocus: HTMLElement | null, private only: "decide" | null = null) {
 		const doc = activeDocument;
 		this.el = doc.body.createDiv({ cls: "sk-sessions-tri" + (Platform.isPhone ? " is-phone" : ""), attr: { role: "dialog", "aria-modal": "true", tabindex: "-1" } });
 		this.keys = new Scope(rt.app.scope);
@@ -61,8 +61,10 @@ export class Sorter {
 				run();
 				return false;
 			});
-		for (const [i, c] of CHOICES.entries()) key(String(i + 1), () => {
-			if (this.phase === "choose") void this.decide(c);
+		// Keys 1 to 4 follow the choices of the line shown (a line to decide gets "Decided" as 2); 5 leaves it for later.
+		for (let i = 0; i < 4; i++) key(String(i + 1), () => this.press(i));
+		key("5", () => {
+			if (this.phase === "choose") void this.decide("later");
 		});
 		key("Backspace", () => void this.undo());
 		this.keys.register([], "Escape", () => {
@@ -76,12 +78,19 @@ export class Sorter {
 		this.el.focus({ preventScroll: true });
 	}
 
-	/** Gathers the lines to sort (one session, or every session in progress) and opens the mode. */
-	static async open(rt: SessionsRuntime, scopePath: string | null, returnFocus: HTMLElement | null): Promise<void> {
+	/**
+	 * Gathers the lines to sort (one session, or every session in progress) and opens the mode.
+	 * `only: "decide"`: the lines to decide of every brainstorm, finished ones too (the To decide queue).
+	 */
+	static async open(rt: SessionsRuntime, scopePath: string | null, returnFocus: HTMLElement | null, only: "decide" | null = null): Promise<void> {
 		// One opening at a time: a second request while the notes are read wins, the first gives up.
 		const generation = ++rt.sortGeneration;
 		const infos = rt.sessionInfos();
-		const list = scopePath ? infos.filter((s) => s.path === scopePath) : infos.filter((s) => !s.closed && !s.archived).sort(compareSessions);
+		const list = scopePath
+			? infos.filter((s) => s.path === scopePath)
+			: only === "decide"
+				? infos.filter((s) => rt.settings.decideArchived || !s.archived).sort((a, b) => b.created - a.created || a.title.localeCompare(b.title))
+				: infos.filter((s) => !s.closed && !s.archived).sort(compareSessions);
 		const queue: Item[] = [];
 		for (const s of list) {
 			const text = await rt.textOf(s.path);
@@ -89,15 +98,18 @@ export class Sorter {
 			const lines = linesOf(text);
 			// Sentences kept as ideas that the note no longer holds are forgotten.
 			rt.pruneKept(s.path, prunePrints([...rt.keptOf(s.path)], lines));
-			for (const item of sortItems(rt.summaryOf(text), lines, rt.isClosing, rt.sortOptions(s.path))) queue.push({ ...item, path: s.path, title: s.title, created: s.created });
+			for (const item of sortItems(rt.summaryOf(text), lines, rt.isClosing, rt.sortOptions(s.path))) {
+				if (only === "decide" && item.kind !== "decide") continue;
+				queue.push({ ...item, path: s.path, title: s.title, created: s.created });
+			}
 		}
 		if (rt.stopped || generation !== rt.sortGeneration) return;
 		rt.sorter?.close("quit", true);
 		if (!queue.length) {
-			rt.ctx.toast(rt.ctx.t("tri.nothing"));
+			rt.ctx.toast(rt.ctx.t(only === "decide" ? "tri.nothing-decide" : "tri.nothing"));
 			return;
 		}
-		new Sorter(rt, scopePath, queue, returnFocus);
+		new Sorter(rt, scopePath, queue, returnFocus, only);
 	}
 
 	private t(key: string, vars?: Record<string, string | number>): string {
@@ -153,7 +165,7 @@ export class Sorter {
 		else {
 			const chs = mid.createDiv({ cls: "sk-sessions-tri-choices", attr: { role: "group" } });
 			chs.createSpan({ cls: "sk-sessions-sr", text: this.t("tri.choices") });
-			CHOICES.forEach((c, k) => {
+			choicesFor(item.kind).forEach((c, k) => {
 				const b = chs.createEl("button", { cls: `sk-sessions-tri-choice is-${c}`, attr: { type: "button", "data-choice": c } });
 				setIcon(b.createSpan({ cls: "sk-sessions-tri-ic" }), ICONS[c]);
 				b.createSpan({ cls: "sk-sessions-tri-label", text: this.t(`tri.choice-${c}`) });
@@ -161,6 +173,12 @@ export class Sorter {
 				b.createSpan({ cls: "sk-sessions-tri-count", text: this.tally[c] ? String(this.tally[c]) : "" });
 				b.addEventListener("click", () => void this.decide(c));
 			});
+			// Not now: the line stays as it is, for another time.
+			const later = mid.createEl("button", { cls: "sk-btn is-ghost is-s sk-sessions-tri-later", attr: { type: "button", "data-choice": "later" } });
+			setIcon(later.createSpan({ cls: "sk-sessions-card-icon" }), ICONS.later);
+			later.createSpan({ text: this.t("tri.choice-later") });
+			if (!Platform.isPhone) later.createEl("kbd", { text: "5" });
+			later.addEventListener("click", () => void this.decide("later"));
 		}
 		const foot = el.createDiv({ cls: "sk-sessions-tri-foot" });
 		if (this.hist.length) {
@@ -232,9 +250,10 @@ export class Sorter {
 		svg.createSvg("path", { attr: { d: "M25 39l9 9 17-19" } });
 		end.createEl("h2", { text: this.t("tri.end-title") });
 		const t = this.tally;
-		const n = t.task + t.decide + t.idea + t.delete;
+		const n = t.task + t.decide + t.done + t.idea + t.delete;
 		const parts: string[] = [];
 		if (t.task) parts.push(this.tn("flow.tasks", t.task));
+		if (t.done) parts.push(this.tn("tri.end-done", t.done));
 		if (t.decide) parts.push(this.tn("tri.end-decide", t.decide));
 		if (t.idea) parts.push(this.tn("tri.end-ideas", t.idea));
 		if (t.delete) parts.push(this.tn("tri.end-deleted", t.delete));
@@ -248,6 +267,7 @@ export class Sorter {
 			const left = leftover(flow);
 			sub = flow.kind === "ready" ? this.t("tri.end-ready") : flow.kind !== "sort" ? "" : left.sort ? this.tn("tri.end-left", left.sort) : this.t("tri.end-waiting");
 		}
+		else if (this.only === "decide") sub = t.later ? this.tn("tri.end-later", t.later) : "";
 		else if (ready) sub = this.tn("tri.end-ready-many", ready);
 		if (sub) end.createEl("p", { cls: "sk-sessions-tri-sub", text: sub });
 		const acts = end.createDiv({ cls: "sk-sessions-tri-acts" });
@@ -266,6 +286,19 @@ export class Sorter {
 	}
 
 	// ----- deciding -----
+
+	/**
+	 * Key 1 to 4: the choice is read on the line shown when the key is played, not when it was
+	 * pressed (a key pressed while the card flies goes to the next line, whose choices may differ).
+	 */
+	private press(i: number): void {
+		if (this.busy) {
+			this.queued.push(() => this.press(i));
+			return;
+		}
+		const item = this.queue[this.i];
+		if (this.phase === "choose" && item) void this.decide(choicesFor(item.kind)[i]);
+	}
 
 	private async decide(choice: Choice, tag: string | null = null): Promise<void> {
 		if (this.busy) {
@@ -289,10 +322,11 @@ export class Sorter {
 		let edit: LineEdit | null = null;
 		let counted = true;
 		const free = item.kind === "likely" || item.kind === "question";
-		// Nothing to write: a line to decide kept to decide, a free sentence kept as an idea.
-		if (!(choice === "decide" && item.kind === "decide") && !(choice === "idea" && free)) {
+		// Nothing to write: a line to decide kept to decide, a free sentence kept as an idea, a line left for later.
+		if (!(choice === "decide" && item.kind === "decide") && !(choice === "idea" && free) && choice !== "later") {
+			const today = moment().format("YYYY-MM-DD");
 			try {
-				edit = await rt.editNote(item.path, (lines) => decide(lines, item, choice, tag, "\t", rt.isClosing));
+				edit = await rt.editNote(item.path, (lines) => decide(lines, item, choice, tag, "\t", rt.isClosing, today));
 			} catch (error) {
 				console.error("[Snailkit] sessions: could not sort the line", error);
 			}
@@ -456,7 +490,7 @@ export class Sorter {
 			window.setTimeout(() => el.remove(), 200);
 		}
 		if (silent) return;
-		const n = this.tally.task + this.tally.decide + this.tally.idea + this.tally.delete;
+		const n = this.tally.task + this.tally.decide + this.tally.done + this.tally.idea + this.tally.delete;
 		if (how === "quit" && n && this.i < this.queue.length) this.rt.ctx.toast(this.tn("tri.quit-toast", n));
 		if (how === "finish" && this.scopePath) void this.rt.finish(this.scopePath);
 		if (this.returnFocus?.isConnected) this.returnFocus.focus({ preventScroll: true });

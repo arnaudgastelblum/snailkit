@@ -35,6 +35,7 @@ export const tasks = defineModule<TasksSettings>({
 		doneSound: true,
 		overdueFirst: false,
 		earlierOpen: false,
+		untaggedDays: 30,
 	},
 	// The order of the tags is the user's arrangement: "Reset to defaults" keeps it.
 	keepOnReset: ["tagOrder", "taskOrder"],
@@ -76,7 +77,7 @@ export const tasks = defineModule<TasksSettings>({
 		});
 
 		// Read the vault again when what counts as a task changes; redraw on any other change.
-		const signature = () => parseFolderList(ctx.settings.excludedFolders).join("|") + "#" + parseTagList(ctx.settings.flagTags).join("|");
+		const signature = () => parseFolderList(ctx.settings.excludedFolders).join("|") + "#" + parseTagList(ctx.settings.flagTags).join("|") + "#" + ctx.settings.untaggedDays;
 		let last = signature();
 		ctx.onSettingsChange(() => {
 			const now = signature();
@@ -86,20 +87,56 @@ export const tasks = defineModule<TasksSettings>({
 			}
 			hub.refreshViews();
 		});
-		// Colors from the Tag colors module come and go with it.
-		ctx.onServicesChange(() => hub.refreshViews());
+		// A brainstorm in progress keeps its untagged tasks to itself: when one starts or finishes (or
+		// the Brainstorm module comes or goes), its notes are read again.
+		type SessionsList = { version: number; list?(): Array<{ path: string; state: string }>; onChange?(callback: () => void): () => void };
+		let busy = new Set<string>();
+		let unwatch: (() => void) | null = null;
+		const inProgress = () => {
+			try {
+				return new Set((ctx.service<SessionsList>("sessions")?.list?.() ?? []).filter((s) => s.state !== "closed").map((s) => s.path));
+			} catch {
+				return new Set<string>();
+			}
+		};
+		const recheck = () => {
+			if (!hub.alive || !hub.index.ready) return;
+			const now = inProgress();
+			const moved = [...new Set([...now, ...busy])].filter((p) => now.has(p) !== busy.has(p));
+			busy = now;
+			if (moved.length) void hub.index.reread(moved);
+		};
+		const watch = () => {
+			unwatch?.();
+			unwatch = ctx.service<SessionsList>("sessions")?.onChange?.(recheck) ?? null;
+			recheck();
+		};
+		ctx.register(() => unwatch?.());
+		hub.index.onChange(() => {
+			if (!busy.size && hub.index.ready) busy = inProgress();
+		});
+		// Untagged tasks of notes that grew too old leave, checked every hour.
+		const expire = window.setInterval(() => hub.index.expireUntagged(), 3_600_000);
+		ctx.register(() => window.clearInterval(expire));
+		// Colors from the Tag colors module come and go with it; the Brainstorm module too.
+		ctx.onServicesChange(() => {
+			hub.refreshViews();
+			watch();
+		});
+		watch();
 		// Today moves at midnight: due labels and the Today view follow the Workbench's own clock
 		// (it draws its shown tabs again every minute).
 
 		ctx.provide("tasks", createTasksApi(hub.index, hub.writer, () => hub.alive, hub));
 	},
 	settings(page) {
-		page.section(page.t("settings.which"), page.t("settings.which-desc"))
-			.text("excludedFolders", page.t("settings.excluded"), {
+		const which = page.section(page.t("settings.which"), page.t("settings.which-desc"));
+		which.text("excludedFolders", page.t("settings.excluded"), {
 				desc: page.t("settings.excluded-desc"),
 				placeholder: page.t("settings.excluded-placeholder"),
 				normalize: (value) => parseFolderList(value).join(", "),
 			});
+		which.number("untaggedDays", page.t("settings.untagged"), { desc: page.t("settings.untagged-desc"), min: 0, max: 180 });
 		page.section(page.t("settings.today"))
 			.toggle("overdueFirst", page.t("settings.overdue-first"), { desc: page.t("settings.overdue-first-desc") });
 		page.section(page.t("settings.groups"))

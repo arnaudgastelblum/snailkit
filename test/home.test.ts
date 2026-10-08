@@ -373,6 +373,9 @@ test("Today chips: empty ones left out", () => {
 		["daily", "due", "old"],
 	);
 	assert.deepEqual(todayChips({ daily: true, due: { overdue: 0, today: 0, yesterday: 0 }, toSort: 3, old: 0 }).map((c) => c.kind), ["daily", "brainstorms"]);
+	// Lines to decide, finished brainstorms included: a chip of their own, only when there are some.
+	assert.deepEqual(todayChips({ daily: true, due: null, toSort: 0, toDecide: 2, old: 0 }), [{ kind: "daily", exists: true }, { kind: "decide", count: 2 }]);
+	assert.deepEqual(todayChips({ daily: true, due: null, toSort: 0, toDecide: 0, old: 0 }).map((c) => c.kind), ["daily"]);
 	const tasks = [
 		{ due: "2026-10-05", done: false },
 		{ due: "2026-10-06", done: false },

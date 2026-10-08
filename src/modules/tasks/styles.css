@@ -302,6 +302,46 @@ body.theme-dark {
 .sk-tasks-grp-today .sk-tasks-grp-ic {
 	color: var(--sk-accent);
 }
+/* Open tasks without a tag: at the bottom of All, quiet, each with its tag button. */
+.sk-tasks-grp-untagged {
+	margin-top: 14px;
+}
+.sk-tasks-grp-untagged .sk-tasks-grp-ic {
+	color: var(--text-faint);
+}
+.sk-tasks-notag {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 20px;
+	margin-left: 8px;
+	padding: 0 8px;
+	border: 1px dashed var(--background-modifier-border-hover, var(--sk-line));
+	border-radius: 999px;
+	background: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 11.5px;
+	vertical-align: 1px;
+	cursor: var(--cursor);
+}
+.sk-tasks-notag:hover,
+.sk-tasks-notag:focus-visible {
+	border-style: solid;
+	border-color: var(--sk-accent);
+	color: var(--text-normal);
+}
+.sk-tasks-notag svg {
+	width: 12px;
+	height: 12px;
+}
+.sk-tasks-crumb-notag {
+	color: var(--text-faint);
+}
+.sk-tasks-nav-item.is-untagged {
+	margin-top: 6px;
+	color: var(--text-muted);
+}
 /* What waits since earlier: below today, folded by default, neutral (never red). */
 .sk-tasks-grp-earlier {
 	margin-top: 14px;
@@ -472,6 +512,46 @@ body.theme-dark {
 .sk-tasks-row.is-sel {
 	--sk-tasks-rbg: var(--sk-surface);
 	background: var(--sk-tasks-row-sel);
+}
+/* Several tasks picked together. */
+.sk-tasks-row.is-picked {
+	--sk-tasks-rbg: var(--sk-surface);
+	background: color-mix(in srgb, var(--sk-accent) 12%, transparent);
+	box-shadow: inset 3px 0 0 var(--sk-accent);
+}
+.sk-tasks-pickbar {
+	position: sticky;
+	top: 0;
+	z-index: 3;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px 4px;
+	margin: 0 0 8px;
+	padding: 6px 8px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+	background: var(--sk-surface);
+	box-shadow: var(--sk-shadow-s, 0 2px 8px rgba(0, 0, 0, 0.08));
+}
+.sk-tasks-pickbar-n {
+	margin-right: 6px;
+	color: var(--text-normal);
+	font-size: 13px;
+	font-weight: 600;
+}
+.sk-tasks-pickbar .sk-btn {
+	gap: 5px;
+}
+.sk-tasks-pickbar .sk-btn svg {
+	width: 14px;
+	height: 14px;
+}
+.sk-tasks-pickbar .sk-btn.is-danger {
+	color: var(--text-error);
+}
+.sk-tasks-pickbar-x {
+	margin-left: auto;
 }
 .sk-tasks-grip {
 	position: absolute;

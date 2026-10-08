@@ -27,6 +27,9 @@ moment.
 
 - A small pill at the top of the note always says where the brainstorm stands and what comes next.
 - The **Brainstorms** tab of the Workbench shows them all on a timeline, with what is left to sort.
+- Questions kept **to decide** (`- [?]`) never get lost, even once the brainstorm is finished:
+  **To decide** in Home and in the Brainstorms tab gathers them all. Sort them one at a time:
+  `2` **Decided** checks the line with today's date, `5` leaves it for later.
 - Everything stays in the note, in plain Markdown: `- [ ] Call the insurer #home/car`.
 - On a phone, tap a sentence to make it a task.
 - The dots learn from you. A sentence you make a task teaches its first word as an action verb, a

@@ -7,7 +7,7 @@ import { createTasksApi, resolveWorkbench, type ViewTab } from "../src/modules/t
 import { TasksHub } from "../src/modules/tasks/hub";
 import {
 	insertTaskLine, insertToken, locateLine, minimalChange, newTaskPath, removeTag, retagText, retitleText,
-	revertLines, setDoneLine, setDueLines, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
+	editLines, removeBlock, removeBlocks, restoreBlock, restoreBlocks, revertLines, setDoneLine, setDueLines, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
 } from "../src/modules/tasks/edit";
 import {
 	addDays, buildTree, countTasks, daysBetween, dueLabel, dueState, fallbackHue, findNode, inScope, isIsoDate,
@@ -435,8 +435,8 @@ test("Today and Upcoming views, counts and filters", () => {
 
 // ----- the public API over a fake vault -----
 
-function fakeVault(files: Record<string, string>, settings: Partial<TasksSettings> = {}) {
-	const make = (path: string) => Object.assign(new TFile(), { path, extension: "md", basename: path.replace(/^.*\//, "").replace(/\.md$/, "") });
+function fakeVault(files: Record<string, string>, settings: Partial<TasksSettings> = {}, mtimes: Record<string, number> = {}) {
+	const make = (path: string) => Object.assign(new TFile(), { path, extension: "md", basename: path.replace(/^.*\//, "").replace(/\.md$/, ""), stat: { mtime: mtimes[path] ?? Date.now(), ctime: 0, size: 0 } });
 	const app = {
 		vault: {
 			getMarkdownFiles: () => Object.keys(files).map(make),
@@ -814,4 +814,183 @@ test("All to tomorrow: 40 tasks in two notes, one write per note, one Undo for a
 	assert.equal(index.open().filter((t) => t.due === "2026-10-09").length, 40);
 	assert.equal(await undo(), true);
 	assert.deepEqual([files["A.md"], files["B.md"]], [a, b]);
+});
+
+test("deleting a task takes its subtasks and description, and Undo puts them back in place", async () => {
+	const note = ["# Home", "- [ ] Paint the hall #home", "\t- [ ] Buy paint", "\tBlue, two coats.", "- [ ] Call Sam #work", ""].join(NL);
+	const { index, writer, files } = fakeVault({ "A.md": note });
+	await index.build();
+	const paint = index.open().find((t) => t.title === "Paint the hall")!;
+	const written = await writer.deleteTask(paint, true);
+	assert.ok(written);
+	assert.equal(files["A.md"], ["# Home", "- [ ] Call Sam #work", ""].join(NL));
+	assert.equal(index.open().length, 1);
+	assert.equal(await written.undo(), true);
+	assert.equal(files["A.md"], note);
+	// Pure: put back after the line that preceded it, even when lines were added above meanwhile.
+	const lines = ["a", "- [ ] T #x", "\tdesc", "b"];
+	const { lines: left, block } = removeBlock(lines, 1, 2);
+	assert.deepEqual(left, ["a", "b"]);
+	assert.deepEqual(restoreBlock(["new", ...left], block), ["new", ...lines]);
+	// Its neighbours changed: nothing is put back.
+	assert.equal(restoreBlock(["a", "c"], block), null);
+});
+
+test("renaming a task whose line changed meanwhile: found again by its tag and words, the change kept", async () => {
+	const { index, writer, files } = fakeVault({ "A.md": ["# Notes", "- [ ] Call the garage #home", ""].join(NL) });
+	await index.build();
+	const stale = index.open()[0];
+	// Meanwhile a sync adds a marker and a line is typed above (the task is read again later).
+	files["A.md"] = ["# Notes", "New line", "- [ ] Call the garage #home %%sync:42%%", ""].join(NL);
+	const written = await writer.rename(stale, "Call the garage back", true);
+	assert.ok(written);
+	assert.equal(files["A.md"], ["# Notes", "New line", "- [ ] Call the garage back #home %%sync:42%%", ""].join(NL));
+	// Two lines with the same tag and words: which one is unknown, nothing is written.
+	files["A.md"] = ["- [ ] Call the garage #home 📅 2026-10-09", "- [ ] Call the garage #home 📅 2026-10-10"].join(NL);
+	assert.equal(await writer.rename(stale, "Call them", true), null);
+});
+
+// ----- tasks without a tag -----
+import { scanUntagged, untaggedInScope } from "../src/modules/tasks/parse";
+
+test("untagged checkboxes: on their own only, never a subtask, in code or done; their line untouched", () => {
+	const lines = [
+		"---", "todo: - [ ] in properties", "---",
+		"- [ ] Rappeler le garage",
+		"- [ ] Paint the hall #home",
+		"\t- [ ] Buy paint",
+		"- [ ] Pack the bags",
+		"\t- [ ] Socks",
+		"- [x] Already done",
+		"```", "- [ ] In code", "```",
+		"- [ ] ",
+		"- [ ] Call Sam #high",
+	];
+	assert.deepEqual(scanUntagged(lines, "Daily.md", flagSet("")).map((t) => [t.line, t.title, t.primary]), [[3, "Rappeler le garage", ""], [6, "Pack the bags", ""], [13, "Call Sam", ""]]);
+	const day = 86_400_000;
+	assert.ok(untaggedInScope(100 * day, 110 * day, 30));
+	assert.ok(!untaggedInScope(100 * day, 280 * day, 30));
+	assert.ok(!untaggedInScope(100 * day, 100 * day, 0));
+});
+
+test("No tag: a fresh daily note is listed, an old template checklist is not; tagging moves the task to its group", async () => {
+	const now = Date.now();
+	const { index, writer, files } = fakeVault(
+		{ "Daily/2026-10-08.md": "- [ ] Rappeler le garage\n- [ ] Pay the bill #home", "Old/Checklist.md": "- [ ] Pack the tent\n- [ ] Check the oil" },
+		{ untaggedDays: 30 },
+		{ "Daily/2026-10-08.md": now, "Old/Checklist.md": now - 180 * 86_400_000 },
+	);
+	await index.build();
+	assert.deepEqual(index.untagged.map((t) => [t.path, t.title]), [["Daily/2026-10-08.md", "Rappeler le garage"]]);
+	// Kept apart: counts, Today, the API (and the sync that reads it) see only tagged tasks.
+	assert.deepEqual(index.open().map((t) => t.title), ["Pay the bill"]);
+	const garage = index.untagged[0];
+	assert.equal(index.get(garage.key), garage);
+	const written = await writer.addTag(garage, "car", true);
+	assert.ok(written);
+	assert.equal(files["Daily/2026-10-08.md"], "- [ ] Rappeler le garage #car\n- [ ] Pay the bill #home");
+	assert.deepEqual(index.untagged, []);
+	assert.ok(index.open().some((t) => t.title === "Rappeler le garage" && t.primary === "car"));
+	// Off with 0.
+	const off = fakeVault({ "A.md": "- [ ] Plain" }, { untaggedDays: 0 });
+	await off.index.build();
+	assert.deepEqual(off.index.untagged, []);
+});
+
+test("review: no twin taken for a stale task, an emptied note gets its task back, old notes stay out when read again", async () => {
+	// Two "Call" tasks with their own sync ids; the first was checked meanwhile: the stale rename writes nothing.
+	const { index, writer, files } = fakeVault({ "A.md": ["- [ ] Call #home %%sync:1%%", "- [ ] Call #home %%sync:2%%"].join(NL) });
+	await index.build();
+	const first = index.open()[0];
+	files["A.md"] = ["- [x] Call #home %%sync:1%%", "- [ ] Call #home %%sync:2%%"].join(NL);
+	assert.equal(await writer.rename(first, "Call back", true), null);
+	assert.equal(files["A.md"], ["- [x] Call #home %%sync:1%%", "- [ ] Call #home %%sync:2%%"].join(NL));
+	// The only task of a note, without a final line break: deleted, then put back.
+	const solo = fakeVault({ "B.md": "- [ ] Only #home" });
+	await solo.index.build();
+	const gone = await solo.writer.deleteTask(solo.index.open()[0], true);
+	assert.equal(solo.files["B.md"], "");
+	assert.equal(await gone!.undo(), true);
+	assert.equal(solo.files["B.md"], "- [ ] Only #home");
+	// An old note read again (cache event, rename) keeps its age: its checklist stays out.
+	const old = fakeVault({ "Old.md": "- [ ] Pack the tent" }, { untaggedDays: 30 }, { "Old.md": Date.now() - 200 * 86_400_000 });
+	await old.index.build();
+	old.index.set("Old.md", "- [ ] Pack the tent\n- [ ] Check the oil");
+	assert.deepEqual(old.index.untagged, []);
+	// A recent one that ages leaves at the next check.
+	const fresh = fakeVault({ "New.md": "- [ ] Water the plants" }, { untaggedDays: 30 });
+	await fresh.index.build();
+	assert.equal(fresh.index.untagged.length, 1);
+	fresh.index.expireUntagged(Date.now() + 31 * 86_400_000);
+	assert.deepEqual(fresh.index.untagged, []);
+	// A renamed untagged task keeps a key that follows its new words.
+	const loose = fakeVault({ "C.md": "- [ ] Water the plants" }, { untaggedDays: 30 });
+	await loose.index.build();
+	const plants = loose.index.untagged[0];
+	assert.equal(loose.writer.keyAfterRename(plants, "Water the lemon tree"), "|water the lemon tree");
+	assert.ok(await loose.writer.rename(plants, "Water the lemon tree", true));
+	assert.equal(loose.index.get("|water the lemon tree")?.title, "Water the lemon tree");
+});
+
+// ----- several tasks at once -----
+
+test("many lines of a note at once: each its own change, one write, all taken back", () => {
+	const lines = ["- [ ] A #home", "- [ ] B #work", "- [ ] C #home"];
+	const result = editLines(lines, [
+		{ line: 0, raw: lines[0], fn: (l) => l.replace("[ ]", "[x]") },
+		{ line: 2, raw: lines[2], fn: (l) => l + " #high" },
+		{ line: 9, raw: "gone", fn: (l) => l },
+	])!;
+	assert.deepEqual(result.lines, ["- [x] A #home", "- [ ] B #work", "- [ ] C #home #high"]);
+	assert.deepEqual(revertLines(result.lines, result.changes).lines, lines);
+});
+
+test("deleting several tasks of a note: blocks removed from the bottom, put back in place", () => {
+	const lines = ["# Top", "- [ ] A #home", "	desc A", "- [ ] B #home", "- [ ] C #home", "	- [ ] sub C", "end"];
+	const ends = (ls: readonly string[], at: number) => (ls[at + 1]?.startsWith("	") ? at + 1 : at);
+	const result = removeBlocks(lines, [{ line: 1, raw: lines[1] }, { line: 4, raw: lines[4] }], ends)!;
+	assert.deepEqual(result.lines, ["# Top", "- [ ] B #home", "end"]);
+	assert.equal(result.blocks.length, 2);
+	assert.deepEqual(restoreBlocks(result.lines, result.blocks).lines, lines);
+	// The neighbour of one block changed meanwhile: that one stays out, the other comes back.
+	const partial = restoreBlocks(["# Top", "- [ ] B #home", "end changed"], result.blocks);
+	assert.equal(partial.restored, 1);
+	assert.deepEqual(partial.lines, ["# Top", "- [ ] A #home", "\tdesc A", "- [ ] B #home", "end changed"]);
+	// A task and a task inside its block, both picked: the outer block goes once, with everything in it.
+	const nested = ["- [ ] P #work", "\t- [ ] C #work", "\t\tdesc C", "after"];
+	const deep = (ls: readonly string[], at: number) => {
+		const w = /^\t*/.exec(ls[at])![0].length;
+		let end = at;
+		for (let j = at + 1; j < ls.length && /^\t*/.exec(ls[j])![0].length > w; j++) end = j;
+		return end;
+	};
+	const both = removeBlocks(nested, [{ line: 0, raw: nested[0] }, { line: 1, raw: nested[1] }], deep)!;
+	assert.deepEqual(both.lines, ["after"]);
+	assert.deepEqual(restoreBlocks(both.lines, both.blocks).lines, nested);
+});
+
+test("bulk on the tasks of two notes: one write per note, one Undo for all", async () => {
+	const a = ["- [ ] A1 #home", "- [ ] A2 #work"].join(NL);
+	const b = ["- [ ] B1 #home", "	note", "- [ ] B2 #home"].join(NL);
+	const { index, writer, files } = fakeVault({ "A.md": a, "B.md": b });
+	await index.build();
+	const vault = (writer as unknown as { ctx: Context }).ctx.app.vault;
+	const process = vault.process.bind(vault);
+	let writes = 0;
+	vault.process = (async (file: TFile, fn: (data: string) => string) => {
+		writes++;
+		return process(file, fn);
+	}) as typeof vault.process;
+	const all = index.open();
+	const moved = await writer.editMany(all.map((task) => ({ task, fn: (line: string) => line.replace(/#(home|work)/, "#errands") })));
+	assert.equal(moved.count, 4);
+	assert.equal(writes, 2);
+	assert.equal(index.open().filter((t) => t.primary === "errands").length, 4);
+	assert.equal(await moved.undo(), true);
+	assert.deepEqual([files["A.md"], files["B.md"]], [a, b]);
+	const gone = await writer.deleteMany(index.open().filter((t) => t.path === "B.md"));
+	assert.equal(gone.count, 2);
+	assert.equal(files["B.md"], "");
+	assert.equal(await gone.undo(), true);
+	assert.equal(files["B.md"], b);
 });

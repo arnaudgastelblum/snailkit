@@ -638,7 +638,7 @@ export class HomeView implements WorkbenchTabInstance {
 		const tasks = f.tasks;
 		const brainstorms = rt.brainstorms();
 		const old = tasks ? oldDailyTasks(tasks, (p) => rt.dayOf(p), f.today).reduce((n, g) => n + g.tasks.length, 0) : null;
-		const chips = todayChips({ daily: !!daily, due: tasks ? dueCounts(tasks, f.today) : null, toSort: brainstorms ? toSortCount(brainstorms) : null, old });
+		const chips = todayChips({ daily: !!daily, due: tasks ? dueCounts(tasks, f.today) : null, toSort: brainstorms ? toSortCount(brainstorms) : null, toDecide: rt.toDecideCount(), old });
 		const sec = this.section(this.body, "today", this.t("today.title"));
 		const row = sec.createDiv({ cls: "sk-home-chips" });
 		for (const chip of chips) {
@@ -649,6 +649,8 @@ export class HomeView implements WorkbenchTabInstance {
 				this.chip(row, { key: "chip:due", act: "due", icon: "list-checks", warn: dueEntry(chip).warn, label: parts.join(" · "), title: this.t("today.due-tip") });
 			} else if (chip.kind === "brainstorms") {
 				this.chip(row, { key: "chip:brainstorms", act: "brainstorms", icon: "zap", label: this.tn("today.brainstorms", chip.count) });
+			} else if (chip.kind === "decide") {
+				this.chip(row, { key: "chip:decide", act: "decide", icon: "circle-help", label: this.tn("today.decide", chip.count) });
 			} else {
 				this.chip(row, { key: "chip:old", act: "old", icon: "calendar-clock", label: this.tn("today.old", chip.count) });
 			}
@@ -1430,7 +1432,7 @@ export class HomeView implements WorkbenchTabInstance {
 		const tasks = f.tasks;
 		const brainstorms = rt.brainstorms();
 		const old = tasks ? oldDailyTasks(tasks, (p) => rt.dayOf(p), f.today).reduce((n, g) => n + g.tasks.length, 0) : null;
-		const chips = todayChips({ daily: !!daily, due: tasks ? dueCounts(tasks, f.today) : null, toSort: brainstorms ? toSortCount(brainstorms) : null, old });
+		const chips = todayChips({ daily: !!daily, due: tasks ? dueCounts(tasks, f.today) : null, toSort: brainstorms ? toSortCount(brainstorms) : null, toDecide: rt.toDecideCount(), old });
 		nav.createDiv({ cls: "sk-home-nav-sec", text: this.t("today.title") });
 		for (const chip of chips) {
 			if (chip.kind === "daily") this.navItem(nav, { key: "chip:daily", act: "daily", icon: "sun", label: chip.exists ? todayLabel(rt.ctx.lang, f.now) : this.t("today.create"), kbd: "T", pin: daily?.path ?? null });
@@ -1439,6 +1441,7 @@ export class HomeView implements WorkbenchTabInstance {
 				this.navItem(nav, { key: "chip:due", act: "due", icon: "list-checks", label: this.t("nav.due"), count: due.count, warn: due.warn, extra: due.earlier ? `+${due.earlier}` : "", extraTip: due.earlier ? this.tn("today.earlier", due.earlier) : "" });
 			}
 			else if (chip.kind === "brainstorms") this.navItem(nav, { key: "chip:brainstorms", act: "brainstorms", icon: "zap", label: this.t("nav.to-sort"), count: chip.count });
+			else if (chip.kind === "decide") this.navItem(nav, { key: "chip:decide", act: "decide", icon: "circle-help", label: this.t("nav.decide"), count: chip.count });
 			else this.navItem(nav, { key: "chip:old", act: "old", icon: "calendar-clock", label: this.t("nav.old"), count: chip.count, on: this.page?.kind === "old-dailies" });
 		}
 		if (this.startBrainstorm()) {
@@ -1888,6 +1891,9 @@ export class HomeView implements WorkbenchTabInstance {
 				return;
 			case "brainstorms":
 				this.host.select("sessions");
+				return;
+			case "decide":
+				if (!this.rt.sortToDecide()) this.host.select("sessions");
 				return;
 			case "new-brainstorm": {
 				const start = this.startBrainstorm();

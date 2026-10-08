@@ -16,4 +16,4 @@ Recognize your tags at a glance. Each family gets a steady color, with its sub-t
 
 - Coloring leaves the text in your notes unchanged.
 - Colors follow your light or dark theme.
-- Enable **Tag placeholder on tasks** to choose a tag from a small button beside untagged tasks.
+- Typing `#` suggests the right tag, and a small **tag** button sits beside tasks without one (both on by default).

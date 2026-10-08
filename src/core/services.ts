@@ -182,7 +182,7 @@ export interface SearchService {
 export interface TasksReader {
 	version: 1;
 	isReady(): boolean;
-	getTasks(options?: { includeDone?: boolean }): TaskInfoLite[];
+	getTasks(options?: { includeDone?: boolean; includeUntagged?: boolean }): TaskInfoLite[];
 	on(event: "change", callback: () => void): () => void;
 	setDone(location: { path: string; line: number; raw: string }, done: boolean): Promise<unknown>;
 	/** The "task checked" sound, when the user turned it on. */
@@ -212,6 +212,10 @@ export interface SessionsReader {
 	version: 1;
 	isSession(file: TFile): boolean;
 	list?(): Array<{ path: string; title: string; created: number; state: "open" | "to-sort" | "closed"; tasks: number; undecided: number }>;
+	/** Since 2026-10-08: the "- [?]" lines of every brainstorm, finished ones too (archived ones only when the user asks). */
+	toDecide?(): Array<{ path: string; title: string; created: number; closed: boolean; archived: boolean; line: number; text: string }>;
+	/** Since 2026-10-08: opens the sorting mode on that queue. */
+	sortToDecide?(): void;
 	onChange?(callback: () => void): () => void;
 }
 

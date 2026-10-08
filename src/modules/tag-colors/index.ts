@@ -16,7 +16,7 @@ export const tagColors = defineModule<TagColorsSettings>({
 	category: "notes",
 	strings: { en, fr, nl, es },
 	demo: (el, t) => buildDemo(el, t),
-	defaults: { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: false, taskPlaceholder: false, placeholderRecent: [], slots: [], overrides: [] },
+	defaults: { uppercase: true, colorPanes: true, tagCard: false, tagSuggest: true, taskPlaceholder: true, placeholderRecent: [], slots: [], overrides: [] },
 	migrate,
 	activate(ctx) { new TagRuntime(ctx).start(); },
 	settings(page) {

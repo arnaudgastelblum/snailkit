@@ -185,6 +185,25 @@ export class HomeRuntime {
 		}
 	}
 
+	/** Lines to decide in every brainstorm, or null without the Brainstorm module (or an older one). */
+	toDecideCount(): number | null {
+		const sessions = this.sessions();
+		if (!sessions?.toDecide) return null;
+		try {
+			return sessions.toDecide().length;
+		} catch {
+			return null;
+		}
+	}
+
+	/** Opens the sorting mode on the lines to decide; false when the Brainstorm module cannot. */
+	sortToDecide(): boolean {
+		const sessions = this.sessions();
+		if (!sessions?.sortToDecide) return false;
+		sessions.sortToDecide();
+		return true;
+	}
+
 	dailyConfig(): DailyConfig {
 		return dailyConfig(this.app, this.rail());
 	}

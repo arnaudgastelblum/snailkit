@@ -194,7 +194,7 @@ export class Sources {
 			const session = brainstorms.get(rows[0].path!);
 			return session ? rows.map(row => row.kind === "note" ? { ...row, kind: "brainstorm" as const, title: session.title, folded: fold(session.title) } : row) : rows;
 		});
-		for (const task of this.service<TasksReader>("tasks")?.getTasks({ includeDone: false }) ?? []) {
+		for (const task of this.service<TasksReader>("tasks")?.getTasks({ includeDone: false, includeUntagged: true }) ?? []) {
 			const base = this.catalog.get(task.path)?.[0];
 			if (base) entries.push({ ...base, kind: "task", title: task.plainTitle, folded: fold(task.plainTitle), aliases: [], line: task.line, tags: [...new Set([...base.tags, ...task.tags.map(tag => fold(tag.replace(/^#/, "")))])] });
 		}

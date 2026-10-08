@@ -1,5 +1,6 @@
 import type { TFile } from "obsidian";
 import type { SessionEntry } from "./atelier";
+import type { DecideEntry } from "./flow";
 import type { Learned, LearnedVerbs } from "./logic";
 
 export interface SessionsSettings {
@@ -13,6 +14,8 @@ export interface SessionsSettings {
 	dots: boolean;
 	/** The page of a finished brainstorm: the theme's secondary background, a veil of the accent color, or none. */
 	sealedBackground: "theme" | "accent" | "none";
+	/** The To decide queue also holds the lines to decide of archived brainstorms. */
+	decideArchived: boolean;
 	/** Paths of the idea sessions (followed through renames). */
 	sessions: string[];
 	/** When each session began ([path, ms]): kept here, a synced copy of the note may get another file date. */
@@ -37,6 +40,7 @@ export const DEFAULTS: SessionsSettings = {
 	scope: "sessions",
 	dots: true,
 	sealedBackground: "theme",
+	decideArchived: false,
 	sessions: [],
 	created: [],
 	learned: [],
@@ -62,6 +66,13 @@ export interface SessionsService {
 	pending(): number;
 	/** Every session with its state and counts, newest first (from what the module already read, no new read of the vault). */
 	list(): SessionEntry[];
+	/**
+	 * The "- [?]" lines of every brainstorm, in progress and finished (archived ones only with the
+	 * setting): the To decide queue. Since 2026-10-08 (optional in version 1).
+	 */
+	toDecide(): DecideEntry[];
+	/** Opens the sorting mode on the To decide queue. */
+	sortToDecide(): void;
 	/** Called (soon, once per burst) when sessions change; returns an unsubscribe function. */
 	onChange(callback: () => void): () => void;
 }

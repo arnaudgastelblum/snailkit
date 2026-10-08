@@ -224,8 +224,39 @@ export function prunePrints(prints: readonly string[], lines: readonly string[])
 	return prints.filter((p, i) => present.has(p) && prints.indexOf(p) === i);
 }
 
-export type Choice = "task" | "decide" | "idea" | "delete";
+/** "done": a line to decide is decided (checked, with the date); "later": left as it is, for another time. */
+export type Choice = "task" | "decide" | "done" | "idea" | "delete" | "later";
 export const CHOICES: readonly Choice[] = ["task", "decide", "idea", "delete"];
+/** The four choices of a "- [?]" line: it is already to decide, so 2 decides it. */
+export const DECIDE_CHOICES: readonly Choice[] = ["task", "done", "idea", "delete"];
+
+/** The choices keys 1 to 4 give for an item. */
+export function choicesFor(kind: SortItem["kind"]): readonly Choice[] {
+	return kind === "decide" ? DECIDE_CHOICES : CHOICES;
+}
+
+/** A line to decide, in the queue of every brainstorm (Home, the Brainstorms tab, the sorting mode). */
+export interface DecideEntry {
+	path: string;
+	title: string;
+	created: number;
+	closed: boolean;
+	archived: boolean;
+	line: number;
+	text: string;
+}
+
+/**
+ * The "- [?]" lines of every brainstorm, in progress and finished (archived ones only with
+ * `archived`): the newest brainstorm first, then in the order of the note.
+ */
+export function decideQueue(list: ReadonlyArray<{ path: string; title: string; created: number; closed: boolean; archived?: boolean; questions: ReadonlyArray<{ line: number; text: string; explicit: boolean }> }>, archived = false): DecideEntry[] {
+	return list
+		.filter((s) => archived || !s.archived)
+		.slice()
+		.sort((a, b) => b.created - a.created || a.title.localeCompare(b.title))
+		.flatMap((s) => s.questions.filter((q) => q.explicit).sort((a, b) => a.line - b.line).map((q) => ({ path: s.path, title: s.title, created: s.created, closed: s.closed, archived: !!s.archived, line: q.line, text: q.text })));
+}
 
 /** A change of the note: lines [at, at + removed.length) become `inserted`. */
 export interface LineEdit {
@@ -256,13 +287,16 @@ function placeOf(lines: readonly string[], item: Pick<SortItem, "line" | "raw">)
  * properties), or, for Delete, its block changed or holds a code fence.
  * - task: "- [ ] Text #tag" (a line to decide becomes a task);
  * - decide: "- [?] Text" (a line to decide stays as it is: null change);
+ * - done: a line to decide is decided: "- [x] Text ✅ today" (only a "- [?]" line);
+ * - later: nothing is written (null);
  * - idea: the line without its checkbox ("- Text");
  * - delete: the line and its description, exactly as shown, are removed.
  * A free sentence (likely task, question) is caught as Ctrl/Cmd+Enter catches it: what comes before
  * stays on its line, what comes after goes below; "idea" writes nothing (null); "delete" removes the
  * sentence only, and the line when nothing else is left on it.
  */
-export function decide(lines: readonly string[], item: Pick<SortItem, "line" | "raw" | "block"> & Partial<Pick<SortItem, "kind" | "text" | "start" | "end">>, choice: Choice, tag: string | null, unit: string, isClosing: (line: string) => boolean): LineEdit | null {
+export function decide(lines: readonly string[], item: Pick<SortItem, "line" | "raw" | "block"> & Partial<Pick<SortItem, "kind" | "text" | "start" | "end">>, choice: Choice, tag: string | null, unit: string, isClosing: (line: string) => boolean, today = ""): LineEdit | null {
+	if (choice === "later") return null;
 	const at = placeOf(lines, item);
 	if (at === null) return null;
 	const raw = lines[at];
@@ -284,6 +318,14 @@ export function decide(lines: readonly string[], item: Pick<SortItem, "line" | "
 	}
 	const sortable = info.kind === "decide" || (info.kind === "task" && info.box === " " && !groupTag(info.body));
 	if (!sortable) return null;
+	if (choice === "done") {
+		if (info.kind !== "decide") return null;
+		const checked = raw.replace(BOX, "$1x]").replace(/\s+$/, "");
+		if (!today) return edit([raw], [checked]);
+		// The date goes before a block id, which must stay last (the format of the Tasks plugin).
+		const id = /\s\^[\w-]+$/.exec(checked);
+		return edit([raw], [id ? `${checked.slice(0, id.index)} ✅ ${today}${id[0]}` : `${checked} ✅ ${today}`]);
+	}
 	let removed = [raw];
 	let inserted: string[];
 	if (choice === "task") {
@@ -338,7 +380,7 @@ export function revertOf(lines: readonly string[], edit: LineEdit): LineEdit | n
 export type Tally = Record<Choice, number>;
 
 export function emptyTally(): Tally {
-	return { task: 0, decide: 0, idea: 0, delete: 0 };
+	return { task: 0, decide: 0, done: 0, idea: 0, delete: 0, later: 0 };
 }
 
 // ----- the Brainstorms tab -----

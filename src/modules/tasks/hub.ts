@@ -11,6 +11,7 @@ import { TasksTab } from "./tab";
 import { TaskIndex } from "./task-index";
 import type { Context, Priority, Task, TaskNotesService } from "./types";
 import { TaskWriter, type Undo } from "./writer";
+import { insertToken, mapTaskText, retagText, setDoneLine, setPriorityText } from "./edit";
 import { playDoneSound } from "../../ui/sound";
 
 /** Ids of Snailkit's own tabs: a companion plugin cannot take them (see addViewTab in api.ts). */
@@ -196,10 +197,16 @@ export class TasksHub {
 		if (written) this.offerUndo(this.ctx.t("toast.done", { title: plainTitle(task.title) }), written.undo);
 	}
 
+	/** Deletes a task (with its subtasks and description), with a toast that can undo it. */
+	async deleteTask(task: Task): Promise<void> {
+		const written = await this.writer.deleteTask(task);
+		if (written) this.offerUndo(this.ctx.t("toast.deleted", { title: plainTitle(task.title) }), written.undo);
+	}
+
 	async retag(task: Task, tag: string): Promise<void> {
 		const to = tag.replace(/^#/, "").toLowerCase();
 		if (!to || to === task.primary) return;
-		const written = await this.writer.retag(task, to);
+		const written = task.primary ? await this.writer.retag(task, to) : await this.writer.addTag(task, to);
 		if (written) this.offerUndo(this.ctx.t("toast.moved", { tag: to, title: plainTitle(task.title) }), written.undo);
 	}
 
@@ -218,6 +225,38 @@ export class TasksHub {
 		const today = this.today();
 		const key = due === null ? "toast.bulk-cleared" : due === today ? "toast.bulk-today" : due === addDays(today, 1) ? "toast.bulk-tomorrow" : "toast.bulk-moved";
 		this.offerUndo(this.ctx.tn(key, count, { date: due ? this.dueText(due) : "" }), undo);
+	}
+
+	// ----- many tasks at once (the selection of the list): one toast, one Undo -----
+
+	async completeAll(tasks: readonly Task[]): Promise<void> {
+		const stamp = this.ctx.settings.stampDone ? this.today() : null;
+		const { count, undo } = await this.writer.editMany(tasks.map((task) => ({ task, fn: (line: string) => setDoneLine(line, true, stamp) })));
+		if (!count) return;
+		this.chime();
+		this.offerUndo(this.ctx.tn("toast.bulk-done", count), undo);
+	}
+
+	async setPriorityAll(tasks: readonly Task[], priority: Priority | null): Promise<void> {
+		const { count, undo } = await this.writer.editMany(tasks.map((task) => ({ task, fn: (line: string) => mapTaskText(line, (text) => setPriorityText(text, priority)) })));
+		if (count) this.offerUndo(this.ctx.tn("toast.bulk-priority", count), undo);
+	}
+
+	/** Every task to one tag: a tagged task changes its tag where it stands, an untagged one gets it. */
+	async retagAll(tasks: readonly Task[], tag: string): Promise<void> {
+		const to = tag.replace(/^#/, "").toLowerCase();
+		if (!to) return;
+		const moving = tasks.filter((task) => task.primary !== to);
+		const { count, undo } = await this.writer.editMany(moving.map((task) => ({
+			task,
+			fn: (line: string) => mapTaskText(line, (text) => (task.primary ? retagText(text, task.primary, to) : insertToken(text, "#" + to))),
+		})));
+		if (count) this.offerUndo(this.ctx.tn("toast.bulk-tag", count, { tag: to }), undo);
+	}
+
+	async deleteAll(tasks: readonly Task[]): Promise<void> {
+		const { count, undo } = await this.writer.deleteMany(tasks);
+		if (count) this.offerUndo(this.ctx.tn("toast.bulk-deleted", count), undo);
 	}
 
 	/** "6 days ago", "Yesterday": how long a task has waited, said without blame. */

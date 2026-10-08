@@ -149,6 +149,36 @@ export function blockEnd(lines: readonly string[], at: number): number {
 	return end;
 }
 
+/** A note is read for untagged tasks when it changed in the last `days` days (0: never). */
+export function untaggedInScope(mtime: number, now: number, days: number): boolean {
+	return days > 0 && now - mtime <= days * 86_400_000;
+}
+
+/**
+ * Open checkboxes without a group tag ("- [ ] Call the garage"): listed under "No tag", their line
+ * untouched. Only those that stand on their own: never inside the block of another checkbox (a
+ * subtask, a checklist under a task), nor in code or the properties. `primary` is "".
+ */
+export function scanUntagged(lines: readonly string[], path: string, flags: ReadonlySet<string>): Task[] {
+	const tasks: Task[] = [];
+	const fence = fenceLines(lines);
+	const start = frontmatterEnd(lines) + 1;
+	for (let i = start; i < lines.length; i++) {
+		if (fence[i]) continue;
+		const m = lines[i].match(TASK_RE);
+		if (!m) continue;
+		const end = blockEnd(lines, i);
+		const fields = parseTaskText(m[4], flags);
+		if (m[3] === " " && !fields.primary && fields.title.trim()) {
+			const baseKey = taskKey("", fields.title);
+			tasks.push({ ...fields, primary: "", path, line: i, raw: lines[i], indent: m[1], text: m[4], done: false, baseKey, key: baseKey, subtasks: [], description: "" });
+		}
+		// What stands under a checkbox belongs to it.
+		i = end;
+	}
+	return tasks;
+}
+
 /**
  * Every task of a note that carries a group tag: open ("[ ]") or done ("[x]"), outside the
  * frontmatter and code blocks. Child checkboxes without a tag of their own are its subtasks.

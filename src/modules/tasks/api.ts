@@ -117,7 +117,8 @@ export interface TasksApi {
 	/** False until the first read of the vault is done (a "change" event follows). */
 	isReady(): boolean;
 	/** Tagged tasks of the vault, in note order. Open tasks only unless `includeDone`. */
-	getTasks(options?: { includeDone?: boolean }): TaskInfo[];
+	/** `includeUntagged`: also the open tasks without a tag of recent notes (tag ""), for Search. Off by default. */
+	getTasks(options?: { includeDone?: boolean; includeUntagged?: boolean }): TaskInfo[];
 	/** The task at that place now (same line, else the only identical line of the note), or null. */
 	find(location: TaskLocation): TaskInfo | null;
 	/** Group tags of the tasks and the other tags of the vault (not the flags), sorted. */
@@ -201,7 +202,10 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 		const task = ref && alive() ? index.find(ref) : null;
 		if (!task) return null;
 		try {
-			const written = after(await op(task));
+			const done = await op(task);
+			const written = after(done);
+			// An untagged task once checked is no longer indexed: the write still succeeded.
+			if (!written && done && !task.primary) return taskInfo({ ...task, line: done.line });
 			return written ? taskInfo(written) : null;
 		} catch (error) {
 			console.error("[Snailkit] tasks: API write failed", error);
@@ -229,7 +233,7 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 			await hub.openWorkbench(options);
 		},
 		isReady: () => alive() && index.ready,
-		getTasks: (options) => (alive() ? index.list.filter((t) => options?.includeDone || !t.done).map(taskInfo) : []),
+		getTasks: (options) => (alive() ? [...index.list.filter((t) => options?.includeDone || !t.done), ...(options?.includeUntagged ? index.untagged : [])].map(taskInfo) : []),
 		find: (value) => {
 			const ref = location(value);
 			const task = ref && alive() ? index.find(ref) : null;

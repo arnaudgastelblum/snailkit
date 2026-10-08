@@ -284,7 +284,7 @@ export class SearchView implements InlineSearch {
 			if (rail) add(rail.isPinned(result.path) ? "action.unpin" : "action.pin", async () => { await rail.setPinned(result.path!, !rail.isPinned(result.path!)); this.more(); });
 			add("action.copy", async () => { const file = app.vault.getFileByPath(result.path!); if (file) await this.win.navigator.clipboard.writeText(app.fileManager.generateMarkdownLink(file, this.host.source?.()?.file.path ?? "")); });
 			if (result.kind === "task") add("action.check", async () => {
-				const tasks = this.sources.service<TasksReader>("tasks"), task = tasks?.getTasks().find(task => task.path === result.path && task.line === result.line);
+				const tasks = this.sources.service<TasksReader>("tasks"), task = tasks?.getTasks({ includeUntagged: true }).find(task => task.path === result.path && task.line === result.line);
 				if (task && task.plainTitle === result.title) {
 					if (await tasks!.setDone({ path: task.path, line: task.line, raw: task.raw }, true)) tasks!.chime?.();
 				}

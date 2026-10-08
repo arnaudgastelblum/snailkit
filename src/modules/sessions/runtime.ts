@@ -25,7 +25,7 @@ import { TAB_ORDER } from "../../core/workbench/types";
 import type { PlacesService, SessionsService, SessionsSettings, TagColorsService, TasksWorkbench } from "./types";
 import { contextOf, contextsOf, createdAt, keepCreated, keepIn, keepKept, keptIn, renameCreated, renameKept, withKept, renameIn, searchable, serviceList, toggleIn, triageOf, locateRaw, withContext, withCreated, type SessionInfo, type Triage } from "./atelier";
 import { SessionsTab } from "./tab";
-import { applyEdit, bodyLineCount, countsOf, flowOf, linesOf, looseCount, type Flow, type LineEdit } from "./flow";
+import { applyEdit, bodyLineCount, countsOf, decideQueue, flowOf, linesOf, looseCount, type DecideEntry, type Flow, type LineEdit } from "./flow";
 import { Sorter } from "./tri";
 
 
@@ -213,6 +213,8 @@ export class SessionsRuntime {
 			reopen: (file) => this.reopen(file),
 			pending: () => this.pending(),
 			list: () => serviceList(this.sessionInfos()),
+			toDecide: () => this.toDecide(),
+			sortToDecide: () => this.startSort(null, null, "decide"),
 			onChange: (callback) => {
 				this.listeners.add(callback);
 				return () => this.listeners.delete(callback);
@@ -277,7 +279,8 @@ export class SessionsRuntime {
 		this.state.set(path, next);
 		this.details.set(path, { summary, triage: triageOf(summary), context: contextOf(lines.slice(0, 40)), text: searchable(text.slice(0, 20000)), lines: bodyLineCount(lines, this.isClosing), loose });
 		this.tab.changed();
-		if (!before || before.closed !== next.closed || (before.pending > 0) !== (next.pending > 0)) this.changed();
+		// Any change of what waits (the To decide queue of Home counts finished brainstorms too).
+		if (!before || before.closed !== next.closed || before.pending !== next.pending) this.changed();
 		this.updateStatus();
 	}
 
@@ -749,12 +752,21 @@ export class SessionsRuntime {
 		this.refreshViews();
 	}
 
-	/** Opens the sorting mode on one session (its path) or on every session in progress (null). */
-	startSort(scope: string | null, returnFocus?: HTMLElement | null): void {
+	/**
+	 * Opens the sorting mode on one session (its path) or on every session in progress (null);
+	 * `only: "decide"`: on the To decide queue of every brainstorm.
+	 */
+	startSort(scope: string | null, returnFocus?: HTMLElement | null, only: "decide" | null = null): void {
 		if (this.stopped) return;
 		this.sorter?.close("quit", true);
 		for (const view of this.views) view.cancelCompose();
-		void Sorter.open(this, scope, returnFocus ?? null);
+		void Sorter.open(this, scope, returnFocus ?? null, only);
+	}
+
+	/** The To decide queue: "- [?]" lines of every brainstorm, from what was last read of them. */
+	toDecide(): DecideEntry[] {
+		const list = this.sessionInfos().map((s) => ({ ...s, questions: this.details.get(s.path)?.summary.questions ?? [] }));
+		return decideQueue(list, this.settings.decideArchived);
 	}
 
 	/** The text of a session now: the open editor's, else the file's. */
@@ -940,7 +952,7 @@ export class SessionsRuntime {
 	}
 
 	private countsKey(): string {
-		return JSON.stringify([this.settings.kept, this.settings.verbs]);
+		return JSON.stringify([this.settings.kept, this.settings.verbs, this.settings.decideArchived]);
 	}
 
 	/** Reads a session again (what it counts changed without its text changing). */

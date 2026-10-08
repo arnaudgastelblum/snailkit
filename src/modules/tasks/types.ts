@@ -34,6 +34,8 @@ export interface TasksSettings {
 	overdueFirst: boolean;
 	/** Today view: the "Waiting since earlier" block is open (remembered). */
 	earlierOpen: boolean;
+	/** Untagged checkboxes are listed (under "No tag") in notes changed in the last N days; 0: never. */
+	untaggedDays: number;
 }
 
 export type Context = ModuleContext<TasksSettings>;

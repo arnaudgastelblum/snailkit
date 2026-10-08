@@ -40,6 +40,7 @@ export type TodayChip =
 	| { kind: "daily"; exists: boolean }
 	| { kind: "due"; overdue: number; today: number; yesterday: number }
 	| { kind: "brainstorms"; count: number }
+	| { kind: "decide"; count: number }
 	| { kind: "old"; count: number };
 
 export interface TodayInput {
@@ -49,6 +50,8 @@ export interface TodayInput {
 	due: DueCounts | null;
 	/** Brainstorms to sort; null without the Brainstorm module. */
 	toSort: number | null;
+	/** Lines to decide in every brainstorm (finished ones too); absent or null without the Brainstorm module. */
+	toDecide?: number | null;
 	/** Open tasks in daily notes before today; null without the Tasks module. */
 	old: number | null;
 }
@@ -58,6 +61,7 @@ export function todayChips(input: TodayInput): TodayChip[] {
 	const out: TodayChip[] = [{ kind: "daily", exists: input.daily }];
 	if (input.due && (input.due.overdue || input.due.today)) out.push({ kind: "due", overdue: input.due.overdue, today: input.due.today, yesterday: input.due.yesterday });
 	if (input.toSort) out.push({ kind: "brainstorms", count: input.toSort });
+	if (input.toDecide) out.push({ kind: "decide", count: input.toDecide });
 	if (input.old) out.push({ kind: "old", count: input.old });
 	return out;
 }

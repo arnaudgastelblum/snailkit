@@ -3,6 +3,7 @@
 // written in the notes. The Workbench (src/core/workbench) owns the view, the tab bar and the
 // layout; this tab owns everything inside its root, div.sk-tasks-view.
 import { Menu, Scope, type WorkspaceLeaf } from "obsidian";
+import { openTagPicker } from "../../ui/tag-picker";
 import type { TabState, WorkbenchTabHost, WorkbenchTabInstance } from "../../core/workbench/types";
 import { richText } from "../../ui/settings-page";
 import { capsule, checkbox, colorFor, descriptionPreview, icon, kbd, renderInline, tagDot, TagSuggestModal } from "./components";
@@ -61,6 +62,16 @@ export class TasksTab implements WorkbenchTabInstance {
 	private readonly layout: Layout;
 	/** The root of the tab (it used to be the view's content element). */
 	private readonly rootEl: HTMLElement;
+	/**
+	 * Tasks picked together (Ctrl/Cmd+click, Shift+click, Shift+arrows, Ctrl/Cmd+A): acted on at once
+	 * from two. Each key keeps the place it had when picked: a key that now names another task (a
+	 * twin renumbered) is dropped, never acted on.
+	 */
+	private readonly picked = new Map<string, { path: string; raw: string }>();
+	/** Where a range starts (the last task clicked or reached by the arrows); focus never moves it. */
+	private anchor: string | null = null;
+	/** Keys being dragged together (the picked tasks), or empty. */
+	private dragKeys: string[] = [];
 	private readonly st: ViewState = { scope: "all", query: "", sel: null, open: null, adding: null, draft: "", editProp: null, propsFor: null };
 	private pending = false;
 	private animating = 0;
@@ -186,6 +197,9 @@ export class TasksTab implements WorkbenchTabInstance {
 			["0 1 2 3", this.t("keyboard.priority")],
 			["M", this.t("keyboard.tag")],
 			["F2", this.t("keyboard.rename")],
+			["Del", this.t("keyboard.delete")],
+			["Ctrl / Shift + click", this.t("keyboard.pick")],
+			["Shift+↑ ↓", this.t("keyboard.pick-more")],
 			["N", this.t("keyboard.new")],
 			["/", this.t("keyboard.search")],
 			["Alt+↑ ↓", this.t("keyboard.reorder")],
@@ -251,6 +265,12 @@ export class TasksTab implements WorkbenchTabInstance {
 	private filtered(): Task[] {
 		const filter = this.settings.priorityFilter;
 		return this.hub.index.open().filter((t) => matchesQuery(t, this.st.query) && passesPriority(t, filter));
+	}
+
+	/** Untagged tasks of recent notes, with the search and the priority filter applied. */
+	private untaggedShown(): Task[] {
+		const filter = this.settings.priorityFilter;
+		return this.hub.index.untagged.filter((t) => matchesQuery(t, this.st.query) && passesPriority(t, filter));
 	}
 
 	private sorted(tasks: readonly Task[]): Task[] {
@@ -319,6 +339,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.updateHead();
 		if (this.navEl) this.renderNav();
 		this.renderList();
+		this.reconcilePicked();
 		if (this.layout === "side") {
 			this.listEl.removeAttribute("data-sk-zone");
 			const entry = this.rowOf(this.st.sel ?? "") ?? this.listEl.querySelector<HTMLElement>(".sk-tasks-row[data-key]");
@@ -502,7 +523,9 @@ export class TasksTab implements WorkbenchTabInstance {
 					? c.today
 					: scope === "upcoming"
 						? c.upcoming
-						: c.all;
+						: scope === "untagged"
+							? this.hub.index.untagged.length
+							: c.all;
 			sub.createSpan({ text: this.hub.ctx.tn("head.open", n) });
 			const dueToday = c.today - c.overdue;
 			if (this.settings.overdueFirst) {
@@ -633,6 +656,9 @@ export class TasksTab implements WorkbenchTabInstance {
 			node.children.forEach(walk);
 		};
 		this.tagTree(this.hub.index.open()).forEach(walk);
+		// Untagged tasks of recent notes: a quiet entry, only when there are some.
+		const loose = this.hub.index.untagged.length;
+		if (loose) item("untagged", "circle-dashed", loose).addClass("is-untagged");
 		nav.createDiv({ cls: "sk-tasks-nav-foot", text: this.t("nav.hint") });
 	}
 
@@ -793,6 +819,12 @@ export class TasksTab implements WorkbenchTabInstance {
 			if (!days.length) this.empty(list, "calendar", "empty.upcoming");
 			return;
 		}
+		if (scope === "untagged") {
+			const loose = this.untaggedShown();
+			if (loose.length) this.untaggedGroup(list, loose);
+			else this.empty(list, "check-circle-2", "empty.untagged");
+			return;
+		}
 		let pool = tasks;
 		if (scope.startsWith("tag:")) pool = tasks.filter((t) => inScope(t.primary, scope.slice(4)));
 		const tree = this.tagTree(pool);
@@ -802,7 +834,9 @@ export class TasksTab implements WorkbenchTabInstance {
 			if (node) this.tagGroup(list, node, 0, this.layout === "page");
 			else if (this.st.adding !== null) this.addRow(list, root);
 		} else tree.forEach((node) => this.tagGroup(list, node, 0));
-		if (!pool.length) {
+		const loose = scope === "all" ? this.untaggedShown() : [];
+		if (loose.length) this.untaggedGroup(list, loose);
+		if (!pool.length && !loose.length) {
 			if (this.st.query || this.settings.priorityFilter.length) {
 				this.empty(list, "search", "empty.search", () => {
 					this.st.query = "";
@@ -833,6 +867,36 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (kind === "today") this.dropTarget(group, { due: true });
 		const body = group.createDiv({ cls: "sk-tasks-grp-body" });
 		for (const t of tasks) this.row(body, t, true);
+	}
+
+	/** Open tasks without a tag (recent notes): at the bottom of All, each with a button to give it one. */
+	private untaggedGroup(parent: HTMLElement, tasks: Task[]): void {
+		const group = parent.createDiv({ cls: "sk-tasks-grp sk-tasks-grp-untagged" });
+		const head = group.createDiv({ cls: "sk-tasks-grp-h" });
+		icon(head, "circle-dashed", "sk-tasks-grp-ic");
+		head.createSpan({ cls: "sk-tasks-grp-lbl", text: this.t("group.untagged") });
+		head.createSpan({ cls: "sk-tasks-grp-count", text: String(tasks.length) });
+		head.createSpan({ cls: "sk-tasks-grp-sub", text: this.t("group.untagged-sub") });
+		const body = group.createDiv({ cls: "sk-tasks-grp-body" });
+		for (const t of this.sorted(tasks)) this.row(body, t, false);
+	}
+
+	/** The shared tag picker under `anchor`: the chosen tag is written in the task's line. */
+	private tagUntagged(t: Task, anchor: HTMLElement): void {
+		const near = [...new Set(this.hub.index.list.filter((x) => x.path === t.path).map((x) => x.primary))];
+		openTagPicker(anchor, {
+			t: (key, vars) => this.hub.ctx.t(key, vars),
+			colors: (tag) => this.hub.tagClasses(tag),
+			sources: { all: () => this.hub.index.allTags(), near: () => near },
+			onChoose: (tag) => {
+				// A flag (#high, a flag tag of the settings) marks a task, it never groups it.
+				if (this.hub.index.flags().has(tag.replace(/^#/, "").toLowerCase())) {
+					this.hub.ctx.toast(this.t("tag.is-flag", { tag: tag.replace(/^#/, "") }));
+					return;
+				}
+				void this.hub.retag(t, tag);
+			},
+		});
 	}
 
 	/**
@@ -978,12 +1042,21 @@ export class TasksTab implements WorkbenchTabInstance {
 		const main = row.createDiv({ cls: "sk-tasks-row-main" });
 		const title = main.createDiv({ cls: "sk-tasks-row-title" });
 		renderInline(title.createSpan({ cls: "sk-tasks-txt" }), t.title);
+		if (!t.primary) {
+			const tagBtn = title.createEl("button", { cls: "sk-tasks-notag", attr: { type: "button", "aria-label": this.t("row.tag") } });
+			icon(tagBtn, "tag");
+			tagBtn.appendText(this.t("row.tag-short"));
+			tagBtn.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.tagUntagged(t, tagBtn);
+			});
+		}
 		descriptionPreview(main, t.description);
 		const meta = (this.layout === "page" ? row : main).createDiv({ cls: "sk-tasks-row-meta" });
 		const state = since ? "since" : dueState(t.due, today);
 		const dueWords = (due: string) => (since ? this.hub.sinceText(due) : this.hub.dueText(due));
 		if (this.layout === "page") {
-			if (showTag) capsule(title, t.primary, this.hub, "sk-tasks-cap-sm");
+			if (showTag && t.primary) capsule(title, t.primary, this.hub, "sk-tasks-cap-sm");
 			const icons = meta.createSpan({ cls: "sk-tasks-m-icons" });
 			this.subtaskCount(icons, t);
 			this.taskNoteMarker(icons, t);
@@ -999,7 +1072,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				icon(due, state === "overdue" ? "alert-circle" : since ? "clock" : "calendar");
 				due.appendText(dueWords(t.due));
 			}
-			if (showTag) capsule(meta, t.primary, this.hub, "sk-tasks-cap-xs");
+			if (showTag && t.primary) capsule(meta, t.primary, this.hub, "sk-tasks-cap-xs");
 			this.subtaskCount(meta, t);
 			this.taskNoteMarker(meta, t);
 			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
@@ -1016,13 +1089,18 @@ export class TasksTab implements WorkbenchTabInstance {
 			e.stopPropagation();
 			this.taskMenu(e, t);
 		});
-		row.addEventListener("click", () => this.select(t.key, true));
+		if (this.picked.has(t.key)) row.addClass("is-picked");
+		row.addEventListener("click", (e) => this.onRowClick(t.key, e));
 		row.addEventListener("dblclick", (e) => {
 			if ((e.target as HTMLElement).closest(".sk-tasks-row-title")) this.inlineRename(t);
 			else void this.openTask(t, e);
 		});
 		row.addEventListener("contextmenu", (e) => {
 			e.preventDefault();
+			if (this.picked.size >= 2 && this.picked.has(t.key)) {
+				this.pickMenu(e);
+				return;
+			}
 			this.select(t.key, false);
 			this.taskMenu(e, t);
 		});
@@ -1037,6 +1115,164 @@ export class TasksTab implements WorkbenchTabInstance {
 		const span = parent.createSpan({ attr: { "aria-label": this.t("detail.subtasks") } });
 		icon(span, "list-checks");
 		span.appendText(`${t.subtasks.filter((s) => s.done).length}/${t.subtasks.length}`);
+	}
+
+	// ----- several tasks at once -----
+
+	private pick(key: string): void {
+		const t = this.hub.index.get(key);
+		if (t) this.picked.set(key, { path: t.path, raw: t.raw });
+	}
+
+	/**
+	 * After each drawing of the list: only the tasks shown, still open and still the same task stay
+	 * picked (a scope or a search that hides them, a task checked or renamed elsewhere: it leaves).
+	 * Then the bar goes on top of the list when two or more remain.
+	 */
+	private reconcilePicked(): void {
+		const list = this.listEl;
+		if (!list) return;
+		const shown = new Set(this.visibleKeys());
+		for (const [key, ref] of [...this.picked]) {
+			const t = this.hub.index.get(key);
+			if (!shown.has(key) || !t || t.done || t.path !== ref.path || t.raw !== ref.raw) this.picked.delete(key);
+		}
+		if (this.picked.size < 2) this.picked.clear();
+		list.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]").forEach((row) => row.toggleClass("is-picked", this.picked.has(row.dataset.key ?? "")));
+		if (this.picked.size >= 2) {
+			this.pickBar(list);
+			const bar = list.querySelector(".sk-tasks-pickbar");
+			if (bar) list.prepend(bar);
+		}
+	}
+
+	private pickedTasks(): Task[] {
+		return [...this.picked.keys()].map((key) => this.hub.index.get(key)).filter((t): t is Task => !!t);
+	}
+
+	private clearPicked(): void {
+		if (!this.picked.size) return;
+		this.picked.clear();
+		this.refresh();
+	}
+
+	/** Ctrl/Cmd+click adds or removes a task; Shift+click takes the range from the selected one; a plain click selects one. */
+	private onRowClick(key: string, e: MouseEvent): void {
+		// The click already focused the row (and made it the selected one): the anchor says where it started.
+		const from = this.anchor && this.anchor !== key && this.hub.index.get(this.anchor) ? this.anchor : null;
+		if (e.ctrlKey || e.metaKey) {
+			if (!this.picked.size && from) this.pick(from);
+			if (this.picked.has(key)) this.picked.delete(key);
+			else this.pick(key);
+			this.st.sel = key;
+			this.anchor = key;
+			this.refresh();
+			this.rowOf(key)?.focus({ preventScroll: true });
+			return;
+		}
+		if (e.shiftKey && from) {
+			this.pickRange(from, key, true);
+			return;
+		}
+		this.picked.clear();
+		this.anchor = key;
+		this.select(key, true);
+	}
+
+	/** Picks every shown task between `from` and `to` (the selection moves to `to`). */
+	private pickRange(from: string, to: string, replace: boolean): void {
+		const keys = this.visibleKeys();
+		const a = keys.indexOf(from);
+		const b = keys.indexOf(to);
+		if (a < 0 || b < 0) return;
+		if (replace) this.picked.clear();
+		for (const key of keys.slice(Math.min(a, b), Math.max(a, b) + 1)) this.pick(key);
+		// The start stays the anchor: another Shift+click changes the range from the same task.
+		this.anchor = from;
+		this.st.sel = to;
+		this.refresh();
+		this.rowOf(to)?.focus({ preventScroll: true });
+	}
+
+	/** Shift+Up/Down: the selection grows (or shrinks back) by one row. */
+	private extendPick(delta: number): void {
+		const keys = this.visibleKeys();
+		if (!keys.length) return;
+		const at = this.st.sel ? keys.indexOf(this.st.sel) : -1;
+		const next = keys[Math.max(0, Math.min(keys.length - 1, at < 0 ? 0 : at + delta))];
+		if (this.st.sel) this.pick(this.st.sel);
+		if (this.picked.has(next) && this.picked.size > 1) this.picked.delete(this.st.sel ?? "");
+		this.pick(next);
+		this.st.sel = next;
+		this.refresh();
+		this.rowOf(next)?.focus({ preventScroll: true });
+	}
+
+	/** The bar over the list while several tasks are picked: what can be done to all of them. */
+	private pickBar(list: HTMLElement): void {
+		const tasks = this.pickedTasks();
+		const today = this.today();
+		const bar = list.createDiv({ cls: "sk-tasks-pickbar", attr: { role: "toolbar", "aria-label": this.t("pick.bar") } });
+		bar.createSpan({ cls: "sk-tasks-pickbar-n", text: this.hub.ctx.tn("pick.count", tasks.length) });
+		const act = (iconName: string, key: string, run: (e: MouseEvent) => void, cls = "") => {
+			const b = bar.createEl("button", { cls: "sk-btn is-ghost is-s" + cls, attr: { type: "button" } });
+			icon(b, iconName);
+			b.createSpan({ text: this.t(key) });
+			b.addEventListener("click", (e) => {
+				e.stopPropagation();
+				run(e);
+			});
+			return b;
+		};
+		const after = (work: Promise<void>) => void work.then(() => this.clearPicked());
+		act("check", "pick.done", () => after(this.hub.completeAll(tasks)));
+		act("sun", "pick.today", () => after(this.hub.setDueAll(tasks, today)));
+		act("sunrise", "pick.tomorrow", () => after(this.hub.setDueAll(tasks, addDays(today, 1))));
+		act("calendar-x", "pick.no-date", () => after(this.hub.setDueAll(tasks, null)));
+		act("flag", "pick.priority", (e) => this.priorityMenu(e, tasks));
+		act("hash", "pick.tag", () => this.pickTagAll(tasks));
+		act("trash-2", "pick.delete", () => after(this.hub.deleteAll(tasks)), " is-danger");
+		const x = bar.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-tasks-pickbar-x", attr: { type: "button", "aria-label": this.t("pick.clear") } });
+		icon(x, "x");
+		x.addEventListener("click", (e) => {
+			e.stopPropagation();
+			this.clearPicked();
+		});
+	}
+
+	private priorityMenu(e: MouseEvent, tasks: Task[]): void {
+		const menu = new Menu();
+		for (const p of [...PRIORITIES, null]) {
+			menu.addItem((item) => item.setTitle(this.t("menu.prio-" + (p ?? "none"))).setIcon(p ? "flag" : "flag-off").onClick(() => void this.hub.setPriorityAll(tasks, p).then(() => this.clearPicked())));
+		}
+		menu.showAtMouseEvent(e);
+	}
+
+	/** One tag for all the picked tasks (the tag picker of a single task, here for all). */
+	private pickTagAll(tasks: Task[]): void {
+		new TagSuggestModal(this.hub, null, this.t("tag.move-placeholder"), (tag) => void this.hub.retagAll(tasks, tag).then(() => this.clearPicked())).open();
+	}
+
+	/** Right click on a picked task: the actions for all of them. */
+	private pickMenu(e: MouseEvent): void {
+		const tasks = this.pickedTasks();
+		const today = this.today();
+		const done = (work: Promise<void>) => void work.then(() => this.clearPicked());
+		const menu = new Menu();
+		menu.addItem((item) => item.setTitle(this.hub.ctx.tn("pick.count", tasks.length)).setIsLabel(true));
+		menu.addItem((item) => item.setTitle(this.t("pick.done")).setIcon("check").onClick(() => done(this.hub.completeAll(tasks))));
+		menu.addSeparator();
+		for (const p of [...PRIORITIES, null]) menu.addItem((item) => item.setTitle(this.t("menu.prio-" + (p ?? "none"))).setIcon(p ? "flag" : "flag-off").onClick(() => done(this.hub.setPriorityAll(tasks, p))));
+		menu.addSeparator();
+		menu.addItem((item) => item.setTitle(this.t("menu.due-today")).setIcon("sun").onClick(() => done(this.hub.setDueAll(tasks, today))));
+		menu.addItem((item) => item.setTitle(this.t("menu.due-tomorrow")).setIcon("sunrise").onClick(() => done(this.hub.setDueAll(tasks, addDays(today, 1)))));
+		menu.addItem((item) => item.setTitle(this.t("menu.due-next-week")).setIcon("calendar").onClick(() => done(this.hub.setDueAll(tasks, nextWeek(today)))));
+		menu.addItem((item) => item.setTitle(this.t("menu.due-clear")).setIcon("calendar-x").onClick(() => done(this.hub.setDueAll(tasks, null))));
+		menu.addSeparator();
+		menu.addItem((item) => item.setTitle(this.t("menu.move")).setIcon("hash").onClick(() => this.pickTagAll(tasks)));
+		menu.addSeparator();
+		menu.addItem((item) => item.setTitle(this.t("pick.delete")).setIcon("trash-2").setWarning(true).onClick(() => done(this.hub.deleteAll(tasks))));
+		menu.showAtMouseEvent(e);
 	}
 
 	private select(key: string, toggleOpen: boolean): void {
@@ -1054,6 +1290,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		const i = this.st.sel ? keys.indexOf(this.st.sel) : -1;
 		const next = keys[Math.max(0, Math.min(keys.length - 1, i < 0 ? 0 : i + delta))];
 		if (this.layout === "side" && this.st.open) this.st.open = next;
+		this.anchor = next;
 		this.select(next, false);
 		this.rowOf(next)?.focus({ preventScroll: true });
 	}
@@ -1081,7 +1318,19 @@ export class TasksTab implements WorkbenchTabInstance {
 		menu.addSeparator();
 		menu.addItem((item) => item.setTitle(this.t("menu.rename")).setIcon("pencil").onClick(() => this.inlineRename(t)));
 		menu.addItem((item) => item.setTitle(this.t("menu.move")).setIcon("hash").onClick(() => this.pickTag(t)));
+		menu.addSeparator();
+		menu.addItem((item) => item.setTitle(this.t("menu.delete")).setIcon("trash-2").setWarning(true).onClick(() => void this.deleteTask(t)));
 		menu.showAtMouseEvent(event);
+	}
+
+	/** Deletes a task (Undo in the toast); the selection moves to the next one. */
+	private async deleteTask(t: Task): Promise<void> {
+		if (this.st.sel === t.key) {
+			this.moveSel(1);
+			if (this.st.sel === t.key) this.st.sel = null;
+		}
+		if (this.st.open === t.key) this.st.open = null;
+		await this.hub.deleteTask(t);
 	}
 
 	/** Renames and keeps the task selected (its key changes with its words). */
@@ -1300,7 +1549,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		const head = detail.createDiv({ cls: "sk-tasks-det-head" });
 		const crumbs = head.createDiv({ cls: "sk-tasks-crumbs" });
-		capsule(crumbs, t.primary, this.hub, "sk-tasks-cap-sm");
+		if (t.primary) capsule(crumbs, t.primary, this.hub, "sk-tasks-cap-sm");
+		else crumbs.createSpan({ cls: "sk-tasks-crumb-notag", text: this.t("group.untagged") });
 		crumbs.createSpan({ text: "/" });
 		crumbs.createEl("b", { text: noteName(t.path) });
 		const open = head.createEl("button", { cls: "sk-btn is-ghost" });
@@ -1399,6 +1649,14 @@ export class TasksTab implements WorkbenchTabInstance {
 		};
 
 		prop("tag", "hash", (value) => {
+			if (!t.primary) {
+				const add = value.createEl("button", { cls: "sk-tasks-notag", attr: { type: "button" } });
+				icon(add, "tag");
+				add.appendText(this.t("row.tag-short"));
+				this.zoneItem(add);
+				add.addEventListener("click", () => this.tagUntagged(t, add));
+				return;
+			}
 			const cap = capsule(value, t.primary, hub);
 			cap.addClass("is-clickable");
 			this.zoneItem(cap);
@@ -1505,6 +1763,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	private dragSource(row: HTMLElement, t: Task): void {
 		row.addEventListener("dragstart", (e) => {
 			this.dragKey = t.key;
+			this.dragKeys = this.picked.size >= 2 && this.picked.has(t.key) ? [...this.picked.keys()] : [];
 			e.dataTransfer?.setData("text/plain", t.title);
 			if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
 			window.setTimeout(() => row.addClass("is-dragging"), 0);
@@ -1515,12 +1774,14 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.rootEl.doc.body.removeClass("sk-tasks-dnd");
 			this.clearDrop();
 			this.dragKey = null;
+			this.dragKeys = [];
 		});
 	}
 
 	/** A place to drop a task: `tag` moves it to that tag, `due` schedules it for today. */
 	private dropTarget(el: HTMLElement, what: { tag?: string; due?: boolean }): void {
 		const accepts = () => {
+			if (this.dragKeys.length >= 2) return true;
 			const t = this.hub.index.get(this.dragKey);
 			return !!t && (what.due ? t.due !== this.today() : what.tag !== t.primary);
 		};
@@ -1542,7 +1803,15 @@ export class TasksTab implements WorkbenchTabInstance {
 			e.stopPropagation();
 			this.clearDrop();
 			const t = this.hub.index.get(this.dragKey);
-			if (!t || !accepts()) return;
+			if (!t) return;
+			// Several picked tasks dragged together: all of them move.
+			if (this.dragKeys.length >= 2) {
+				const tasks = this.dragKeys.map((key) => this.hub.index.get(key)).filter((x): x is Task => !!x);
+				if (what.tag) void this.hub.retagAll(tasks, what.tag).then(() => this.clearPicked());
+				if (what.due) void this.hub.setDueAll(tasks, this.today()).then(() => this.clearPicked());
+				return;
+			}
+			if (!accepts()) return;
 			if (what.tag) void this.hub.retag(t, what.tag);
 			if (what.due) void this.hub.setDue(t, this.today());
 		});
@@ -1550,7 +1819,8 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	/** The tasks of `t`'s tag as the list shows them now. */
 	private groupKeys(t: Task): string[] {
-		return this.sorted(this.hub.index.open().filter((x) => x.primary === t.primary)).map((x) => x.key);
+		const pool = t.primary ? this.hub.index.open() : this.hub.index.untagged;
+		return this.sorted(pool.filter((x) => x.primary === t.primary)).map((x) => x.key);
 	}
 
 	/**
@@ -1560,7 +1830,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	private async placeTask(key: string, target: string, after: boolean): Promise<void> {
 		const t = this.hub.index.get(key);
 		if (!t) return;
-		const live = new Set(this.hub.index.open().map((x) => x.key));
+		const live = new Set([...this.hub.index.open(), ...this.hub.index.untagged].map((x) => x.key));
 		const order = this.settings.taskOrder.filter((k) => live.has(k));
 		this.settings.taskOrder = moveInOrder(order, this.groupKeys(t), key, target, after);
 		const switched = this.sortMode() !== "manual";
@@ -1651,12 +1921,62 @@ export class TasksTab implements WorkbenchTabInstance {
 			await this.nudgeTask(t, key === "ArrowUp" ? -1 : 1);
 			return;
 		}
+		// Ctrl/Cmd+A: every task shown is picked.
+		if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && key.toLowerCase() === "a") {
+			e.preventDefault();
+			e.stopPropagation();
+			const keys = this.visibleKeys();
+			if (keys.length < 2) return;
+			for (const k of keys) this.pick(k);
+			this.refresh();
+			return;
+		}
+		// Shift+Up/Down: several tasks.
+		if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && (key === "ArrowUp" || key === "ArrowDown")) {
+			e.preventDefault();
+			e.stopPropagation();
+			this.extendPick(key === "ArrowUp" ? -1 : 1);
+			return;
+		}
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
+		const many = this.picked.size >= 2 ? this.pickAction(key) : null;
+		if (many) {
+			e.preventDefault();
+			e.stopPropagation();
+			await many();
+			return;
+		}
 		const action = this.keyAction(key, this.hub.index.get(this.st.sel));
 		if (!action) return;
 		e.preventDefault();
 		e.stopPropagation();
 		await action();
+	}
+
+	/** What a key does to the picked tasks, or null (then it acts as usual, on the selected one). */
+	private pickAction(key: string): (() => unknown) | null {
+		const tasks = this.pickedTasks();
+		const today = this.today();
+		switch (key.length === 1 ? key.toLowerCase() : key) {
+			case "Escape":
+				return () => this.clearPicked();
+			case "x":
+			case " ":
+				return () => this.hub.completeAll(tasks).then(() => this.clearPicked());
+			case "Delete":
+				return () => this.hub.deleteAll(tasks).then(() => this.clearPicked());
+			case "t":
+				return () => this.hub.setDueAll(tasks, today).then(() => this.clearPicked());
+			case "m":
+				return () => this.pickTagAll(tasks);
+			case "0":
+			case "1":
+			case "2":
+			case "3":
+				return () => this.hub.setPriorityAll(tasks, ([null, "high", "medium", "low"] as const)[+key]).then(() => this.clearPicked());
+			default:
+				return null;
+		}
 	}
 
 	/** What a key does in the list, or null to let Obsidian have it. */
@@ -1690,6 +2010,8 @@ export class TasksTab implements WorkbenchTabInstance {
 					this.st.open = this.st.open === t.key ? null : t.key;
 					this.refresh();
 				};
+			case "Delete":
+				return () => this.deleteTask(t);
 			case "o":
 				return () => this.openTask(t);
 			case "m":

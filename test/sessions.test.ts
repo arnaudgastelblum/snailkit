@@ -982,3 +982,46 @@ test("the sorting offers exactly the dotted lines: nested descriptions left out,
 	// The header of a new brainstorm never gets a dot.
 	assert.deepEqual(looseItems(["", "[[Inbox]]", "October 8, 2026", "", "Buy 2 pencils"], noClose).map((x) => x.line), [4]);
 });
+
+// ----- the To decide queue -----
+import { choicesFor, decideQueue } from "../src/modules/sessions/flow";
+
+const closing = (l: string) => l.startsWith("*Brainstorm closed");
+const DONE_NOTE = ["", "[[Inbox]]", "October 1, 2026", "", "- [?] Move to the new office?", "Some idea.", "- [?] Hire a designer", "- [ ] Call Sam #work", "", "*Brainstorm closed at 10:00*"];
+
+test("To decide: the lines to decide of every brainstorm, finished ones too, archived ones only on request", () => {
+	const q = (line: number, text: string, explicit = true) => ({ line, text, explicit });
+	const list = [
+		{ path: "Old.md", title: "Old", created: 100, closed: true, questions: [q(6, "Hire a designer"), q(4, "Move to the new office?"), q(9, "Why?", false)] },
+		{ path: "New.md", title: "New", created: 300, closed: false, questions: [q(2, "Paint it blue?")] },
+		{ path: "Gone.md", title: "Gone", created: 200, closed: true, archived: true, questions: [q(1, "Sell the car?")] },
+	];
+	assert.deepEqual(decideQueue(list).map((e) => [e.path, e.line, e.closed]), [["New.md", 2, false], ["Old.md", 4, true], ["Old.md", 6, true]]);
+	assert.deepEqual(decideQueue(list, true).map((e) => e.path), ["New.md", "Gone.md", "Old.md", "Old.md"]);
+	// From a finished note as summarized: its two lines, in order.
+	const s = summarizeNote(DONE_NOTE, closing);
+	assert.deepEqual(decideQueue([{ path: "D.md", title: "D", created: 1, closed: true, questions: s.questions }]).map((e) => e.text), ["Move to the new office?", "Hire a designer"]);
+});
+
+test("deciding a question: Decided checks it with the date, a task, an idea, deleted, or later; the note stays finished", () => {
+	assert.deepEqual(choicesFor("decide"), ["task", "done", "idea", "delete"]);
+	assert.deepEqual(choicesFor("task"), ["task", "decide", "idea", "delete"]);
+	const items = sortItems(summarizeNote(DONE_NOTE, closing), DONE_NOTE, closing).filter((x) => x.kind === "decide");
+	assert.equal(items.length, 2);
+	const [move, hire] = items;
+	const done = decideLine(DONE_NOTE, move, "done", null, "\t", closing, "2026-10-08")!;
+	assert.deepEqual(done.inserted, ["- [x] Move to the new office? ✅ 2026-10-08"]);
+	assert.deepEqual(decideLine(["- [?] Ship it ^ab12"], { line: 0, raw: "- [?] Ship it ^ab12", block: [] }, "done", null, "\t", closing, "2026-10-08")!.inserted, ["- [x] Ship it ✅ 2026-10-08 ^ab12"]);
+	assert.deepEqual(decideLine(DONE_NOTE, hire, "task", "work", "\t", closing)!.inserted, ["- [ ] Hire a designer #work"]);
+	assert.deepEqual(decideLine(DONE_NOTE, hire, "idea", null, "\t", closing)!.inserted, ["- Hire a designer"]);
+	assert.deepEqual(decideLine(DONE_NOTE, hire, "delete", null, "\t", closing)!.inserted, []);
+	assert.equal(decideLine(DONE_NOTE, hire, "later", null, "\t", closing), null);
+	// Decided only applies to a line to decide.
+	const task = { line: 7, raw: "- [ ] Call Sam #work", block: [] };
+	assert.equal(decideLine(DONE_NOTE, task, "done", null, "\t", closing, "2026-10-08"), null);
+	// Each decision is taken back exactly, and the closing line stays last: the note stays finished.
+	const after = applyEdit(DONE_NOTE, done);
+	assert.ok(closing(after[after.length - 1]));
+	assert.equal(summarizeNote(after, closing).questions.filter((q) => q.explicit).length, 1);
+	assert.deepEqual(applyEdit(after, revertOf(after, done)!), DONE_NOTE);
+});

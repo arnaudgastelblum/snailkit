@@ -23,6 +23,10 @@ the two.
 
 - Open the list from the ribbon, the Note menu or Home. Right click a task for every action.
 - Keyboard: `↑` `↓` to move, `X` to check, `T` for today, `N` for a new task.
+- Several at once: `Ctrl`/`Cmd`+click or `Shift`+click (or `Shift`+`↑` `↓`, `Ctrl`+`A`), then
+  check, date, prioritize, tag or delete them together, or drag them onto a tag. One Undo for all.
+- A checkbox written without a tag is not lost: if its note changed in the last 30 days, it waits
+  under **No tag** at the bottom of the list, with a **tag** button to give it one.
 - **Today** shows today's tasks first. Those from earlier days wait quietly below, folded, with
   **All to today**, **All to tomorrow** or **Remove dates** to settle them in one go (one Undo
   for all). Prefer the overdue ones first? **Show overdue first** in the settings.

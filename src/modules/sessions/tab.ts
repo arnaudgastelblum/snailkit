@@ -92,6 +92,10 @@ class TabView implements ViewTabInstance {
 	private track: HTMLElement;
 	private tip: HTMLElement;
 	private leadEl: HTMLElement;
+	/** The To decide queue: the lines to decide of every brainstorm, finished ones too. */
+	private decideEl: HTMLElement;
+	/** The To decide block shows every line (else the first few). */
+	private decideAll = false;
 	private archBtn: HTMLElement;
 	/** The card shown over a row (mouse only). */
 	private hoverCard: HTMLElement | null = null;
@@ -128,6 +132,7 @@ class TabView implements ViewTabInstance {
 		const top = this.desk ? this.main.createDiv({ cls: "sk-sessions-desk-top" }) : this.root;
 
 		this.leadEl = top.createDiv({ cls: "sk-sessions-lead", attr: { "data-sk-zone": "sentence" } });
+		this.decideEl = top.createDiv({ cls: "sk-sessions-decide", attr: { "data-sk-zone": "decide" } });
 		const head = top.createDiv({ cls: "sk-sessions-tab-head" });
 		const searchBox = head.createDiv({ cls: "sk-sessions-tab-search" });
 		setIcon(searchBox.createSpan({ cls: "sk-sessions-tab-search-icon" }), "search");
@@ -370,6 +375,7 @@ class TabView implements ViewTabInstance {
 		if (this.desk && (!this.selected || !shown.some((s) => s.path === this.selected))) this.selected = shown[0]?.path ?? null;
 		if (this.confirming && !all.some((s) => s.path === this.confirming)) this.confirming = null;
 		this.renderLead(all);
+		this.renderDecide();
 		this.renderContexts(contexts);
 		this.archBtn.empty();
 		setIcon(this.archBtn.createSpan({ cls: "sk-sessions-card-icon" }), "archive");
@@ -407,6 +413,45 @@ class TabView implements ViewTabInstance {
 	 * The sentence at the top: how many are in progress and what waits, with the Sort button; a
 	 * discreet recap of the week under it (it can be hidden).
 	 */
+	/**
+	 * The lines to decide of every brainstorm, finished ones too: the text, where it comes from and
+	 * when. A line opens its note there; Decide sorts them one at a time.
+	 */
+	private renderDecide(): void {
+		const el = this.decideEl;
+		el.empty();
+		const queue = this.rt.toDecide();
+		el.toggleClass("is-hidden", !queue.length);
+		if (!queue.length) return;
+		const head = el.createDiv({ cls: "sk-sessions-decide-head" });
+		const title = head.createDiv({ cls: "sk-sessions-decide-title" });
+		setIcon(title.createSpan({ cls: "sk-sessions-decide-icon" }), "circle-help");
+		title.createSpan({ text: this.t("decide.title") });
+		title.createSpan({ cls: "sk-sessions-group-n", text: String(queue.length) });
+		const go = head.createEl("button", { cls: "sk-btn is-s", attr: { type: "button", "data-sk-item": "", "data-focus-key": "decide:sort" } });
+		setIcon(go.createSpan({ cls: "sk-sessions-card-icon" }), "list-filter");
+		go.createSpan({ text: this.t("decide.sort") });
+		go.addEventListener("click", () => this.rt.startSort(null, this.root, "decide"));
+		const date = new Intl.DateTimeFormat(this.rt.ctx.lang, { day: "numeric", month: "short" });
+		const shown = this.decideAll ? queue : queue.slice(0, 4);
+		const list = el.createDiv({ cls: "sk-sessions-decide-list" });
+		for (const q of shown) {
+			const row = list.createEl("button", { cls: "sk-sessions-decide-row", attr: { type: "button", "data-sk-item": "", "data-focus-key": `decide:${q.path}:${q.line}` } });
+			row.createSpan({ cls: "sk-sessions-decide-box", attr: { "aria-hidden": "true" } });
+			row.createSpan({ cls: "sk-sessions-decide-text", text: q.text });
+			row.createSpan({ cls: "sk-sessions-decide-from", text: `${q.title} · ${date.format(q.created)}` + (q.closed ? ` · ${this.t("flow.closed")}` : "") });
+			row.addEventListener("click", (e) => this.host.open(q.path, q.line, e));
+		}
+		if (queue.length > shown.length || this.decideAll && queue.length > 4) {
+			const more = list.createEl("button", { cls: "sk-btn is-ghost is-s sk-sessions-decide-more", attr: { type: "button", "data-sk-item": "", "data-focus-key": "decide:more" } });
+			more.setText(this.decideAll ? this.t("decide.fewer") : this.tn("decide.more", queue.length - shown.length));
+			more.addEventListener("click", () => {
+				this.decideAll = !this.decideAll;
+				this.render();
+			});
+		}
+	}
+
 	private renderLead(all: SessionInfo[]): void {
 		const el = this.leadEl;
 		el.empty();

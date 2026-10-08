@@ -3,10 +3,10 @@
 // again before writing, and nothing is written when it is gone.
 import { MarkdownView, Notice, TFile, moment, normalizePath, type Editor, type WorkspaceLeaf } from "obsidian";
 import {
-	insertTaskLine, locateLine, mapTaskText, minimalChange, newTaskPath, retagText, retitleText, revertLines,
+	editLines, insertTaskLine, insertToken, locateLine, removeBlock, removeBlocks, restoreBlock, restoreBlocks, type RemovedBlock, mapTaskText, minimalChange, newTaskPath, retagText, retitleText, revertLines,
 	setDoneLine, setDueLines, setDueText, setMarkerText, setNoteLinkText, setPriorityText, type LineChange,
 } from "./edit";
-import { parseTaskText, taskKey } from "./parse";
+import { blockEnd, parseTaskText, scanTasks, scanUntagged, taskKey } from "./parse";
 import type { TaskIndex } from "./task-index";
 import type { Context, Priority, Task, TaskRef } from "./types";
 import { openNoteAt } from "../../core/workbench/open";
@@ -72,7 +72,7 @@ export class TaskWriter {
 			});
 		}
 		// The list follows at once, without waiting for the editor to save.
-		if (out !== null) this.index.set(path, out);
+		if (out !== null) this.index.set(path, out, true);
 		return out;
 	}
 
@@ -84,6 +84,9 @@ export class TaskWriter {
 		let same = false;
 		const written = await this.editFile(ref.path, (lines) => {
 			at = locateLine(lines, ref.line, ref.raw);
+			// The line changed since it was read (a sync added a marker, the note was being typed in):
+			// the same task is still found by its tag and words when only one line has them.
+			if (at < 0 && "baseKey" in ref) at = this.findByKey(lines, ref.path, ref as Task);
 			if (at < 0) return null;
 			const next = fn(lines[at]);
 			if (next === null) return null;
@@ -114,6 +117,22 @@ export class TaskWriter {
 			return ok;
 		};
 		return { path: ref.path, line: at, undo };
+	}
+
+	/**
+	 * The line of the only task of the note with the same tag and words as `task` (whatever its
+	 * state, so that a twin is never taken for it), in the same state and without a marker that
+	 * says otherwise (a sync id of another task); -1 when unsure.
+	 */
+	private findByKey(lines: readonly string[], path: string, task: Task): number {
+		const flags = this.index.flags();
+		const all = task.primary ? scanTasks(lines, path, flags) : scanUntagged(lines, path, flags);
+		const hits = all.filter((t) => t.baseKey === task.baseKey);
+		if (hits.length !== 1) return -1;
+		const hit = hits[0];
+		if (hit.done !== task.done) return -1;
+		for (const [name, value] of Object.entries(task.markers ?? {})) if (hit.markers?.[name] !== undefined && hit.markers[name] !== value) return -1;
+		return hit.line;
 	}
 
 	editText(ref: TaskRef, fn: (text: string) => string, quiet = false): Promise<Written | null> {
@@ -180,6 +199,126 @@ export class TaskWriter {
 		return { count, undo };
 	}
 
+	/**
+	 * Deletes a task line with its subtasks and description (the indented lines under it). The
+	 * task note, if any, is left as it is. Undo puts the lines back where they were.
+	 */
+	async deleteTask(ref: TaskRef, quiet = false): Promise<Written | null> {
+		const found: { block: RemovedBlock | null } = { block: null };
+		const written = await this.editFile(ref.path, (lines) => {
+			const at = locateLine(lines, ref.line, ref.raw);
+			if (at < 0) return null;
+			const result = removeBlock(lines, at, blockEnd(lines, at));
+			found.block = result.block;
+			return result.lines;
+		});
+		const removed = found.block;
+		if (written === null || !removed) {
+			if (!quiet) new Notice(this.ctx.t("notice.changed"));
+			return null;
+		}
+		const undo: Undo = async () => {
+			let ok = false;
+			await this.editFile(ref.path, (lines) => {
+				const back = restoreBlock(lines, removed);
+				ok = back !== null;
+				return back;
+			});
+			if (!ok) new Notice(this.ctx.t("notice.undo-failed"));
+			return ok;
+		};
+		return { path: ref.path, line: removed.at, undo };
+	}
+
+	/**
+	 * Rewrites many task lines (`fn` per task: the new line, or null to leave it): one write per
+	 * note, one Undo that puts back every line left untouched since.
+	 */
+	async editMany(items: ReadonlyArray<{ task: TaskRef; fn: (line: string) => string | null }>): Promise<{ count: number; undo: Undo }> {
+		const byPath = new Map<string, Array<{ line: number; raw: string; fn: (line: string) => string | null }>>();
+		for (const { task, fn } of items) byPath.set(task.path, [...(byPath.get(task.path) ?? []), { line: task.line, raw: task.raw, fn }]);
+		const done: Array<{ path: string; changes: LineChange[] }> = [];
+		let failed = false;
+		for (const [path, list] of byPath) {
+			let changes: LineChange[] = [];
+			try {
+				const written = await this.editFile(path, (lines) => {
+					const result = editLines(lines, list);
+					changes = result?.changes ?? [];
+					return result?.lines ?? null;
+				});
+				if (written !== null && changes.length) done.push({ path, changes });
+			} catch (error) {
+				failed = true;
+				console.error("[Snailkit] tasks: could not change " + path, error);
+			}
+		}
+		if (failed) new Notice(this.ctx.t("notice.some-failed"));
+		const count = done.reduce((n, d) => n + d.changes.length, 0);
+		const undo: Undo = async () => {
+			let all = true;
+			for (const { path, changes } of done) {
+				let restored = 0;
+				try {
+					await this.editFile(path, (lines) => {
+						const result = revertLines(lines, changes);
+						restored = result.restored;
+						return restored ? result.lines : null;
+					});
+				} catch (error) {
+					console.error("[Snailkit] tasks: could not undo in " + path, error);
+				}
+				if (restored < changes.length) all = false;
+			}
+			if (!all) new Notice(this.ctx.t("notice.undo-failed"));
+			return all;
+		};
+		return { count, undo };
+	}
+
+	/** Deletes many tasks with their blocks: one write per note, one Undo that puts them all back. */
+	async deleteMany(refs: readonly TaskRef[]): Promise<{ count: number; undo: Undo }> {
+		const byPath = new Map<string, TaskRef[]>();
+		for (const ref of refs) byPath.set(ref.path, [...(byPath.get(ref.path) ?? []), ref]);
+		const done: Array<{ path: string; blocks: RemovedBlock[] }> = [];
+		let failed = false;
+		for (const [path, list] of byPath) {
+			let blocks: RemovedBlock[] = [];
+			try {
+				const written = await this.editFile(path, (lines) => {
+					const result = removeBlocks(lines, list, blockEnd);
+					blocks = result?.blocks ?? [];
+					return result?.lines ?? null;
+				});
+				if (written !== null && blocks.length) done.push({ path, blocks });
+			} catch (error) {
+				failed = true;
+				console.error("[Snailkit] tasks: could not delete in " + path, error);
+			}
+		}
+		if (failed) new Notice(this.ctx.t("notice.some-failed"));
+		const count = done.reduce((n, d) => n + d.blocks.length, 0);
+		const undo: Undo = async () => {
+			let all = true;
+			for (const { path, blocks } of done) {
+				let restored = 0;
+				try {
+					await this.editFile(path, (lines) => {
+						const back = restoreBlocks(lines, blocks);
+						restored = back.restored;
+						return restored ? back.lines : null;
+					});
+				} catch (error) {
+					console.error("[Snailkit] tasks: could not undo in " + path, error);
+				}
+				if (restored < blocks.length) all = false;
+			}
+			if (!all) new Notice(this.ctx.t("notice.undo-failed"));
+			return all;
+		};
+		return { count, undo };
+	}
+
 	setNoteLink(task: Task, linkTarget: string | null, quiet = false): Promise<Written | null> {
 		return this.editText(task, (text) => setNoteLinkText(text, linkTarget), quiet);
 	}
@@ -194,20 +333,32 @@ export class TaskWriter {
 		return this.editText(task, (text) => retagText(text, task.primary, to), quiet);
 	}
 
+	/** Gives an untagged task its tag, before its dates and markers. */
+	addTag(task: Task, tag: string, quiet = false): Promise<Written | null> {
+		const to = tag.replace(/^#/, "").toLowerCase();
+		return this.editText(task, (text) => insertToken(text, "#" + to), quiet);
+	}
+
 	/** Renames a task: only its title, tags and dates stay. Refused when the group tag would be lost. */
 	async rename(task: Task, title: string, quiet = false): Promise<Written | null> {
 		const next = retitleText(task.text, task.title, title);
-		if (!parseTaskText(next, this.index.flags()).primary) {
+		if (task.primary && !parseTaskText(next, this.index.flags()).primary) {
 			if (!quiet) new Notice(this.ctx.t("notice.keep-tag"));
 			return null;
 		}
-		return this.editText(task, () => next, quiet);
+		// Rewritten from the line as it is now: a date or a marker added meanwhile stays.
+		return this.editText(task, (text) => {
+			const now = retitleText(text, task.title, title);
+			return !task.primary || parseTaskText(now, this.index.flags()).primary ? now : next;
+		}, quiet);
 	}
 
 	/** Key the task will have once renamed, to keep it selected in the list. */
 	keyAfterRename(task: Task, title: string): string {
 		const fields = parseTaskText(retitleText(task.text, task.title, title), this.index.flags());
-		return fields.primary ? taskKey(fields.primary, fields.title) : task.key;
+		if (fields.primary) return taskKey(fields.primary, fields.title);
+		// A task without a tag keeps its "|words" key, with its new words.
+		return task.primary ? task.key : taskKey("", fields.title);
 	}
 
 	toggleSubtask(task: Task, sub: { line: number; raw: string; done: boolean }): Promise<Written | null> {
