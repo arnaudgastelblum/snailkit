@@ -28,6 +28,8 @@ export const home = defineModule<HomeSettings>({
 		new HomeRuntime(ctx).start();
 	},
 	settings(page) {
+		page.section(page.t("settings.layout"))
+			.toggle("pinsOnTop", page.t("settings.pins-top"), { desc: page.t("settings.pins-top-desc") });
 		const domains = page.section(page.t("settings.domains"));
 		// The home page found now (with the options in force), through the shared "places" service.
 		const places = (page.app as unknown as { plugins?: { plugins?: Record<string, { api?: { service?(name: string): unknown } }> } }).plugins?.plugins?.snailkit?.api?.service?.("places") as PlacesService | undefined;

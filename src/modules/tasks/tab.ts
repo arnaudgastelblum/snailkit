@@ -12,7 +12,7 @@ import {
 } from "./group";
 import type { ViewAction } from "./api";
 import type { TasksHub } from "./hub";
-import { TaskNotePreview } from "./note-preview";
+import { TaskNoteView } from "./task-note-view";
 import { RenameTagModal } from "./rename-tag";
 import { TAG_RENAMED_EVENT } from "../../core/services";
 import type { TagRenameResult } from "../../core/tags/rename";
@@ -89,7 +89,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	/** What the details showed last time, so their entrance animation plays only on a change. */
 	private shownDetail: string | null = null;
 	private shownProp: string | null = null;
-	private notePreview: TaskNotePreview | null = null;
+	private notePreview: TaskNoteView | null = null;
 
 	constructor(
 		private readonly hub: TasksHub,
@@ -118,6 +118,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.keyScope.register([], "F2", (event) => {
 			const target = event.target as HTMLElement | null;
 			const t = this.hub.index.get(this.st.sel);
+			if (target?.closest("[data-sk-zone=nav], [data-sk-zone=toolbar]")) return;
 			if (!t || target?.matches?.("input, textarea") || target?.isContentEditable) return;
 			this.inlineRename(t);
 			return false;
@@ -162,6 +163,33 @@ export class TasksTab implements WorkbenchTabInstance {
 	/** Typing in a field of the list: a layout change of the Workbench waits. */
 	busy(): boolean {
 		return this.isEditing();
+	}
+
+	private zoneItem(el: HTMLElement): void {
+		el.setAttr("data-sk-item", "");
+		el.tabIndex = 0;
+		if (!el.hasAttribute("role")) el.setAttr("role", "button");
+		el.addEventListener("keydown", (e) => {
+			if (e.key !== "Enter" || e.target !== el) return;
+			e.preventDefault();
+			e.stopPropagation();
+			el.click();
+		});
+	}
+
+	keys(): Array<[string, string]> {
+		return [
+			["↑ ↓ / J K", this.t("keyboard.move")],
+			["Enter", this.t("keyboard.open")],
+			["X / Space", this.t("keyboard.done")],
+			["T", this.t("keyboard.today")],
+			["0 1 2 3", this.t("keyboard.priority")],
+			["M", this.t("keyboard.tag")],
+			["F2", this.t("keyboard.rename")],
+			["N", this.t("keyboard.new")],
+			["/", this.t("keyboard.search")],
+			["Alt+↑ ↓", this.t("keyboard.reorder")],
+		];
 	}
 
 	/** The Workbench was revealed or this tab chosen: the keyboard acts on the list. */
@@ -249,17 +277,17 @@ export class TasksTab implements WorkbenchTabInstance {
 		el.toggleClass("is-side", this.layout === "side");
 		const hub = el.createDiv({ cls: `sk-tasks-hub sk-tasks-${this.layout ?? "side"}` });
 		if (this.layout === "page") {
-			this.navEl = hub.createDiv({ cls: "sk-tasks-nav" });
+			this.navEl = hub.createDiv({ cls: "sk-tasks-nav", attr: { "data-sk-zone": "nav" } });
 			const center = hub.createDiv({ cls: "sk-tasks-center" });
-			this.headEl = center.createDiv({ cls: "sk-tasks-page-head" });
-			this.listEl = center.createDiv({ cls: "sk-tasks-list" });
+			this.headEl = center.createDiv({ cls: "sk-tasks-page-head", attr: { "data-sk-zone": "toolbar" } });
+			this.listEl = center.createDiv({ cls: "sk-tasks-list", attr: { "data-sk-zone": "list" } });
 			this.footEl = center.createDiv({ cls: "sk-tasks-foot" });
-			this.detailEl = hub.createDiv({ cls: "sk-tasks-detail" });
+			this.detailEl = hub.createDiv({ cls: "sk-tasks-detail", attr: { "data-sk-zone": "detail" } });
 		} else {
 			this.navEl = null;
 			this.detailEl = null;
 			this.headEl = hub.createDiv({ cls: "sk-tasks-side-head" });
-			this.listEl = hub.createDiv({ cls: "sk-tasks-list" });
+			this.listEl = hub.createDiv({ cls: "sk-tasks-list", attr: { "data-sk-zone": "list" } });
 			this.footEl = hub.createDiv({ cls: "sk-tasks-foot" });
 		}
 		this.renderHead();
@@ -278,6 +306,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		this.pending = false;
 		this.notePreview?.detach();
+		const focusedScope = this.rootEl.doc.activeElement?.closest<HTMLElement>("[data-scope]")?.dataset.scope;
+		const focusedRow = this.rootEl.doc.activeElement?.closest<HTMLElement>(".sk-tasks-row[data-key]")?.dataset.key;
 		const scroll = this.listEl.scrollTop;
 		const addInput = this.listEl.querySelector<HTMLInputElement>(".sk-tasks-add input");
 		const adding = addInput && this.rootEl.doc.activeElement === addInput ? { value: addInput.value, pos: addInput.selectionStart ?? 0 } : null;
@@ -288,12 +318,27 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.updateHead();
 		if (this.navEl) this.renderNav();
 		this.renderList();
+		if (this.layout === "side") {
+			this.listEl.removeAttribute("data-sk-zone");
+			const entry = this.rowOf(this.st.sel ?? "") ?? this.listEl.querySelector<HTMLElement>(".sk-tasks-row[data-key]");
+			if (entry) {
+				// Keep the inline detail outside the list zone without moving it.
+				const zone = entry.parentElement!.createDiv({ attr: { "data-sk-zone": "list" } });
+				entry.before(zone);
+				zone.appendChild(entry);
+				entry.setAttr("data-sk-zone-focus", "");
+				entry.tabIndex = 0;
+			} else this.listEl.setAttr("data-sk-zone", "list");
+		}
 		if (this.detailEl) this.renderDetail();
 		if (this.notePreview && !this.rootEl.contains(this.notePreview.el)) {
 			this.notePreview.unload();
 			this.notePreview = null;
 		}
 		this.listEl.scrollTop = scroll;
+		if (focusedRow && this.st.sel) this.rowOf(this.st.sel)?.focus({ preventScroll: true });
+		if (focusedScope) Array.from(this.rootEl.querySelectorAll<HTMLElement>("[data-scope]")).find((item) => item.dataset.scope === focusedScope)?.focus({ preventScroll: true });
+		this.rootEl.querySelectorAll<HTMLElement>("[data-sk-zone] button").forEach((button) => button.setAttr("data-sk-item", ""));
 		if (adding) {
 			const input = this.listEl.querySelector<HTMLInputElement>(".sk-tasks-add input");
 			if (input) {
@@ -320,7 +365,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		head.empty();
 		this.filterBtn = this.countEl = this.scopeEl = this.hubTitleEl = this.subEl = this.sortLabel = this.extEl = null;
 		if (this.layout === "side") {
-			const top = head.createDiv({ cls: "sk-tasks-side-top" });
+			const toolbar = head.createDiv({ attr: { "data-sk-zone": "toolbar" } });
+			const top = toolbar.createDiv({ cls: "sk-tasks-side-top" });
 			const title = top.createDiv({ cls: "sk-tasks-title" });
 			title.createSpan({ text: this.t("view.title") });
 			this.countEl = title.createSpan({ cls: "sk-tasks-count" });
@@ -330,8 +376,8 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.extEl = top.createDiv({ cls: "sk-tasks-ext" });
 			this.iconButton(top, "maximize-2", this.t("action.page"), () => void this.hub.activate("page", { tasks: true }));
 			this.iconButton(top, "plus", this.t("action.new-key"), () => this.startAdd(null));
-			this.searchBox(head);
-			this.scopeEl = head.createDiv({ cls: "sk-tasks-scopes" });
+			this.searchBox(toolbar);
+			this.scopeEl = head.createDiv({ cls: "sk-tasks-scopes", attr: { "data-sk-zone": "nav" } });
 		} else {
 			const titleRow = head.createDiv({ cls: "sk-tasks-ph-title" });
 			this.hubTitleEl = titleRow.createDiv({ cls: "sk-tasks-ph-name" });
@@ -427,6 +473,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			scopes.empty();
 			for (const [id, n] of [["all", c.all], ["today", c.today], ["upcoming", c.upcoming]] as const) {
 				const button = scopes.createEl("button", { cls: "sk-tasks-scope" + (this.st.scope === id ? " is-on" : "") });
+				button.dataset.scope = id;
 				button.createSpan({ text: this.t("scope." + id) });
 				if (n) button.createSpan({ cls: "sk-tasks-scope-n" + (id === "today" && c.overdue ? " is-warn" : ""), text: String(n) });
 				button.addEventListener("click", () => this.setScope(id));
@@ -548,6 +595,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		const c = countTasks(this.hub.index.open(), this.today());
 		const item = (id: string, iconName: string, n: number, warn = false) => {
 			const it = nav.createDiv({ cls: "sk-tasks-nav-item" + (this.st.scope === id ? " is-on" : "") });
+			this.zoneItem(it);
+			it.dataset.scope = id;
 			icon(it, iconName);
 			it.createSpan({ cls: "sk-tasks-nav-label", text: this.t("title." + id) });
 			if (n) it.createSpan({ cls: "sk-tasks-n" + (warn ? " is-warn" : ""), text: String(n) });
@@ -560,6 +609,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		nav.createDiv({ cls: "sk-tasks-nav-sec", text: this.t("nav.tags") });
 		const walk = (node: TagNode) => {
 			const it = nav.createDiv({ cls: "sk-tasks-nav-item sk-tasks-nav-tag" + (this.st.scope === "tag:" + node.tag ? " is-on" : "") });
+			this.zoneItem(it);
+			it.dataset.scope = "tag:" + node.tag;
 			it.setCssProps({ "--sk-tasks-depth": String(node.depth) });
 			if (node.depth === 0) capsule(it, node.tag, this.hub, "sk-tasks-cap-nav");
 			else {
@@ -843,6 +894,20 @@ export class TasksTab implements WorkbenchTabInstance {
 			cls: "sk-tasks-row" + (t.priority ? " p-" + t.priority : "") + (this.st.sel === t.key ? " is-sel" : "") + (this.freshKey === t.key ? " is-new" : ""),
 		});
 		row.dataset.key = t.key;
+		row.tabIndex = this.st.sel === t.key ? 0 : -1;
+		row.setAttr("data-sk-item", "");
+		if (this.st.sel === t.key) row.setAttr("data-sk-zone-focus", "");
+		row.addEventListener("focus", () => {
+			if (this.st.sel === t.key) return;
+			this.st.sel = t.key;
+			this.listEl?.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]").forEach((item) => {
+				const on = item === row;
+				item.toggleClass("is-sel", on);
+				item.toggleAttribute("data-sk-zone-focus", on);
+				item.tabIndex = on ? 0 : -1;
+			});
+			if (this.detailEl) this.renderDetail();
+		});
 		row.draggable = true;
 		icon(row, "grip-vertical", "sk-tasks-grip");
 		const box = checkbox(row);
@@ -859,7 +924,9 @@ export class TasksTab implements WorkbenchTabInstance {
 		const state = dueState(t.due, today);
 		if (this.layout === "page") {
 			if (showTag) capsule(title, t.primary, this.hub, "sk-tasks-cap-sm");
-			this.subtaskCount(meta.createSpan({ cls: "sk-tasks-m-icons" }), t);
+			const icons = meta.createSpan({ cls: "sk-tasks-m-icons" });
+			this.subtaskCount(icons, t);
+			this.taskNoteMarker(icons, t);
 			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
 			icon(note, "file-text");
 			this.sessionMarker(note, t.path);
@@ -874,6 +941,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			}
 			if (showTag) capsule(meta, t.primary, this.hub, "sk-tasks-cap-xs");
 			this.subtaskCount(meta, t);
+			this.taskNoteMarker(meta, t);
 			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
 			icon(note, "file-text");
 			this.sessionMarker(note, t.path);
@@ -917,7 +985,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (this.layout === "side" && toggleOpen) this.st.open = this.st.open === key && was === key ? null : key;
 		this.refresh();
 		this.rowOf(key)?.scrollIntoView({ block: "nearest" });
-		if (!this.isEditing()) this.rootEl.focus({ preventScroll: true });
+		if (!this.isEditing()) (this.rootEl.doc.activeElement?.matches(".sk-tasks-row[data-key]") ? this.rowOf(key) ?? this.rootEl : this.rootEl).focus({ preventScroll: true });
 	}
 
 	private moveSel(delta: number): void {
@@ -927,6 +995,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		const next = keys[Math.max(0, Math.min(keys.length - 1, i < 0 ? 0 : i + delta))];
 		if (this.layout === "side" && this.st.open) this.st.open = next;
 		this.select(next, false);
+		this.rowOf(next)?.focus({ preventScroll: true });
 	}
 
 	private taskMenu(event: MouseEvent, t: Task): void {
@@ -1020,7 +1089,9 @@ export class TasksTab implements WorkbenchTabInstance {
 	}
 
 	private pickTag(t: Task): void {
-		new TagSuggestModal(this.hub, t.primary, this.t("tag.move-placeholder"), (tag) => void this.hub.retag(t, tag)).open();
+		const picker = new TagSuggestModal(this.hub, t.primary, this.t("tag.move-placeholder"), (tag) => void this.hub.retag(t, tag));
+		picker.modalEl.setAttr("data-sk-own-tab", "");
+		picker.open();
 	}
 
 	private async complete(t: Task, rowEl?: HTMLElement): Promise<void> {
@@ -1083,7 +1154,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		const row = parent.createDiv({ cls: "sk-tasks-row sk-tasks-add" });
 		checkbox(row);
 		const main = row.createDiv({ cls: "sk-tasks-row-main" });
-		const input = main.createEl("input", { type: "text", attr: { placeholder: this.t(tag ? "add.placeholder" : "add.placeholder-tag") } });
+		const input = main.createEl("input", { type: "text", attr: { "data-sk-own-tab": "", placeholder: this.t(tag ? "add.placeholder" : "add.placeholder-tag") } });
 		input.value = this.st.draft;
 		input.addEventListener("input", () => {
 			this.st.draft = input.value;
@@ -1184,7 +1255,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	}
 
 	private inlineDetail(parent: HTMLElement, t: Task): void {
-		this.detailBody(parent.createDiv({ cls: "sk-tasks-inline-det" + this.entering(t.key) }), t);
+		this.detailBody(parent.createDiv({ cls: "sk-tasks-inline-det" + this.entering(t.key), attr: { "data-sk-zone": "detail" } }), t);
 	}
 
 	/** " is-entering" the first time the details of this task are drawn. */
@@ -1204,8 +1275,12 @@ export class TasksTab implements WorkbenchTabInstance {
 
 		// Title: rendered Markdown; editing shows the Markdown of the title.
 		const titleRow = body.createDiv({ cls: "sk-tasks-det-title-row" + (t.priority ? " p-" + t.priority : "") });
-		if (this.layout === "page") checkbox(titleRow).addEventListener("click", () => void this.complete(t));
-		const title = titleRow.createDiv({ cls: "sk-tasks-det-title", attr: { contenteditable: "true", spellcheck: "false", "aria-label": this.t("detail.rename") } });
+		if (this.layout === "page") {
+			const done = checkbox(titleRow);
+			this.zoneItem(done);
+			done.addEventListener("click", () => void this.complete(t));
+		}
+		const title = titleRow.createDiv({ cls: "sk-tasks-det-title", attr: { contenteditable: "true", tabindex: "0", "data-sk-item": "", spellcheck: "false", "aria-label": this.t("detail.rename") } });
 		renderInline(title, t.title);
 		icon(titleRow, "pencil", "sk-tasks-det-edit").addEventListener("click", () => title.focus());
 		title.addEventListener("focus", () => title.setText(t.title));
@@ -1246,6 +1321,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			const value = props.createDiv({ cls: "sk-tasks-prop-v" + (editor ? " is-editable" : "") + (isOpen ? " is-open" : "") });
 			showValue(value);
 			if (!editor) return;
+			this.zoneItem(value);
 			icon(value, "chevron-down", "sk-tasks-prop-chev");
 			value.addEventListener("click", (e) => {
 				if ((e.target as HTMLElement).closest(".sk-tasks-cap, input, button")) return;
@@ -1265,6 +1341,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		prop("tag", "hash", (value) => {
 			const cap = capsule(value, t.primary, hub);
 			cap.addClass("is-clickable");
+			this.zoneItem(cap);
 			cap.setAttr("aria-label", this.t("menu.move"));
 			cap.addEventListener("click", () => this.pickTag(t));
 		});
@@ -1347,15 +1424,17 @@ export class TasksTab implements WorkbenchTabInstance {
 				const box = checkbox(item, "sk-tasks-cb-sm");
 				box.setAttr("aria-checked", String(sub.done));
 				renderInline(item.createSpan({ cls: "sk-tasks-txt" }), sub.text);
+				this.zoneItem(box);
 				box.addEventListener("click", () => void hub.writer.toggleSubtask(t, sub));
 			}
 		}
-		if (this.notePreview && (this.notePreview.task.key !== t.key || this.notePreview.task.path !== t.path)) {
+		if (this.notePreview && this.notePreview.task.key !== t.key) {
 			this.notePreview.unload();
 			this.notePreview = null;
 		}
 		if (!this.notePreview) {
-			this.notePreview = new TaskNotePreview(hub, t, this.layout === "side", (line, event) => void this.host.open(t.path, line, event));
+			if (!hub.taskNotes) return;
+			this.notePreview = new TaskNoteView(hub, hub.taskNotes, t);
 			this.notePreview.mount(body, t);
 			this.notePreview.load();
 		} else this.notePreview.mount(body, t);
@@ -1476,6 +1555,13 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	// ----- keyboard -----
 
+	/** A small notebook on tasks that have their own note. */
+	private taskNoteMarker(parent: HTMLElement, t: Task): void {
+		if (!t.noteLink) return;
+		const marker = icon(parent, "notebook-pen", "sk-tasks-has-note");
+		marker.setAttr("aria-label", this.t("note.title"));
+	}
+
 	private sessionMarker(parent: HTMLElement, path: string): void {
 		if (!this.hub.isSession(path)) return;
 		const marker = icon(parent, "zap", "sk-tasks-session");
@@ -1484,7 +1570,11 @@ export class TasksTab implements WorkbenchTabInstance {
 	}
 
 	private async onKey(e: KeyboardEvent): Promise<void> {
+		if (e.defaultPrevented) return;
 		const target = e.target as HTMLElement;
+		const zone = target.closest<HTMLElement>("[data-sk-zone]");
+		if (zone && zone.dataset.skZone !== "list" && !["/", "n"].includes(e.key.toLowerCase())) return;
+		if (target !== this.rootEl && target !== this.listEl && !target.matches(".sk-tasks-row[data-key]") && !["/", "n"].includes(e.key.toLowerCase())) return;
 		if (target.matches?.("input, textarea") || target.isContentEditable) return;
 		const key = e.key;
 		if ((e.ctrlKey || e.metaKey) && !e.altKey && key.toLowerCase() === "z" && this.hub.canUndo()) {

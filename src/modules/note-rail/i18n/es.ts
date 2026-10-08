@@ -143,6 +143,7 @@ export const es: StringsOf<typeof en> = {
 	"settings.template-desc": "Nota que se copia en cada nueva nota diaria.",
 	"settings.template-none": "Sin plantilla",
 	"rail.today": "Hoy",
+	"rail.home": "Inicio",
 	"rail.today-error": "No se pudo abrir la nota de hoy.",
 	"rail.search": "Search",
 	"settings.show-place": "Dónde se guarda la nota",

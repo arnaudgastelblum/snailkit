@@ -451,7 +451,8 @@ export class SessionsRuntime {
 		const tasks = this.ctx.service<TasksWorkbench>("tasks");
 		try {
 			if (tasks?.version === 1 && tasks.find?.({ path, line, raw }) && tasks.setDone) {
-				await tasks.setDone({ path, line, raw }, done);
+				const written = await tasks.setDone({ path, line, raw }, done);
+				if (written && done) tasks.chime?.();
 				return;
 			}
 		} catch {

@@ -68,7 +68,26 @@ export interface WorkbenchTabInstance {
 	focus?(): void;
 	/** True while the user edits something in the tab: a layout change waits until the focus leaves it. */
 	busy?(): boolean;
+	/**
+	 * The keys of this tab, for the Workbench's "?" help: [keys, what they do], already
+	 * translated, e.g. ["↑ ↓", "Move in the list"]. The Workbench adds its own (tabs, zones).
+	 */
+	keys?(): Array<[string, string]>;
 }
+
+/**
+ * Keyboard zones of a tab (same for every tab, handled by the Workbench view):
+ * - a tab marks each zone of its page with `data-sk-zone="<name>"` (search, today, pins, map,
+ *   recent, nav, list, detail...), in reading order; zones are not nested;
+ * - Tab / Shift+Tab, when the focus is not in a text area, a contenteditable or an element (or
+ *   ancestor) marked `data-sk-own-tab`, move to the next / previous zone: its `[data-sk-zone-focus]`
+ *   element if any, else its first focusable element, else the zone itself;
+ * - ↑ ↓ (and ← → in a zone marked `data-sk-zone-grid`), when the tab did not handle them
+ *   (event.defaultPrevented), move the focus between the zone's `[data-sk-item]` elements, which
+ *   should be focusable (tabindex) and open with Enter;
+ * - "?" (outside fields) shows the help: the Workbench keys, then the tab's keys().
+ */
+export const ZONE_ATTR = "data-sk-zone";
 
 export interface WorkbenchTab {
 	/** Unique id, a-z and "-". "home", "tasks" and "sessions" belong to their modules. */

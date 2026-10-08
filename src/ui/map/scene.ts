@@ -1,6 +1,7 @@
 import { branchPath, childRows, columnLayout, nodeKey, pathFrom, type MapMode, type MapRow } from "./layout";
 import { MapLifetime } from "./motion";
 import { MAP_LIMITS as L, type MapOptions, type MapState } from "./types";
+import { zoomOf } from "../surface";
 
 let sceneId = 0;
 interface Entry { row: MapRow; el: HTMLElement; signature: string }
@@ -163,11 +164,13 @@ export class MapScene {
 			}
 		}
 		if (animate && !changedMode && mode === "columns") {
+			// Moves are measured on screen; the map may be zoomed (Home's zoom): back to its own pixels.
+			const z = zoomOf(this.box);
 			for (const [key, entry] of this.entries) {
 				const from = before.get(key); if (!from) continue;
 				const to = entry.el.getBoundingClientRect();
 				if (Math.abs(from.left - to.left) > 1 || Math.abs(from.top - to.top) > 1)
-					this.life.animate(entry.el, [{ transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)` }, { transform: "none" }], 420);
+					this.life.animate(entry.el, [{ transform: `translate(${(from.left - to.left) / z}px, ${(from.top - to.top) / z}px)` }, { transform: "none" }], 420);
 			}
 		}
 		this.drawEdges(animate);

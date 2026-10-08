@@ -1,4 +1,4 @@
-import { Surface } from "../surface";
+import { Surface, zoomOf } from "../surface";
 import { inTriangle, mapMode, nodeKey, pathFrom, startingChain, validChain, type MapRow, type Point } from "./layout";
 import { dropZone, nextAfter, sameOrder, type Zone } from "./drop";
 import { keyMove } from "./keys";
@@ -96,9 +96,10 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 				const x = Math.max(6, Math.min(r.left, win.innerWidth - tip.offsetWidth - 6));
 				const y = Math.max(6, Math.min(r.bottom + 6, win.innerHeight - tip.offsetHeight - 6));
 				tip.style.left = `${x}px`; tip.style.top = `${y}px`;
-				// A contained ancestor (Obsidian's leaf has contain: strict) anchors "fixed" to itself: take its offset out.
-				const t = tip.getBoundingClientRect();
-				tip.style.left = `${2 * x - t.left}px`; tip.style.top = `${2 * y - t.top}px`;
+				// A contained ancestor (Obsidian's leaf has contain: strict) anchors "fixed" to itself, and
+				// the map may be zoomed: find where style 0 lands on screen, then place in its own pixels.
+				const t = tip.getBoundingClientRect(), z = zoomOf(box);
+				tip.style.left = `${(x - (t.left - x * z)) / z}px`; tip.style.top = `${(y - (t.top - y * z)) / z}px`;
 			});
 		}
 	};
@@ -395,8 +396,8 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 	/** The ghost under the pointer, where it was grabbed. */
 	const placeGhost = () => {
 		if (!drag?.ghost) return;
-		const b = shell.getBoundingClientRect();
-		drag.ghost.style.left = `${drag.px - drag.offX - b.left}px`; drag.ghost.style.top = `${drag.py - drag.offY - b.top}px`;
+		const b = shell.getBoundingClientRect(), z = zoomOf(box);
+		drag.ghost.style.left = `${(drag.px - drag.offX - b.left) / z}px`; drag.ghost.style.top = `${(drag.py - drag.offY - b.top) / z}px`;
 	};
 	/** The drop under the pointer, shown (line or lit node); called again whenever the layout moves. */
 	const aim = (): Found => {
@@ -405,8 +406,8 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 		drag.found = found;
 		light(found.target ?? null);
 		if (found.line) {
-			const b = box.getBoundingClientRect();
-			line.style.left = `${found.line.left - b.left}px`; line.style.width = `${found.line.width}px`; line.style.top = `${found.line.top - b.top - 1}px`; line.hidden = false;
+			const b = box.getBoundingClientRect(), z = zoomOf(box);
+			line.style.left = `${(found.line.left - b.left) / z}px`; line.style.width = `${found.line.width / z}px`; line.style.top = `${(found.line.top - b.top) / z - 1}px`; line.hidden = false;
 		} else line.hidden = true;
 		placeGhost();
 		// A folded node the pointer rests on (to drop onto it) opens after a moment, to go deeper.
@@ -465,7 +466,7 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 			const ghost = drag.el.cloneNode(true) as HTMLElement;
 			ghost.removeAttribute("id"); ghost.removeAttribute("data-map-key"); ghost.removeAttribute("data-nav");
 			ghost.classList.add("sk-map-ghost"); ghost.classList.remove("is-hi", "is-pressed", "is-current"); ghost.setAttribute("aria-hidden", "true");
-			Object.assign(ghost.style, { width: `${drag.el.getBoundingClientRect().width}px`, maxWidth: "none", transform: "none" });
+			Object.assign(ghost.style, { width: `${drag.el.getBoundingClientRect().width / zoomOf(box)}px`, maxWidth: "none", transform: "none" });
 			shell.append(ghost); drag.ghost = ghost;
 			drag.el.classList.add("is-dragged"); box.classList.add("is-dragging");
 			drag.scroller = scrollerOf();

@@ -3269,3 +3269,19 @@ button.sk-sessions-row-invite:hover {
 }
 .sk-sessions-tagslot.is-flying { opacity: 0; }
 .sk-sessions-overflow-hidden { display: none !important; }
+
+/* Keep keyboard focus visible across Workbench zones. */
+.sk-sessions-tab [data-sk-item]:focus-visible,
+.sk-sessions-tab [data-sk-zone]:focus-visible {
+	outline: 2px solid var(--sk-accent);
+	outline-offset: 2px;
+}
+
+.sk-sessions-toolbar {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.sk-sessions-tab[data-layout="side"] .sk-sessions-toolbar {
+	gap: 10px;
+}

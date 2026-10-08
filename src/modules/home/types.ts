@@ -11,6 +11,10 @@ export interface HomeSettings {
 	lens: string;
 	/** True once the user picked a view: until then the Home opens on the Map. */
 	lensChosen: boolean;
+	/** Wide Home: the pins also above the view (else they have their own entry, Pins). */
+	pinsOnTop: boolean;
+	/** Zoom of the Map (1 = 100 %), kept from one session to the next. */
+	mapZoom: number;
 
 	// The arrangement of the domains (user data, kept by "Reset to defaults"). Every entry is a
 	// vault path, followed through renames and dropped when the note is deleted.
@@ -35,6 +39,8 @@ export const DEFAULTS: HomeSettings = {
 	ignoredFolders: "",
 	lens: "map",
 	lensChosen: false,
+	pinsOnTop: false,
+	mapZoom: 1,
 	domainOrder: [],
 	featured: "",
 	groups: [],
@@ -48,7 +54,7 @@ export const DEFAULTS: HomeSettings = {
 export const KEEP_ON_RESET: Array<keyof HomeSettings> = ["domainOrder", "featured", "groups", "domainGroups", "hidden", "pulledOut", "noteOrder"];
 
 /** The Home's three views of the domains. */
-export type HomeLens = "domains" | "map" | "tags";
+export type HomeLens = "domains" | "map" | "tags" | "pins";
 
 /** A page of the Home tab, shown in place of the Home with a breadcrumb (Escape goes up). */
 export type HomePage =

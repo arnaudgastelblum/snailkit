@@ -9,8 +9,9 @@ import type { DayWords } from "./quick-add";
 import { resolveWorkbench, type TasksApi, type ViewAction, type ViewTab } from "./api";
 import { TasksTab } from "./tab";
 import { TaskIndex } from "./task-index";
-import type { Context, Priority, Task } from "./types";
+import type { Context, Priority, Task, TaskNotesService } from "./types";
 import { TaskWriter, type Undo } from "./writer";
+import { playDoneSound } from "../../ui/sound";
 
 /** Ids of Snailkit's own tabs: a companion plugin cannot take them (see addViewTab in api.ts). */
 const RESERVED_TABS = ["tasks", "home", "sessions"];
@@ -21,6 +22,7 @@ interface TagColors {
 }
 
 export class TasksHub {
+	taskNotes: TaskNotesService | null = null;
 	readonly index: TaskIndex;
 	readonly writer: TaskWriter;
 	private lastUndo: { run: Undo; until: number } | null = null;
@@ -183,8 +185,14 @@ export class TasksHub {
 		return !!this.lastUndo && Date.now() <= this.lastUndo.until;
 	}
 
+	/** The sound of a task checked by hand, when it is on in the settings. */
+	chime(): void {
+		if (this.ctx.settings.doneSound) playDoneSound();
+	}
+
 	async complete(task: Task): Promise<void> {
 		const written = await this.writer.setDone(task, true);
+		if (written) this.chime();
 		if (written) this.offerUndo(this.ctx.t("toast.done", { title: plainTitle(task.title) }), written.undo);
 	}
 

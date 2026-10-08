@@ -24,6 +24,12 @@ export interface TasksSettings {
 	tagOrder: string[];
 	/** Open tasks placed by the user within their tag (task keys), for the "My order" sort. */
 	taskOrder: string[];
+	/** Folder of new task notes; empty: where Obsidian puts new notes. */
+	taskNotesFolder: string;
+	/** Start of a task note's name, followed by the task title. */
+	taskNotePrefix: string;
+	/** A short sound when a task is checked by hand (never when a sync checks it). */
+	doneSound: boolean;
 }
 
 export type Context = ModuleContext<TasksSettings>;
@@ -37,6 +43,8 @@ export interface Subtask {
 
 /** What a task line says, without its place in the vault. */
 export interface TaskFields {
+	/** Target of the 📝 wiki link, without its alias or .md extension. */
+	noteLink: string | null;
 	/** Every tag of the line, lowercased, without "#". */
 	tags: string[];
 	/** The group of the task: its first tag that is not a flag. */
@@ -74,4 +82,14 @@ export interface TaskRef {
 	path: string;
 	line: number;
 	raw: string;
+}
+
+/** The task notes of the vault: the note linked from a task line with 📝 (src/modules/tasks/task-note.ts). */
+export interface TaskNotesService {
+	/** The task's note file, or null when it has none. */
+	file(task: Task): import("obsidian").TFile | null;
+	/** The body of the task's note (below its breadcrumb line), or null when the task has no note. */
+	read(task: Task): Promise<string | null>;
+	/** Writes the body of the task's note, creating the note and the 📝 link in the line when missing. */
+	write(task: Task, body: string): Promise<void>;
 }

@@ -5,6 +5,8 @@ import { defineModule } from "../../core/module";
 import { buildDemo } from "./demo";
 import { createTasksApi } from "./api";
 import { TasksHub } from "./hub";
+import { TaskNotes } from "./task-note";
+import { playDoneSound } from "../../ui/sound";
 import { parseFolderList, parseTagList } from "./parse";
 import type { TasksSettings } from "./types";
 import { en } from "./i18n/en";
@@ -28,12 +30,17 @@ export const tasks = defineModule<TasksSettings>({
 		collapsed: [],
 		tagOrder: [],
 		taskOrder: [],
+		taskNotesFolder: "",
+		taskNotePrefix: "Task - ",
+		doneSound: true,
 	},
 	// The order of the tags is the user's arrangement: "Reset to defaults" keeps it.
 	keepOnReset: ["tagOrder", "taskOrder"],
 	activate(ctx) {
 		const hub = new TasksHub(ctx);
 		ctx.register(() => hub.dispose());
+		// Task notes: the note linked from a task line with 📝 (details, and the API for companions).
+		hub.taskNotes = new TaskNotes(hub);
 
 		// The Workbench is a view of the core: this module adds its tab there (removed when it stops).
 		ctx.workbench.addTab(hub.tab());
@@ -99,10 +106,18 @@ export const tasks = defineModule<TasksSettings>({
 			});
 		const writing = page.section(page.t("settings.writing"));
 		writing.toggle("stampDone", page.t("settings.stamp"), { desc: page.t("settings.stamp-desc") });
+		writing.toggle("doneSound", page.t("settings.sound"), { desc: page.t("settings.sound-desc"), onChange: (on) => { if (on) playDoneSound(); } });
 		writing.text("newTaskNote", page.t("settings.target"), {
 			desc: page.t("settings.target-desc"),
 			placeholder: page.t("settings.target-placeholder"),
 			normalize: (value) => value.trim().replace(/\\/g, "/").replace(/^\/+/, ""),
 		});
+		const notes = page.section(page.t("settings.notes"), page.t("settings.notes-desc"));
+		notes.text("taskNotesFolder", page.t("settings.note-folder"), {
+			desc: page.t("settings.note-folder-desc"),
+			placeholder: page.t("settings.note-folder-placeholder"),
+			normalize: (value) => value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, ""),
+		});
+		notes.text("taskNotePrefix", page.t("settings.note-prefix"), { desc: page.t("settings.note-prefix-desc") });
 	},
 });

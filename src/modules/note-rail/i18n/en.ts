@@ -140,6 +140,7 @@ export const en = {
 	"settings.template-desc": "Note copied into each new daily note.",
 	"settings.template-none": "No template",
 	"rail.today": "Today",
+	"rail.home": "Home",
 	"rail.today-error": "Could not open today's note.",
 	"rail.search": "Search",
 	"settings.show-place": "Where the note belongs",

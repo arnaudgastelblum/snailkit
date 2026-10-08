@@ -579,6 +579,7 @@ export class Composer {
 		const panel = (this.panel = doc.createElement("div"));
 		panel.className = "sk-sessions-panel" + (this.phone ? " is-sheet" : "");
 		panel.setAttr("role", "dialog");
+		panel.setAttr("data-sk-own-tab", "");
 		panel.setAttr("aria-label", this.t("panel.label"));
 		if (this.phone) panel.createDiv({ cls: "sk-sessions-pk-grabber" });
 

@@ -21,6 +21,8 @@ export interface TaskLocation {
 
 /** A tagged task, as read from its note. A copy: changing it changes nothing. */
 export interface TaskInfo extends TaskLocation {
+	/** Resolved vault path of the 📝 note, or null when absent or missing. */
+	notePath: string | null;
 	/** Group tag and words ("project/website|fix the footer"): survives edits of priority and dates, and moves to another note. */
 	key: string;
 	/** What follows "- [ ] " in the line. */
@@ -100,6 +102,18 @@ export interface ViewTab {
 
 export interface TasksApi {
 	readonly version: 1;
+	/**
+	 * Plays the "task checked" sound when the user turned it on (Tasks settings). For tools that
+	 * check a task on a click of the user, after setDone(..., true) succeeded; never for a sync.
+	 */
+	chime?(): void;
+	/** Body below the task note's breadcrumb; available on versions supporting task notes. */
+	taskNote?: {
+		/** Null when the task, service or note is missing. */
+		read(key: string): Promise<string | null>;
+		/** Creates the note and link if needed; false when the task or service is missing. */
+		write(key: string, body: string): Promise<boolean>;
+	};
 	/** False until the first read of the vault is done (a "change" event follows). */
 	isReady(): boolean;
 	/** Tagged tasks of the vault, in note order. Open tasks only unless `includeDone`. */
@@ -152,8 +166,9 @@ const MARKER_VALUE_RE = /^[A-Za-z0-9_.-]+$/;
 const TAG_RE = /^[\p{L}\p{N}_][\p{L}\p{N}_/-]*$/u;
 const PRIORITIES = ["high", "medium", "low"];
 
-function info(t: Task): TaskInfo {
+function info(t: Task, notePath: string | null): TaskInfo {
 	return {
+		notePath,
 		path: t.path,
 		line: t.line,
 		raw: t.raw,
@@ -178,7 +193,8 @@ function location(value: TaskLocation): TaskRef | null {
 }
 
 /** Builds the API over the module's index and writer. `alive` turns false when the module stops. */
-export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () => boolean, hub?: Pick<TasksHub, "viewActions" | "addViewTab" | "refreshViews" | "showTag" | "openWorkbench">): TasksApi {
+export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () => boolean, hub?: Pick<TasksHub, "viewActions" | "addViewTab" | "refreshViews" | "showTag" | "openWorkbench"> & Partial<Pick<TasksHub, "ctx" | "taskNotes" | "chime">>): TasksApi {
+	const taskInfo = (task: Task) => info(task, task.noteLink ? hub?.ctx?.app.metadataCache.getFirstLinkpathDest(task.noteLink, task.path)?.path ?? null : null);
 	const after = (written: Written | null) => (written && alive() ? index.at(written.path, written.line) : null);
 	const run = async (value: TaskLocation, op: (task: Task) => Promise<Written | null>): Promise<TaskInfo | null> => {
 		const ref = location(value);
@@ -186,7 +202,7 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 		if (!task) return null;
 		try {
 			const written = after(await op(task));
-			return written ? info(written) : null;
+			return written ? taskInfo(written) : null;
 		} catch (error) {
 			console.error("[Snailkit] tasks: API write failed", error);
 			return null;
@@ -196,22 +212,35 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 
 	return {
 		version: 1,
+		taskNote: {
+			read: async (key) => {
+				const task = alive() ? index.get(key) : null;
+				return task && hub?.taskNotes ? hub.taskNotes.read(task) : null;
+			},
+			write: async (key, body) => {
+				const task = alive() ? index.get(key) : null;
+				if (!task || !hub?.taskNotes) return false;
+				await hub.taskNotes.write(task, body);
+				return true;
+			},
+		},
 		openWorkbench: async (options) => {
 			if (!hub || !alive()) return;
 			await hub.openWorkbench(options);
 		},
 		isReady: () => alive() && index.ready,
-		getTasks: (options) => (alive() ? index.list.filter((t) => options?.includeDone || !t.done).map(info) : []),
+		getTasks: (options) => (alive() ? index.list.filter((t) => options?.includeDone || !t.done).map(taskInfo) : []),
 		find: (value) => {
 			const ref = location(value);
 			const task = ref && alive() ? index.find(ref) : null;
-			return task ? info(task) : null;
+			return task ? taskInfo(task) : null;
 		},
 		getTags: () => (alive() ? index.allTags() : []),
 		on: (event, callback) => {
 			if (event !== "change" || typeof callback !== "function" || !alive()) return () => undefined;
 			return index.onChange(callback);
 		},
+		chime: () => hub?.chime?.(),
 		setDone: (value, done) => run(value, (t) => writer.setDone(t, !!done, true)),
 		setDue: (value, due) => {
 			if (due !== null && !(typeof due === "string" && isIsoDate(due))) return Promise.resolve(null);
@@ -247,7 +276,7 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 			try {
 				const place = await writer.addTask(task.title, tag, priority, due, markers);
 				const written = place && alive() ? index.at(place.path, place.line) : null;
-				return written ? info(written) : null;
+				return written ? taskInfo(written) : null;
 			} catch (error) {
 				console.error("[Snailkit] tasks: addTask failed", error);
 				return null;

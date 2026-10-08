@@ -1,6 +1,6 @@
 // Pure rewriting of task lines (check, priority, due date, tag, title, markers) and of notes
 // (where a new task goes, the smallest editor change). Lines in, lines out.
-import { DONE_RE, DUE_RE, FENCE_RE, PRIORITIES, TASK_RE, escapeRe, fenceLines, frontmatterEnd, tagsOf } from "./parse";
+import { DONE_RE, DUE_RE, FENCE_RE, NOTE_LINK_RE, PRIORITIES, TASK_RE, escapeRe, fenceLines, frontmatterEnd, tagsOf } from "./parse";
 import type { Priority } from "./types";
 
 // Tokens other tools expect at the very end of a task: a carry-over counter (↻n), the done
@@ -9,6 +9,19 @@ const TRAILING_RE = /(?:\s+(?:↻\d+|✅\s*\d{4}-\d{2}-\d{2}|\^[A-Za-z0-9-]+|%%(
 const STAR_TOKEN_RE = /(^|\s)⭐️?(?=\s|$)/u;
 const BLOCK_ID_END_RE = /\s+\^[A-Za-z0-9-]+\s*$/;
 const TAG_CHARS = "[\\p{L}\\p{N}_/-]";
+
+/** Replaces tokens outside task-note links, whose targets may contain token-like text. */
+function replaceOutsideNoteLinks(text: string, re: RegExp, replacement: string): string {
+	const links = [...text.matchAll(NOTE_LINK_RE)];
+	let replaced = false;
+	return text.replace(new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g"), (whole: string, ...args: unknown[]) => {
+		const at = args[args.length - 2] as number;
+		if (replaced && !re.global) return whole;
+		if (links.some((link) => at < link.index + link[0].length && at + whole.length > link.index)) return whole;
+		replaced = true;
+		return whole.replace(re, replacement);
+	});
+}
 
 /** Inserts a token before the trailing run (↻n, ✅ date, %%comments%%, ^block-id). */
 export function insertToken(text: string, token: string): string {
@@ -20,20 +33,20 @@ export function insertToken(text: string, token: string): string {
 /** Removes every `#tag` (whole tag, any case), with the space before it. */
 export function removeTag(text: string, tag: string): string {
 	const re = new RegExp(`(^|\\s+)#${escapeRe(tag)}(?!${TAG_CHARS})`, "giu");
-	return text.replace(re, "").replace(/^\s+/, "").replace(/\s+$/, "");
+	return replaceOutsideNoteLinks(text, re, "").replace(/^\s+/, "").replace(/\s+$/, "");
 }
 
 export function setPriorityText(text: string, priority: Priority | null): string {
-	let out = text.replace(STAR_TOKEN_RE, "$1").replace(/^\s+/, "");
+	let out = replaceOutsideNoteLinks(text, STAR_TOKEN_RE, "$1").replace(/^\s+/, "");
 	for (const p of PRIORITIES) out = removeTag(out, p);
 	return priority ? insertToken(out, "#" + priority) : out;
 }
 
 /** Sets the due date where it stands, adds it, or removes it (null). Nothing else moves. */
 export function setDueText(text: string, due: string | null): string {
-	if (DUE_RE.test(text)) {
-		if (due) return text.replace(/📅\s*\d{4}-\d{2}-\d{2}/u, "📅 " + due);
-		return text.replace(DUE_RE, "").replace(/^\s+/, "");
+	if (DUE_RE.test(text.replace(NOTE_LINK_RE, " "))) {
+		if (due) return replaceOutsideNoteLinks(text, /📅\s*\d{4}-\d{2}-\d{2}/u, "📅 " + due);
+		return replaceOutsideNoteLinks(text, DUE_RE, "").replace(/^\s+/, "");
 	}
 	return due ? insertToken(text, "📅 " + due) : text;
 }
@@ -41,13 +54,13 @@ export function setDueText(text: string, due: string | null): string {
 /** Replaces the group tag where it stands (leading or trailing style), else adds the new one. */
 export function retagText(text: string, from: string, to: string): string {
 	const re = new RegExp(`(^|\\s)#${escapeRe(from)}(?!${TAG_CHARS})`, "iu");
-	return re.test(text) ? text.replace(re, `$1#${to}`) : insertToken(text, "#" + to);
+	return re.test(text.replace(NOTE_LINK_RE, " ")) ? replaceOutsideNoteLinks(text, re, `$1#${to}`) : insertToken(text, "#" + to);
 }
 
 /** Sets (or removes, with null) a `%%name:value%%` marker. */
 export function setMarkerText(text: string, name: string, value: string | null): string {
 	const re = new RegExp(`\\s*%%${escapeRe(name)}:[A-Za-z0-9_.-]+%%`, "g");
-	const out = text.replace(re, "").replace(/^\s+/, "");
+	const out = replaceOutsideNoteLinks(text, re, "").replace(/^\s+/, "");
 	return value ? insertToken(out, `%%${name}:${value}%%`) : out;
 }
 
@@ -62,11 +75,26 @@ interface Span {
 }
 
 function tokenSpans(text: string): Span[] {
-	return [...text.matchAll(TOKEN_RE)].map((m) => {
+	const links = [...text.matchAll(NOTE_LINK_RE)].map((m) => ({ start: m.index, end: m.index + m[0].length, text: m[0] }));
+	const tokens = [...text.matchAll(TOKEN_RE)].map((m) => {
 		const lead = m[0].length - m[0].trimStart().length;
 		const index = m.index ?? 0;
 		return { start: index + lead, end: index + m[0].length, text: m[0].trim() };
 	});
+	return [...links, ...tokens.filter((token) => !links.some((link) => token.start < link.end && token.end > link.start))].sort((a, b) => a.start - b.start);
+}
+
+/** Adds or replaces the task-note link before trailing tags and tokens, or removes it. */
+export function setNoteLinkText(text: string, linkTarget: string | null): string {
+	const out = text.replace(NOTE_LINK_RE, " ").replace(/\s+/g, " ").trim();
+	if (linkTarget === null) return out;
+	let at = out.length;
+	const spans = tokenSpans(out);
+	for (let i = spans.length - 1; i >= 0; i--) {
+		if (out.slice(spans[i].end, at).trim()) break;
+		at = spans[i].start;
+	}
+	return [out.slice(0, at).trim(), `[[${linkTarget.replace(/\.md$/i, "")}|📝]]`, out.slice(at).trim()].filter(Boolean).join(" ");
 }
 
 /**
@@ -97,7 +125,7 @@ export function mapTaskText(line: string, fn: (text: string) => string): string 
 export function setDoneLine(line: string, done: boolean, stamp: string | null): string | null {
 	const m = line.match(TASK_RE);
 	if (!m) return null;
-	let text = m[4].replace(DONE_RE, "").replace(/\s+$/, "");
+	let text = replaceOutsideNoteLinks(m[4], DONE_RE, "").replace(/\s+$/, "");
 	if (done && stamp) {
 		const id = text.match(BLOCK_ID_END_RE);
 		text = id ? text.slice(0, id.index) + " ✅ " + stamp + id[0] : text + " ✅ " + stamp;

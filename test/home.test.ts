@@ -32,7 +32,7 @@ import { familyTags, hasTag, leafOf, tagFamilies } from "../src/modules/home/log
 import { typesInSearch } from "../src/modules/home/logic/keys";
 import { dueCounts, oldDailyTasks, todayChips, toSortCount } from "../src/modules/home/logic/today";
 import type { World } from "../src/modules/home/logic/world";
-import { cleanSettings, migrateSettings, splitFolders, startLens, LENSES } from "../src/modules/home/settings-logic";
+import { cleanSettings, migrateSettings, splitFolders, startLens, LENSES, nextZoom, zoomLevel } from "../src/modules/home/settings-logic";
 import { applyOrder, cleanOrder, dropFromOrder, moveBefore, orderMentions, orderOf, renameInOrder, withOrder } from "../src/modules/home/logic/order";
 import { cleanNoteName, dropRefusal, freeNotePath } from "../src/modules/home/logic/moves";
 
@@ -247,7 +247,7 @@ test("stored settings are cleaned: unknown ids, empty groups, duplicates, bad va
 		pulledOut: [null, "S.md"],
 	});
 	assert.deepEqual(arr, { domainOrder: ["A.md", "B.md"], featured: "", groups: [["g1", "One"]], domainGroups: [["A.md", "g1"]], hidden: [], pulledOut: ["S.md"] });
-	const settings = cleanSettings({ lens: "graph", homePage: "  Home.md ", ignoredFolders: "a", domainOrder: [], featured: "", groups: [], domainGroups: [], hidden: [], pulledOut: [], lensChosen: false, noteOrder: [] });
+	const settings = cleanSettings({ lens: "graph", homePage: "  Home.md ", ignoredFolders: "a", domainOrder: [], featured: "", groups: [], domainGroups: [], hidden: [], pulledOut: [], lensChosen: false, pinsOnTop: false, mapZoom: 1, noteOrder: [] });
 	assert.equal(settings.lens, "map");
 	assert.equal(settings.homePage, "Home.md");
 	assert.deepEqual(splitFolders(" Templates, /Archive/ ,, Templates"), ["Templates", "Archive"]);
@@ -636,4 +636,14 @@ test("first view: the Map, unless the user picked another one", () => {
 	assert.equal(migrateSettings({ lens: "map" }).lensChosen, true);
 	assert.equal(migrateSettings({}).lensChosen, false);
 	assert.equal(migrateSettings({ lens: "domains", lensChosen: true }).lensChosen, true);
+});
+
+test("the zoom of the Map goes by steps and comes back to a step", () => {
+	assert.equal(zoomLevel(undefined), 1);
+	assert.equal(zoomLevel("big"), 1);
+	assert.equal(zoomLevel(1.3), 1.25);
+	assert.equal(nextZoom(1, 1), 1.1);
+	assert.equal(nextZoom(1, -1), 0.9);
+	assert.equal(nextZoom(1.6, 1), 1.6, "the nearest stays the nearest");
+	assert.equal(nextZoom(0.6, -1), 0.6, "the farthest stays the farthest");
 });

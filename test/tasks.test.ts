@@ -7,7 +7,7 @@ import { createTasksApi, resolveWorkbench, type ViewTab } from "../src/modules/t
 import { TasksHub } from "../src/modules/tasks/hub";
 import {
 	insertTaskLine, insertToken, locateLine, minimalChange, newTaskPath, removeTag, retagText, retitleText,
-	setDoneLine, setDueText, setMarkerText, setPriorityText,
+	setDoneLine, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
 } from "../src/modules/tasks/edit";
 import {
 	addDays, buildTree, countTasks, daysBetween, dueLabel, dueState, fallbackHue, findNode, inScope, isIsoDate,
@@ -64,6 +64,60 @@ test("note preview skips partial fences and properties before the task", () => {
 });
 
 const FLAGS = flagSet("urgent");
+
+test("task-note links in every position leave titles and identity unchanged", () => {
+	for (const target of ["Task - Read", "Tasks/Task - Read", "Tasks/Task - Read.md"]) {
+		const link = `[[${target}|📝]]`;
+		for (const text of [`${link} Read a book #reading`, `Read ${link} a book #reading`, `Read a book ${link} #reading`, `Read a book #reading ${link}`]) {
+			const [parsed] = scanTasks(["- [ ] " + text], "A.md", FLAGS);
+			assert.equal(parsed.noteLink, target.replace(/\.md$/, ""));
+			assert.equal(parsed.title, "Read a book");
+			assert.equal(plainTitle(parsed.title), "Read a book");
+			assert.equal(parsed.key, "reading|read a book");
+		}
+	}
+	for (const link of ["[[Read]]", "[[Read|alias]]", "[[Read|📝 extra]]", "[[Read| 📝]]"]) {
+		const parsed = parseTaskText(`Read ${link} #reading`, FLAGS);
+		assert.equal(parsed.noteLink, null);
+		assert.equal(parsed.title, `Read ${link}`);
+	}
+	const parsed = parseTaskText("Read [[Tasks/With #home #high ⭐ 📅 2026-10-12 ⏰ 12:00 ↻2 ✅ 2026-10-13 %%sync:abc%%|📝]] #reading", FLAGS);
+	assert.deepEqual(parsed.tags, ["reading"]);
+	assert.equal(parsed.title, "Read");
+	assert.equal(parsed.priority, null);
+	assert.equal(parsed.due, null);
+	assert.equal(parsed.doneDate, null);
+	assert.deepEqual(parsed.markers, {});
+});
+
+test("task-note links are added, replaced and removed before trailing tokens", () => {
+	const tail = "#reading ⭐ 📅 2026-10-12 ⏰ 12:00 ⏳ 2026-10-11 ↻2 ✅ 2026-10-13 %%sync:abc%% ^block";
+	const link = "[[Tasks/Read|📝]]";
+	assert.equal(setNoteLinkText(`Read ${tail}`, "Tasks/Read.md"), `Read ${link} ${tail}`);
+	assert.equal(setNoteLinkText(`[[Old|📝]] Read ${tail}`, "Tasks/Read"), `Read ${link} ${tail}`);
+	assert.equal(setNoteLinkText(`Read ${tail} [[Old|📝]]`, "Tasks/Read"), `Read ${link} ${tail}`);
+	assert.equal(setNoteLinkText(`Read  ${link}  ${tail}`, null), `Read ${tail}`);
+	assert.equal(setNoteLinkText("Read", "Tasks/Read"), `Read ${link}`);
+	assert.equal(setNoteLinkText("#reading Read", "Tasks/Read"), `#reading Read ${link}`);
+	assert.equal(setNoteLinkText("Read [[other|alias]] #reading", "Tasks/Read"), `Read [[other|alias]] ${link} #reading`);
+	assert.equal(setNoteLinkText(`Read ${link} [[Old|📝]] #reading`, "Tasks/Read"), `Read ${link} #reading`);
+});
+
+test("task edits preserve the task-note link even with token-like text in its target", () => {
+	const link = "[[Tasks/Read #reading #high ⭐ 📅 2026-01-01 ✅ 2026-01-02 %%sync:old%%|📝]]";
+	const text = `Read ${link} #reading #high ⭐ 📅 2026-10-12 %%sync:abc%%`;
+	assert.equal(retitleText(text, "Read", "Write"), `Write ${link} #reading #high ⭐ 📅 2026-10-12 %%sync:abc%%`);
+	assert.equal(retitleText(`Read ${link} a book #reading`, "Read a book", "Write"), `Write ${link} #reading`);
+	assert.equal(retagText(text, "reading", "work"), `Read ${link} #work #high ⭐ 📅 2026-10-12 %%sync:abc%%`);
+	assert.equal(setDueText(text, "2026-10-14"), `Read ${link} #reading #high ⭐ 📅 2026-10-14 %%sync:abc%%`);
+	assert.equal(setDueText(text, null), `Read ${link} #reading #high ⭐ %%sync:abc%%`);
+	assert.ok(setPriorityText(text, "low").includes(link));
+	assert.equal(parseTaskText(setPriorityText(text, "low"), FLAGS).priority, "low");
+	assert.equal(setMarkerText(text, "sync", "new"), `Read ${link} #reading #high ⭐ 📅 2026-10-12 %%sync:new%%`);
+	const done = setDoneLine(`- [ ] ${text}`, true, "2026-10-15");
+	assert.equal(done, `- [x] ${text} ✅ 2026-10-15`);
+	assert.equal(setDoneLine(done!, false, null), `- [ ] ${text}`);
+});
 
 // ----- parsing -----
 
@@ -406,8 +460,52 @@ function fakeVault(files: Record<string, string>, settings: Partial<TasksSetting
 	const writer = new TaskWriter(ctx, index);
 	let alive = true;
 	const api = createTasksApi(index, writer, () => alive);
-	return { api, index, files, stop: () => (alive = false) };
+	return { api, index, writer, files, stop: () => (alive = false) };
 }
+
+test("writing a task-note link preserves duplicate keys, order and undo", async () => {
+	const { index, writer, files } = fakeVault({ "A.md": "- [ ] Read #reading\n- [ ] Read #reading" });
+	await index.build();
+	const keys = index.list.map((task) => task.key);
+	const written = await writer.setNoteLink(index.list[0], "Tasks/Read", true);
+	assert.ok(written);
+	assert.equal(files["A.md"], "- [ ] Read [[Tasks/Read|📝]] #reading\n- [ ] Read #reading");
+	assert.deepEqual(index.list.map((task) => task.key), keys);
+	assert.equal(await written.undo(), true);
+	assert.equal(files["A.md"], "- [ ] Read #reading\n- [ ] Read #reading");
+});
+
+test("task-note API resolves paths and delegates open and done tasks to the current service", async () => {
+	const { hub, api, stop } = fakeHub();
+	const resolved: string[][] = [];
+	hub.ctx.app.metadataCache.getFirstLinkpathDest = (target, source) => {
+		resolved.push([target, source]);
+		return target === "Missing" ? null : Object.assign(new TFile(), { path: "Tasks/Read.md" });
+	};
+	hub.index.set("A.md", "- [ ] Read [[Read.md|📝]] #reading\n- [x] Finished [[Tasks/Read|📝]] #reading\n- [ ] Missing [[Missing|📝]] #reading\n- [ ] Plain #reading");
+	const all = api.getTasks({ includeDone: true });
+	assert.deepEqual(all.map((task) => task.notePath), ["Tasks/Read.md", "Tasks/Read.md", null, null]);
+	assert.deepEqual(resolved, [["Read", "A.md"], ["Tasks/Read", "A.md"], ["Missing", "A.md"]]);
+	assert.equal(api.find(all[0])?.notePath, "Tasks/Read.md");
+	assert.equal(await api.taskNote!.read(all[0].key), null);
+	assert.equal(await api.taskNote!.write(all[0].key, "Body"), false);
+	const writes: string[][] = [];
+	hub.taskNotes = {
+		file: () => null,
+		read: async (task) => task.noteLink ? task.title : null,
+		write: async (task, body) => { writes.push([task.key, body]); },
+	};
+	for (const task of all.slice(0, 2)) {
+		assert.equal(await api.taskNote!.read(task.key), task.title);
+		assert.equal(await api.taskNote!.write(task.key, "Body"), true);
+	}
+	assert.equal(writes.length, 2);
+	assert.equal(await api.taskNote!.read("unknown"), null);
+	assert.equal(await api.taskNote!.write("unknown", "Body"), false);
+	stop();
+	assert.equal(await api.taskNote!.read(all[0].key), null);
+	assert.equal(await api.taskNote!.write(all[0].key, "Body"), false);
+});
 
 test("the version 1 API returns descriptions when reading and updating tasks", async () => {
 	const { api, index } = fakeVault({

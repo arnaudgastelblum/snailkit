@@ -367,4 +367,13 @@ export const es: StringsOf<typeof en> = {
 	"tab.finish-it": "¿La terminas?",
 	"tri.keep-code": "Esta línea contiene un bloque de código: elimínala en la propia nota.",
 	"tri.refreshed": "Esta línea cambió mientras tanto: así está ahora.",
+	"keyboard.move": "Moverte por la lista",
+	"keyboard.ends": "Primera / última lluvia de ideas",
+	"keyboard.open": "Abrir la lluvia de ideas",
+	"keyboard.pin": "Fijar / desfijar",
+	"keyboard.archive": "Archivar / restaurar",
+	"keyboard.context": "Cambiar el contexto",
+	"keyboard.rename": "Renombrar la lluvia de ideas",
+	"keyboard.delete": "Confirmar la eliminación",
+	"keyboard.search": "Buscar",
 };

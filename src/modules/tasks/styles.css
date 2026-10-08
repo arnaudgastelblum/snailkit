@@ -1705,3 +1705,86 @@ body.sk-tasks-dnd .sk-tasks-grip {
 	margin-top: 2px;
 	--icon-size: 14px;
 }
+
+/* The task's own note, in its details. */
+.sk-tasks-tnote {
+	margin-top: 20px;
+	padding-top: 12px;
+	border-top: 1px solid var(--sk-line);
+	min-width: 0;
+}
+.sk-tasks-tnote-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.sk-tasks-tnote-icon {
+	display: flex;
+	color: var(--text-muted);
+	--icon-size: 15px;
+}
+.sk-tasks-tnote-head button.sk-tasks-tnote-open {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	--icon-size: 13px;
+}
+.sk-tasks-tnote-head button.sk-tasks-tnote-open.is-hidden {
+	display: none;
+}
+.sk-tasks-tnote-body {
+	margin-top: 8px;
+}
+.sk-tasks-tnote-rendered {
+	max-height: 460px;
+	overflow: auto;
+	overscroll-behavior: contain;
+	overflow-wrap: anywhere;
+	padding: 8px 12px;
+	border: 1px solid transparent;
+	border-radius: var(--sk-radius-s);
+	background: var(--sk-surface);
+	cursor: text;
+	transition: border-color var(--sk-fast) ease;
+}
+.sk-tasks-tnote-rendered:hover,
+.sk-tasks-tnote-rendered:focus-visible {
+	border-color: var(--sk-line);
+	outline: none;
+}
+.sk-tasks-tnote-rendered > :first-child {
+	margin-top: 0;
+}
+.sk-tasks-tnote-rendered img {
+	max-width: 100%;
+	border-radius: var(--sk-radius-s);
+}
+textarea.sk-tasks-tnote-area {
+	width: 100%;
+	height: var(--sk-tasks-tnote-h, 64px);
+	min-height: 64px;
+	max-height: 460px;
+	padding: 8px 12px;
+	resize: none;
+	border-radius: var(--sk-radius-s);
+	font-family: var(--font-text);
+	font-size: var(--font-text-size, 15px);
+	line-height: 1.55;
+}
+.is-side textarea.sk-tasks-tnote-area,
+.is-side .sk-tasks-tnote-rendered {
+	max-height: 300px;
+}
+.sk-tasks-has-note {
+	display: inline-flex;
+	color: var(--text-faint);
+	--icon-size: 13px;
+}
+
+/* Keep keyboard focus visible across Workbench zones. */
+.sk-tasks-view [data-sk-item]:focus-visible,
+.sk-tasks-view [data-sk-zone]:focus-visible {
+	outline: 2px solid var(--sk-accent);
+	outline-offset: 2px;
+}

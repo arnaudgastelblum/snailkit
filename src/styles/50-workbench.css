@@ -1,6 +1,7 @@
 /* The Workbench (src/core/workbench): one view, its tabs in Obsidian's view header (or in a slim
    row on top where that header is hidden), and the shown tab filling the rest. */
 .sk-wb-view {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	padding: 0 !important;
@@ -172,4 +173,77 @@
 	clip-path: inset(50%);
 	white-space: nowrap;
 	pointer-events: none;
+}
+
+/* Keyboard zones: a short glow on the zone reached with Tab. */
+.sk-wb-view [data-sk-zone] {
+	border-radius: var(--sk-radius-s);
+	transition: box-shadow 260ms var(--sk-ease);
+}
+.sk-wb-view [data-sk-zone].is-zone-flash {
+	box-shadow: 0 0 0 2px var(--sk-accent-line);
+}
+.sk-wb-view [data-sk-zone]:focus {
+	outline: none;
+}
+
+/* The "?" help. */
+.sk-wb-help {
+	position: absolute;
+	top: 52px;
+	right: 16px;
+	z-index: 20;
+	width: min(360px, calc(100% - 32px));
+	max-height: calc(100% - 72px);
+	overflow: auto;
+	padding: 14px 16px 12px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-l);
+	background: var(--background-primary);
+	box-shadow: var(--sk-shadow-pop);
+	font-size: 13px;
+	animation: sk-rise var(--sk-slow) var(--sk-ease) both;
+	outline: none;
+}
+.sk-wb-help-title {
+	font-weight: 700;
+	font-size: 14px;
+	margin-bottom: 6px;
+}
+.sk-wb-help-sec {
+	margin: 10px 0 4px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+.sk-wb-help-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.sk-wb-help-row {
+	display: grid;
+	grid-template-columns: 130px 1fr;
+	gap: 10px;
+	align-items: baseline;
+}
+.sk-wb-help-keys {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+}
+.sk-wb-help-keys kbd {
+	font-size: 11px;
+}
+.sk-wb-help-label {
+	color: var(--text-muted);
+}
+.sk-wb-help-foot {
+	margin-top: 12px;
+	padding-top: 8px;
+	border-top: 1px solid var(--sk-line);
+	font-size: 12px;
+	color: var(--text-faint);
 }

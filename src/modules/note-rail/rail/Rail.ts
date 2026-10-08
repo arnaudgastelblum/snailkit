@@ -43,6 +43,7 @@ export class Rail {
 	private tooltipEl: HTMLElement;
 	private buttons = new Map<RailPanelId, RailButton>();
 	/** Above the panel buttons: Search (with that module), the area of the note (a colored initial) and today's daily note. */
+	private homeEl: HTMLElement;
 	private searchEl: HTMLElement;
 	private placeEl: HTMLElement;
 	private todayEl: HTMLElement;
@@ -91,6 +92,11 @@ export class Rail {
 		this.railEl = this.hostEl.createDiv({ cls: "sk-note-rail", attr: { role: "toolbar" } });
 		this.puckEl = this.railEl.createSpan("sk-note-rail-puck");
 		// No aria-label (Obsidian would add its own tooltip): the name is hidden text.
+		// First: back to the Workbench's Home (with the Home module).
+		this.homeEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-home", attr: { "data-btn": "home" } });
+		setIcon(this.homeEl.createSpan("sk-note-rail-btn-icon"), "house");
+		this.homeEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("rail.home") });
+		this.homeEl.addEventListener("mousedown", (e) => e.preventDefault());
 		this.searchEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-search", attr: { "data-btn": "search" } });
 		setIcon(this.searchEl.createSpan("sk-note-rail-btn-icon"), "search");
 		this.searchEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("rail.search") });
@@ -102,6 +108,7 @@ export class Rail {
 		this.todayEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-today", attr: { "data-btn": "today" } });
 		setIcon(this.todayEl.createSpan("sk-note-rail-btn-icon"), "sun");
 		this.todayEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("rail.today") });
+		this.wireAction(this.homeEl, () => env.t("rail.home"), () => void this.homeService()?.open());
 		this.wireAction(this.searchEl, () => this.searchTip(), () => this.openSearch());
 		this.wireAction(this.placeEl, () => this.placeTip, (e) => this.onPlace(e));
 		this.wireAction(this.todayEl, () => env.t("rail.today"), (e) => void this.openToday(e));
@@ -343,9 +350,10 @@ export class Rail {
 
 	// ---- area and today ------------------------------------------------------
 
-	/** The Search magnifier (with that module), the area pill (hidden when the note has none) and the Today button (lit on today's note). */
+	/** The Home button (with that module), the Search magnifier (with that module), the area pill (hidden when the note has none) and the Today button (lit on today's note). */
 	private renderActions(): void {
 		const file = this.view.file;
+		this.homeEl.hidden = !this.homeService();
 		this.searchEl.hidden = !this.searchService();
 		const place = file && this.env.settings.showPlace !== false ? placeFinder(this.env.app).placeOf(file) : null;
 		const area = place?.area ?? null;

@@ -1,4 +1,4 @@
-// The Home tab of the Workbench: one calm column (760 px at most). The search field (drawn by the
+// The Home tab of the Workbench: one calm column, as wide as the view like the other tabs. The search field (drawn by the
 // Search module), Today, Pins, the Domains · Map · Tags switch, Recent; and, in place of the Home,
 // the pages of a domain, a tag and the older daily notes, with a breadcrumb (Escape goes up).
 // A rounded cursor glides from line to line (mouse and arrows) in the hue of the domain.
@@ -22,7 +22,7 @@ import { moveUnder, parentLink } from "../../core/places/move";
 import { cleanNoteName, dropRefusal, freeNotePath } from "./logic/moves";
 import { moveBefore, orderOf, withOrder } from "./logic/order";
 import { mountPinsRow } from "./pins-row";
-import { LENSES, startLens } from "./settings-logic";
+import { LENSES, nextZoom, VIEWS, zoomLevel, startLens } from "./settings-logic";
 import type { HomeLens, HomePage, HomeTabState } from "./types";
 
 /** Families of tags shown before "N more tags", and sub-tags per family. */
@@ -74,7 +74,7 @@ function readState(raw: TabState | undefined): Partial<HomeTabState> & { hasPage
 		out.hasPage = true;
 		out.page = readPage(raw.page);
 	}
-	if (typeof raw.lens === "string" && LENSES.includes(raw.lens as HomeLens)) out.lens = raw.lens as HomeLens;
+	if (typeof raw.lens === "string" && VIEWS.includes(raw.lens as HomeLens)) out.lens = raw.lens as HomeLens;
 	if (typeof raw.scroll === "number" && raw.scroll >= 0) out.scroll = raw.scroll;
 	if (raw.map && typeof raw.map === "object") out.map = raw.map as MapState;
 	if (typeof raw.cursor === "string") out.cursor = raw.cursor;
@@ -96,6 +96,16 @@ const nameBy = (el: HTMLElement, text: string): void => {
 export class HomeView implements WorkbenchTabInstance {
 	private readonly doc: Document;
 	private readonly root: HTMLElement;
+	/** A page wide enough for the navigator (not the side panel, not a phone). */
+	private readonly wide: boolean = false;
+	private nav: HTMLElement | null = null;
+	private head: HTMLElement | null = null;
+	private edge: HTMLElement | null = null;
+	private drawer: HTMLElement | null = null;
+	private drawerList: HTMLElement | null = null;
+	private drawerTimer = 0;
+	/** Opened by its button or R: it stays until closed, instead of following the mouse. */
+	private drawerPinned = false;
 	private readonly scroller: HTMLElement;
 	private readonly col: HTMLElement;
 	private readonly field: HTMLElement;
@@ -157,18 +167,24 @@ export class HomeView implements WorkbenchTabInstance {
 		this.root.tabIndex = -1;
 		this.root.toggleClass("is-phone", this.phone);
 		this.root.toggleClass("is-touch", this.touch);
+		// Wide Home (a page, not a phone): a navigator on the left like the Tasks tab, the view in the
+		// middle, the recent notes in a drawer that slides in from the right edge.
+		this.wide = host.layout === "page" && !this.phone;
+		this.root.toggleClass("is-wide", this.wide);
+		if (this.wide) this.nav = this.root.createDiv({ cls: "sk-home-nav", attr: { "data-sk-zone": "nav" } });
 		this.scroller = this.root.createDiv({ cls: "sk-home-scroll" });
 		this.col = this.scroller.createDiv({ cls: "sk-home-col" });
-		this.field = this.col.createEl("label", { cls: "sk-home-field" });
+		if (this.wide) this.head = this.col.createDiv({ cls: "sk-home-head" });
+		this.field = this.col.createEl("label", { cls: "sk-home-field", attr: { "data-sk-zone": "search" } });
 		setIcon(this.field.createSpan({ cls: "sk-home-field-icon" }), "search");
 		this.tokens = this.field.createSpan({ cls: "sk-home-tokens" });
 		// Named by its label (no aria-label: Obsidian would show it as a tooltip over the field).
 		this.field.createSpan({ cls: "sk-home-sr", text: rt.t("search.label") });
 		this.input = this.field.createEl("input", {
-			attr: { type: "text", autocomplete: "off", spellcheck: "false", placeholder: rt.t("search.placeholder") },
+			attr: { "data-sk-zone-focus": "", "data-sk-own-tab": "", type: "text", autocomplete: "off", spellcheck: "false", placeholder: rt.t("search.placeholder") },
 		});
 		if (!this.touch) this.field.createEl("kbd", { cls: "sk-home-slash", text: "/" });
-		this.results = this.col.createDiv({ cls: "sk-home-results" });
+		this.results = this.col.createDiv({ cls: "sk-home-results", attr: { "data-sk-own-tab": "" } });
 		this.preview = host.layout === "page" && !this.touch ? this.col.createEl("aside", { cls: "sk-home-preview" }) : null;
 		this.body = this.col.createDiv({ cls: "sk-home-body" });
 		this.surface = new Surface(this.col, {
@@ -192,6 +208,13 @@ export class HomeView implements WorkbenchTabInstance {
 			this.hintEl = null;
 		}
 
+		if (this.wide && !this.touch) this.makeDrawer();
+		for (const el of [this.nav, this.drawer]) {
+			if (!el) continue;
+			this.listen(el, "click", (e) => this.onClick(e as MouseEvent));
+			this.listen(el, "auxclick", (e) => this.onAuxClick(e as MouseEvent));
+			this.listen(el, "contextmenu", (e) => this.onContextMenu(e as MouseEvent));
+		}
 		this.listen(this.root, "keydown", (e) => this.onKey(e as KeyboardEvent));
 		this.listen(this.body, "click", (e) => this.onClick(e as MouseEvent));
 		this.listen(this.body, "auxclick", (e) => this.onAuxClick(e as MouseEvent));
@@ -271,6 +294,22 @@ export class HomeView implements WorkbenchTabInstance {
 		if (state.scroll !== undefined) this.scroller.scrollTop = state.scroll;
 		else if (moved) this.scroller.scrollTop = page ? 0 : this.rootScroll;
 		if (page?.kind === "domain" && page.here && !state.cursor) this.revealHere();
+	}
+
+	keys(): Array<[string, string]> {
+		return [
+			["/", this.t("help.search-key")],
+			["Enter", this.t("help.open")],
+			[Platform.isMacOS ? "Cmd+Enter" : "Ctrl+Enter", this.t("help.open-tab")],
+			["P", this.t("help.pin")],
+			[this.t("keys.space"), this.t("help.check")],
+			["T", this.t("help.daily")],
+			...(this.drawer ? [["R", this.t("help.recent")] as [string, string]] : []),
+			["Escape", this.t("help.up")],
+			["Shift+F10", this.t("help.arrange")],
+			["← →", this.t("help.map-navigation")],
+			["+ − 0", this.t("help.map-zoom")],
+		];
 	}
 
 	focus(): void {
@@ -369,6 +408,7 @@ export class HomeView implements WorkbenchTabInstance {
 	private item(parent: HTMLElement, tag: keyof HTMLElementTagNameMap, cls: string, o: { key: string; act: string; arg?: string; pin?: string | null; hue?: number | null; label?: string; flip?: boolean }): HTMLElement {
 		const el = parent.createEl(tag, { cls: `${cls} sk-surface-item` });
 		el.setAttr("data-hnav", "");
+		el.setAttr("data-sk-item", "");
 		el.setAttr("role", "button");
 		el.dataset.key = o.key;
 		el.dataset.act = o.act;
@@ -383,7 +423,8 @@ export class HomeView implements WorkbenchTabInstance {
 	}
 
 	private section(parent: HTMLElement, id: string, title: string | ((head: HTMLElement) => void), right?: string | null): HTMLElement {
-		const sec = parent.createEl("section", { cls: "sk-home-sec", attr: { "data-sec": id, "data-flip": `sec:${id}` } });
+		const sec = parent.createEl("section", { cls: "sk-home-sec", attr: { "data-sec": id, "data-sk-zone": id === "lens" ? "view" : id, "data-flip": `sec:${id}` } });
+		if (["today", "pins", "lens", "pnotes", "tnotes"].includes(id)) sec.setAttr("data-sk-zone-grid", "");
 		const head = sec.createDiv({ cls: "sk-home-sech" });
 		if (typeof title === "string") head.createEl("h2", { text: title });
 		else title(head);
@@ -399,6 +440,9 @@ export class HomeView implements WorkbenchTabInstance {
 	}
 
 	private initRoving(): void {
+		this.body.querySelectorAll<HTMLElement>("[data-sk-zone] button").forEach((button) => {
+			if (!this.mapBox?.contains(button)) button.setAttr("data-sk-item", "");
+		});
 		this.body.querySelectorAll<HTMLElement>("[data-sec]").forEach((sec) => {
 			sec.querySelectorAll<HTMLElement>("[data-hnav]").forEach((x, i) => (x.tabIndex = i === 0 ? 0 : -1));
 		});
@@ -522,6 +566,9 @@ export class HomeView implements WorkbenchTabInstance {
 			else if (this.page.kind === "tag") this.drawTagPage(this.page.tag);
 			else this.drawOldPage();
 		} else this.drawRoot();
+		this.drawNav();
+		this.drawHead();
+		this.drawDrawer();
 		this.initRoving();
 		this.updateHint();
 		this.scroller.scrollTop = scroll;
@@ -557,6 +604,14 @@ export class HomeView implements WorkbenchTabInstance {
 
 	private drawRoot(): void {
 		const f = this.frame!;
+		if (this.wide) {
+			// Today lives in the navigator, the recent notes in the drawer: the view has the page.
+			if (this.rt.settings.pinsOnTop && this.lens !== "pins") this.drawPins();
+			const view = this.body.createDiv({ cls: "sk-home-lens is-main", attr: { "data-lens": this.lens, "data-sec": "lens", "data-sk-zone": "view" } });
+			this.drawLens(view);
+			if (this.lens !== "map") this.destroyMap();
+			return;
+		}
 		this.drawToday(f);
 		this.drawPins();
 		this.drawLensSection();
@@ -613,7 +668,7 @@ export class HomeView implements WorkbenchTabInstance {
 	 * reorder, folders in a popover, a menu). One component kept across redraws, like the Map;
 	 * mounted again when the Note rail service changes.
 	 */
-	private drawPins(): void {
+	private drawPins(parent?: HTMLElement): boolean {
 		const rail = this.rt.rail();
 		let count = 0;
 		try {
@@ -624,10 +679,10 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 		if (!rail || !count) {
 			this.destroyPins();
-			return;
+			return false;
 		}
 		if (this.pins && this.pinsRail !== rail) this.destroyPins();
-		const sec = this.section(this.body, "pins", this.t("pins.title"));
+		const sec = parent ?? this.section(this.body, "pins", this.t("pins.title"));
 		if (!this.pins || !this.pinsBox) {
 			this.pinsBox = this.doc.createElement("div");
 			this.pinsBox.className = "sk-home-pins";
@@ -648,6 +703,7 @@ export class HomeView implements WorkbenchTabInstance {
 			}
 		} else this.pins.update();
 		sec.appendChild(this.pinsBox);
+		return true;
 	}
 
 	private destroyPins(): void {
@@ -692,6 +748,11 @@ export class HomeView implements WorkbenchTabInstance {
 	}
 
 	private drawLens(view: HTMLElement): void {
+		if (this.lens === "pins") {
+			this.destroyMap();
+			if (!this.drawPins(view)) view.createDiv({ cls: "sk-home-none", text: this.t(this.rt.rail() ? "pins.none-yet" : "pins.need-rail") });
+			return;
+		}
 		if (this.lens === "tags") {
 			this.destroyMap();
 			this.drawTags(view);
@@ -718,6 +779,22 @@ export class HomeView implements WorkbenchTabInstance {
 
 	/** Switches the Home's view: the old one fades out, the new one comes in. */
 	private setLens(lens: HomeLens, viaKey = false, chosen = true): void {
+		if (this.wide) {
+			if (lens === this.lens && !this.page) return;
+			this.lens = lens;
+			void this.rt.setLens(lens, chosen);
+			if (this.page) {
+				this.goRoot(null, viaKey);
+				return;
+			}
+			this.host.saveState();
+			this.surface.clear();
+			this.render({ focus: false });
+			const view = this.body.querySelector<HTMLElement>(".sk-home-lens");
+			if (view && !reduced(this.root)) view.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+			if (viaKey) this.nav?.querySelector<HTMLElement>(`[data-key="view:${lens}"]`)?.focus();
+			return;
+		}
 		if (lens === this.lens) {
 			if (viaKey) this.body.querySelector<HTMLElement>(`[data-lens="${lens}"]`)?.focus();
 			return;
@@ -939,16 +1016,66 @@ export class HomeView implements WorkbenchTabInstance {
 				console.error("[Snailkit] home: the map could not open", error);
 				this.map = null;
 			}
+			// Ctrl (Cmd on macOS) and the wheel: zoom, like in a drawing.
+			this.listen(this.mapBox, "wheel", (e) => {
+				const wheel = e as WheelEvent;
+				if (!(wheel.ctrlKey || wheel.metaKey) || !wheel.deltaY) return;
+				wheel.preventDefault();
+				this.zoomMap(wheel.deltaY < 0 ? 1 : -1);
+			});
 		}
+		this.applyZoom();
 		const help = view.createDiv({ cls: "sk-home-mhelp" });
 		const q = help.createEl("button", { cls: "sk-btn is-ghost is-icon is-s", attr: { type: "button", "aria-label": this.t("map.help-button"), "aria-haspopup": "dialog", "aria-expanded": "false" } });
 		setIcon(q, "circle-help");
 		q.dataset.mapq = "";
 		help.createSpan({ cls: "sk-home-sp" });
+		const zoom = help.createDiv({ cls: "sk-home-zoom", attr: { role: "group" } });
+		nameBy(zoom, this.t("map.zoom"));
+		const out = zoom.createEl("button", { cls: "sk-btn is-ghost is-icon is-s", attr: { type: "button", "aria-label": this.t("map.zoom-out") } });
+		setIcon(out, "minus");
+		out.dataset.zoom = "-1";
+		const level = zoom.createEl("button", { cls: "sk-btn is-ghost is-s sk-home-zoom-level", attr: { type: "button", "aria-label": this.t("map.zoom-reset") } });
+		level.dataset.zoom = "0";
+		const into = zoom.createEl("button", { cls: "sk-btn is-ghost is-icon is-s", attr: { type: "button", "aria-label": this.t("map.zoom-in") } });
+		setIcon(into, "plus");
+		into.dataset.zoom = "1";
+		this.paintZoom();
 		if (layout.hidden.length) {
 			const b = help.createEl("button", { cls: "sk-home-hidb", text: this.tn("domains.hidden", layout.hidden.length), attr: { type: "button" } });
 			b.dataset.hidden = "";
 		}
+	}
+
+	/** The zoom of the Map, from the settings (kept from one session to the next). */
+	private get mapZoom(): number {
+		return zoomLevel(this.rt.settings.mapZoom);
+	}
+
+	/** One step in or out (`step` 0: back to 100 %), saved. */
+	private zoomMap(step: 1 | -1 | 0): void {
+		const next = step === 0 ? 1 : nextZoom(this.mapZoom, step);
+		if (next === this.mapZoom) return;
+		this.rt.settings.mapZoom = next;
+		void this.rt.ctx.saveSettings();
+		this.applyZoom();
+		this.paintZoom();
+	}
+
+	/** The Map draws in its own pixels: zooming its box makes it lay out again for the room it has. */
+	private applyZoom(): void {
+		if (!this.mapBox) return;
+		this.mapBox.setCssProps({ zoom: String(this.mapZoom) });
+		this.map?.layout();
+	}
+
+	private paintZoom(): void {
+		const zoom = this.body.querySelector<HTMLElement>(".sk-home-zoom");
+		if (!zoom) return;
+		const z = this.mapZoom;
+		zoom.querySelector<HTMLElement>(".sk-home-zoom-level")?.setText(`${Math.round(z * 100)} %`);
+		zoom.querySelector<HTMLButtonElement>('[data-zoom="-1"]')!.disabled = z === nextZoom(z, -1);
+		zoom.querySelector<HTMLButtonElement>('[data-zoom="1"]')!.disabled = z === nextZoom(z, 1);
 	}
 
 	private destroyMap(): void {
@@ -1248,10 +1375,10 @@ export class HomeView implements WorkbenchTabInstance {
 
 	// ----- Recent -----
 
-	private drawRecents(f: Frame): void {
+	private drawRecents(f: Frame, into?: HTMLElement): void {
 		const groups = groupRecents(this.rt.recents(), f.now, (p) => this.world.exists(p));
 		if (!groups.length) return;
-		const sec = this.section(this.body, "recent", this.t("recent.title"));
+		const sec = into ?? this.section(this.body, "recent", this.t("recent.title"));
 		const grid = sec.createDiv({ cls: "sk-home-rec" });
 		for (const { group, items } of groups) {
 			grid.createDiv({ cls: "sk-home-rl", text: this.t(`recent.${group}`) });
@@ -1269,10 +1396,149 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 	}
 
+	// ----- the wide Home: navigator, header, recent drawer -----
+
+	/** One entry of the navigator: an icon, a label, a count (orange when something is late). */
+	private navItem(parent: HTMLElement, o: { key: string; act: string; arg?: string; icon: string; label: string; count?: number | null; warn?: boolean; on?: boolean; kbd?: string; pin?: string | null }): HTMLElement {
+		const el = this.item(parent, "div", "sk-home-nav-item", { key: o.key, act: o.act, arg: o.arg, pin: o.pin ?? null });
+		el.setAttr("data-sk-item", "");
+		el.toggleClass("is-on", !!o.on);
+		setIcon(el.createSpan({ cls: "sk-home-nav-ic" }), o.icon);
+		el.createSpan({ cls: "sk-home-nav-label", text: o.label });
+		if (o.kbd && !this.touch) el.createEl("kbd", { text: o.kbd });
+		if (o.count) el.createSpan({ cls: "sk-home-n" + (o.warn ? " is-warn" : ""), text: String(o.count) });
+		return el;
+	}
+
+	/** The navigator: Today (what calls for you), a New brainstorm button, then the views. */
+	private drawNav(): void {
+		const nav = this.nav;
+		if (!nav) return;
+		nav.empty();
+		const rt = this.rt;
+		const f = this.frame ?? this.makeFrame();
+		const daily = rt.todayNote();
+		const tasks = f.tasks;
+		const brainstorms = rt.brainstorms();
+		const old = tasks ? oldDailyTasks(tasks, (p) => rt.dayOf(p), f.today).reduce((n, g) => n + g.tasks.length, 0) : null;
+		const chips = todayChips({ daily: !!daily, due: tasks ? dueCounts(tasks, f.today) : null, toSort: brainstorms ? toSortCount(brainstorms) : null, old });
+		nav.createDiv({ cls: "sk-home-nav-sec", text: this.t("today.title") });
+		for (const chip of chips) {
+			if (chip.kind === "daily") this.navItem(nav, { key: "chip:daily", act: "daily", icon: "sun", label: chip.exists ? todayLabel(rt.ctx.lang, f.now) : this.t("today.create"), kbd: "T", pin: daily?.path ?? null });
+			else if (chip.kind === "due") this.navItem(nav, { key: "chip:due", act: "due", icon: "list-checks", label: this.t("nav.due"), count: chip.overdue + chip.today, warn: chip.overdue > 0 });
+			else if (chip.kind === "brainstorms") this.navItem(nav, { key: "chip:brainstorms", act: "brainstorms", icon: "zap", label: this.t("nav.to-sort"), count: chip.count });
+			else this.navItem(nav, { key: "chip:old", act: "old", icon: "calendar-clock", label: this.t("nav.old"), count: chip.count, on: this.page?.kind === "old-dailies" });
+		}
+		if (this.startBrainstorm()) {
+			const add = this.item(nav, "button", "sk-btn is-primary sk-home-nav-new", { key: "chip:new-brainstorm", act: "new-brainstorm" });
+			add.setAttr("data-sk-item", "");
+			setIcon(add.createSpan({ cls: "sk-home-nav-ic" }), "plus");
+			add.createSpan({ text: this.t("today.new-brainstorm") });
+		}
+		nav.createDiv({ cls: "sk-home-nav-sec", text: this.t("nav.views") });
+		const icons: Record<HomeLens, string> = { map: "git-fork", domains: "layout-grid", tags: "tags", pins: "pin" };
+		let pins = 0;
+		try {
+			const groups = rt.rail()?.listPins();
+			pins = groups ? groups.loose.length + groups.folders.length : 0;
+		} catch {
+			pins = 0;
+		}
+		for (const view of VIEWS) {
+			const label = view === "pins" ? this.t("pins.title") : this.t(`lens.${view}`);
+			this.navItem(nav, { key: `view:${view}`, act: "lens", arg: view, icon: icons[view], label, count: view === "pins" ? pins : null, on: !this.page && this.lens === view });
+		}
+	}
+
+	/** Above the view: its name and how it works, and the button of the recent notes. */
+	private drawHead(): void {
+		const head = this.head;
+		if (!head) return;
+		head.empty();
+		head.toggleClass("is-hidden", !!this.page);
+		if (this.page) return;
+		const title = head.createDiv({ cls: "sk-home-title" });
+		title.createEl("h1", { text: this.lens === "pins" ? this.t("pins.title") : this.t(`lens.${this.lens}`) });
+		const hint = this.lensHint(this.lens, this.rt.layout().order.length > 0);
+		if (hint) title.createSpan({ cls: "sk-home-title-hint", text: hint });
+		if (this.drawer) {
+			const recent = head.createEl("button", { cls: "sk-btn is-ghost is-s sk-home-recent-btn", attr: { type: "button", "aria-expanded": String(this.root.hasClass("drawer-open")) } });
+			setIcon(recent.createSpan({ cls: "sk-home-nav-ic" }), "history");
+			recent.createSpan({ text: this.t("recent.title") });
+			if (!this.touch) recent.createEl("kbd", { text: "R" });
+			recent.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.toggleDrawer();
+			});
+		}
+	}
+
+	/** The recent notes: hidden, they slide in when the mouse reaches the right edge, and leave with it. */
+	private makeDrawer(): void {
+		this.edge = this.root.createDiv({ cls: "sk-home-edge", attr: { "aria-hidden": "true" } });
+		this.edge.createDiv({ cls: "sk-home-edge-grip" });
+		this.drawer = this.root.createDiv({ cls: "sk-home-drawer", attr: { role: "complementary", "data-sk-zone": "recent" } });
+		const head = this.drawer.createDiv({ cls: "sk-home-drawer-head" });
+		setIcon(head.createSpan({ cls: "sk-home-nav-ic" }), "history");
+		head.createSpan({ text: this.t("recent.title") });
+		this.drawerList = this.drawer.createDiv({ cls: "sk-home-drawer-list" });
+		const stay = () => window.clearTimeout(this.drawerTimer);
+		const leave = () => {
+			if (this.drawerPinned) return;
+			window.clearTimeout(this.drawerTimer);
+			this.drawerTimer = window.setTimeout(() => this.closeDrawer(), 260);
+		};
+		this.listen(this.edge, "mouseenter", () => {
+			stay();
+			this.drawerTimer = window.setTimeout(() => this.openDrawer(false), 90);
+		});
+		this.listen(this.edge, "mouseleave", leave);
+		this.listen(this.drawer, "mouseenter", stay);
+		this.listen(this.drawer, "mouseleave", leave);
+	}
+
+	private drawDrawer(): void {
+		if (!this.drawerList || !this.frame) return;
+		this.drawerList.empty();
+		this.drawRecents(this.frame, this.drawerList);
+		if (!this.drawerList.childElementCount) this.drawerList.createDiv({ cls: "sk-home-none", text: this.t("recent.none") });
+	}
+
+	private openDrawer(pinned: boolean): void {
+		if (!this.drawer) return;
+		window.clearTimeout(this.drawerTimer);
+		this.drawerPinned = this.drawerPinned || pinned;
+		if (this.root.hasClass("drawer-open")) return;
+		this.drawDrawer();
+		this.drawerList?.querySelectorAll<HTMLElement>(".sk-home-rr").forEach((row, i) => row.setCssProps({ "--sk-i": String(Math.min(i, 12)) }));
+		this.root.addClass("drawer-open");
+		this.head?.querySelector(".sk-home-recent-btn")?.setAttr("aria-expanded", "true");
+	}
+
+	private closeDrawer(): void {
+		window.clearTimeout(this.drawerTimer);
+		this.drawerPinned = false;
+		if (!this.root.hasClass("drawer-open")) return;
+		const hadFocus = !!this.drawer?.contains(this.doc.activeElement);
+		this.root.removeClass("drawer-open");
+		this.head?.querySelector(".sk-home-recent-btn")?.setAttr("aria-expanded", "false");
+		if (hadFocus) this.root.focus({ preventScroll: true });
+	}
+
+	/** The button and R: open and stay, or close. */
+	private toggleDrawer(): void {
+		if (this.root.hasClass("drawer-open")) {
+			this.closeDrawer();
+			return;
+		}
+		this.openDrawer(true);
+		this.drawer?.querySelector<HTMLElement>("[data-hnav]")?.focus();
+	}
+
 	// ----- pages -----
 
 	private crumbs(items: Array<[string, string | null]>): void {
-		const nav = this.body.createEl("nav", { cls: "sk-home-crumbs" });
+		const nav = this.body.createEl("nav", { cls: "sk-home-crumbs", attr: { "data-sk-zone": "breadcrumbs" } });
 		nameBy(nav, this.t("dpage.crumbs"));
 		if (this.phone) {
 			const back = nav.createEl("button", { cls: "sk-home-back", attr: { type: "button" } });
@@ -1312,7 +1578,7 @@ export class HomeView implements WorkbenchTabInstance {
 		items.push([title, null]);
 		this.crumbs(items);
 
-		const head = this.body.createDiv({ cls: "sk-home-ph" });
+		const head = this.body.createDiv({ cls: "sk-home-ph", attr: { "data-sk-zone": "header" } });
 		const pa = head.createSpan({ cls: "sk-home-pa is-l", text: initialOf(title) });
 		pa.setCssProps({ "--sk-hue": String(hue) });
 		head.createEl("h1", { text: title });
@@ -1430,13 +1696,13 @@ export class HomeView implements WorkbenchTabInstance {
 			if (hasTag(tags, tag) && !this.world.isBrainstorm(file.path)) notes.push(file);
 		}
 		notes.sort((a, b) => b.stat.mtime - a.stat.mtime || a.basename.localeCompare(b.basename));
-		const head = this.body.createDiv({ cls: "sk-home-ph" });
+		const head = this.body.createDiv({ cls: "sk-home-ph", attr: { "data-sk-zone": "header" } });
 		this.pill(head, display, "is-l", `#${display}`);
 		const summary = [f.tasks ? this.tn("dpage.task-count", tasks.filter((t) => !t.done).length) : "", this.tn("domains.notes", notes.length)].filter(Boolean).join(" · ");
 		head.createSpan({ cls: "sk-home-sum", text: summary });
 		const subs = familyTags(counts, family).filter((t) => foldTag(t.tag) !== family);
 		if (subs.length) {
-			const wrap = this.body.createDiv({ cls: "sk-home-subtags" });
+			const wrap = this.body.createDiv({ cls: "sk-home-subtags", attr: { "data-sk-zone": "subtags", "data-sk-zone-grid": "" } });
 			const segm = wrap.createDiv({ cls: "sk-segm", attr: { role: "group" } });
 			nameBy(segm, this.t("tpage.subtags"));
 			segm.createDiv({ cls: "sk-segm-thumb", attr: { "aria-hidden": "true" } });
@@ -1488,7 +1754,7 @@ export class HomeView implements WorkbenchTabInstance {
 			[this.t("old.title"), null],
 		]);
 		const groups = f.tasks ? oldDailyTasks(f.tasks, (p) => this.rt.dayOf(p), f.today, (t) => this.justDone.has(t.key)) : [];
-		const head = this.body.createDiv({ cls: "sk-home-ph" });
+		const head = this.body.createDiv({ cls: "sk-home-ph", attr: { "data-sk-zone": "header" } });
 		head.createEl("h1", { text: this.t("old.title") });
 		const open = groups.reduce((n, g) => n + g.tasks.filter((t) => !t.done).length, 0);
 		if (open) head.createSpan({ cls: "sk-home-sum", text: this.tn("dpage.task-count", open) });
@@ -1625,6 +1891,12 @@ export class HomeView implements WorkbenchTabInstance {
 			case "hidden":
 				this.hiddenMenu(el);
 				return;
+			case "lens":
+				this.setLens(arg as HomeLens, viaKey);
+				return;
+			case "recent":
+				this.toggleDrawer();
+				return;
 			case "all-tags":
 				this.allTags = !this.allTags;
 				this.render({ keepKey: "tags-all" });
@@ -1716,6 +1988,7 @@ export class HomeView implements WorkbenchTabInstance {
 			this.rt.ctx.toast(this.t("toast.task-gone"));
 			return;
 		}
+		if (done) tasks.chime?.();
 		this.rt.ctx.toast(this.t(done ? "toast.checked" : "toast.unchecked"), {
 			action: { label: this.t("common.undo"), run: () => void tasks.setDone({ path: written.path, line: written.line, raw: written.raw }, !done) },
 		});
@@ -1928,6 +2201,8 @@ export class HomeView implements WorkbenchTabInstance {
 		const target = e.target as HTMLElement;
 		if (!target?.closest) return;
 		if (this.map && this.mapBox?.contains(target)) return;
+		const zb = target.closest<HTMLElement>("[data-zoom]");
+		if (zb) return this.zoomMap(Number(zb.dataset.zoom) as 1 | -1 | 0);
 		const q = target.closest<HTMLElement>("[data-mapq]");
 		if (q) return this.toggleMapHelp(q);
 		const hb = target.closest<HTMLElement>("[data-hidden]");
@@ -2045,11 +2320,6 @@ export class HomeView implements WorkbenchTabInstance {
 			this.toSearch();
 			return;
 		}
-		if (plain && key === "?") {
-			e.preventDefault();
-			this.toggleHelp(this.foot?.querySelector<HTMLElement>(".sk-home-help") ?? null);
-			return;
-		}
 		// The keyboard on the Home itself (after Esc in the empty search field, or a click on an empty
 		// spot): a typed character starts a search, it is not a shortcut (T would open today's note and
 		// the rest of the word would land in it).
@@ -2057,6 +2327,21 @@ export class HomeView implements WorkbenchTabInstance {
 			e.preventDefault();
 			this.toSearch();
 			this.typeInSearch(key);
+			return;
+		}
+		if (!e.altKey && this.lens === "map" && !this.page && this.mapBox && (key === "+" || key === "=" || key === "-" || key === "0")) {
+			e.preventDefault();
+			this.zoomMap(key === "0" ? 0 : key === "-" ? -1 : 1);
+			return;
+		}
+		if (plain && this.drawer && (key === "r" || key === "R")) {
+			e.preventDefault();
+			this.toggleDrawer();
+			return;
+		}
+		if (this.drawer && key === "Escape" && this.root.hasClass("drawer-open")) {
+			e.preventDefault();
+			this.closeDrawer();
 			return;
 		}
 		if (plain && (key === "t" || key === "T")) {
@@ -2081,6 +2366,8 @@ export class HomeView implements WorkbenchTabInstance {
 			}
 			return;
 		}
+		if (target?.closest("[data-sk-zone]") && key.startsWith("Arrow")) return;
+		if (key === "Enter" && target?.closest("button, a")) return;
 		const item = this.current(target);
 		if ((e.ctrlKey || e.metaKey) && !e.altKey && key === "Enter") {
 			if (item) {
@@ -2148,12 +2435,13 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 	}
 
-	/** The item under the cursor, else the focused one. */
+	/** The focused item, or the cursor when the Home itself has focus. */
 	private current(target: HTMLElement | null): HTMLElement | null {
-		const hi = this.surface.current;
-		if (hi && this.body.contains(hi)) return hi;
 		const focused = target?.closest?.<HTMLElement>("[data-hnav]");
-		return focused && this.body.contains(focused) ? focused : null;
+		if (focused && this.body.contains(focused)) return focused;
+		if (target !== this.root) return null;
+		const hi = this.surface.current;
+		return hi && this.body.contains(hi) ? hi : null;
 	}
 
 	private resized(): void {

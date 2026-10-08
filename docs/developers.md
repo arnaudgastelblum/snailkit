@@ -29,6 +29,8 @@ Listen to the workspace event `snailkit:services-changed` to know when the API a
 | `moveToTag(location, tag)` | same | Replaces the group tag (not a flag). |
 | `setMarker(location, name, value \| null)` | same | Sets or removes a hidden `%%name:value%%` comment in the line. |
 | `addTask({ title, tag, priority?, due?, markers? })` | same | Writes a new open task where quick add writes. |
+| `taskNote?.read(key)` | `Promise<string \| null>` | Reads the task note body below its breadcrumb. Null when the task, service or note is missing, or the module has stopped. |
+| `taskNote?.write(key, body)` | `Promise<boolean>` | Writes the body, creating the note and its 📝 link when needed. False when the task or service is missing, or the module has stopped. |
 | `addViewAction(get)` | remove function | Puts a button in the header of the task list. `get()` returns `{ icon, label, text?, state?, onClick }` as it is now (or null to hide it); it is read again at each redraw. `state`: `"busy"` turns the icon, `"error"` colors it. `text` shows next to the icon when the list is a page. |
 | `addViewTab(tab)` | remove function | Adds a [Workbench](workbench.md) tab after Snailkit's own tabs (Home, Tasks, Brainstorm). `tab` is `{ id, icon, label, count?, countTone?, mount }`; `icon` is a Lucide name, `label` is already translated, and `count()` returns a number or null. Optional `countTone?(): "warn" \| null` colors the count like overdue task counts when it returns `"warn"`. Ids start with a letter and contain only `a-z` and `-`; `home`, `tasks` and `sessions` are reserved. Invalid or duplicate ids and a stopped module return a no-op remover. The tab goes away when the remover runs or when the Tasks module stops. |
 | `refreshViews()` | nothing | Redraws the open views soon, after a button or tab changed. |
@@ -41,7 +43,11 @@ A `TaskInfo` is a copy of what the task says: `path`, `line` (0-based), `raw` (t
 
 `description` is the task's indented block text without checkbox lines or fenced code, with common indentation and leading/trailing empty lines removed, joined by `\n` (empty string when absent).
 
-A **location** is `{ path, line, raw }`: any `TaskInfo` works. Every write finds the line again first and resolves to the task as written (with its new `line` and `raw`), or to `null` when nothing was written (line gone or ambiguous, invalid value, module turned off). Writes show no notice; the caller decides what to say. Use the returned task for the next call: the old `raw` no longer matches.
+`TaskInfo.notePath: string | null` is the vault path of the note linked by `[[target|📝]]`, resolved by `app.metadataCache.getFirstLinkpathDest(target, task.path)`. It is null when there is no link or the destination does not exist. Short targets, full vault paths and targets ending in `.md` are accepted; only the exact alias `📝` identifies a task note. The link stays out of `title`, `plainTitle` and the task key.
+
+`taskNote` is an optional, compatible addition to version 1: check for it before use. Both methods find open or done tasks by their current key and delegate to the task notes service. The note body is separate from the indented `description`; its breadcrumb is managed by Snailkit. Service errors reject the promise.
+
+A **location** is `{ path, line, raw }`: any `TaskInfo` works. Every location-based write finds the line again first and resolves to the task as written (with its new `line` and `raw`), or to `null` when nothing was written (line gone or ambiguous, invalid value, module turned off). These writes show no notice; the caller decides what to say. Use the returned task for the next call: the old `raw` no longer matches.
 
 **Markers** link a task to something else without changing what the user sees: `setMarker(task, "sync", "a1b2")` writes `%%sync:a1b2%%` (hidden in Reading view), read back in `markers.sync`. Names use `a-z`, `0-9` and `-`; values use letters, digits, `_`, `.` and `-`. The marker stays with the line when the task is renamed, moved to another tag or completed.
 

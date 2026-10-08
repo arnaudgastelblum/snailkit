@@ -3,7 +3,7 @@
 import { Component, MarkdownRenderer, MarkdownView, Notice, setIcon, type TFile } from "obsidian";
 import { getNotePins, getVaultPins } from "../../pins";
 import { asElement, reducedMotion } from "../../rail/motion";
-import type { PanelContext, PanelDefinition, PanelInstance } from "../../types";
+import type { PanelContext, PanelDefinition, PanelInstance, TasksService } from "../../types";
 import { checkTaskLine, locateTask, parseOpenTasks, type TaskItem } from "./parse";
 import { workbenchFooter } from "../workbench-link";
 import { dueBadge, summaryParts } from "./summary";
@@ -299,6 +299,7 @@ class TasksController implements PanelInstance {
 			} else await this.ctx.app.vault.process(group.file, update);
 			if (this.destroyed) return;
 			if (!changed) { new Notice(this.ctx.t("tasks.changed")); return; }
+			this.ctx.service<TasksService>("tasks")?.chime?.();
 			row.addClass("sk-note-rail-tasks-done");
 			row.querySelector(".sk-note-rail-tasks-check")?.setAttribute("aria-checked", "true");
 			this.ctx.setCount(--this.total);

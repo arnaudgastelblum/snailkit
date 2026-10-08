@@ -21,6 +21,7 @@ interface TasksApi {
 	version: 1;
 	getTasks(options?: { includeDone?: boolean }): TaskInfo[];
 	setDone(location: TaskInfo, done: boolean): Promise<TaskInfo | null>;
+	chime?(): void;
 	openTag?(tag: string): Promise<boolean>;
 }
 /** What the card uses of Note rail's "places" service. */
@@ -212,6 +213,7 @@ export class TagCard {
 				if (row.hasClass("is-done")) return;
 				row.addClass("is-done");
 				if (!(await api.setDone(task, true))) row.removeClass("is-done");
+				else api.chime?.();
 			})(); });
 			title.addEventListener("click", (e) => void this.openAt(task.path, task.line, e));
 		}

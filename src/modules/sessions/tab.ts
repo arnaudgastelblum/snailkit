@@ -125,11 +125,11 @@ class TabView implements ViewTabInstance {
 		this.main = this.desk ? this.root.createDiv({ cls: "sk-sessions-desk-main" }) : this.root;
 		const top = this.desk ? this.main.createDiv({ cls: "sk-sessions-desk-top" }) : this.root;
 
-		this.leadEl = top.createDiv({ cls: "sk-sessions-lead" });
+		this.leadEl = top.createDiv({ cls: "sk-sessions-lead", attr: { "data-sk-zone": "sentence" } });
 		const head = top.createDiv({ cls: "sk-sessions-tab-head" });
 		const searchBox = head.createDiv({ cls: "sk-sessions-tab-search" });
 		setIcon(searchBox.createSpan({ cls: "sk-sessions-tab-search-icon" }), "search");
-		this.search = searchBox.createEl("input", { attr: { type: "search", placeholder: t("tab.search"), "aria-label": t("tab.search"), spellcheck: "false" } });
+		this.search = searchBox.createEl("input", { attr: { type: "search", "data-sk-zone-focus": "", placeholder: t("tab.search"), "aria-label": t("tab.search"), spellcheck: "false" } });
 		if (this.desk) searchBox.createEl("kbd", { cls: "sk-sessions-kbd", text: "/" });
 		const narrow = host.layout === "side";
 		this.timelineBtn = head.createEl("button", { cls: "sk-btn is-ghost is-icon sk-sessions-tl-toggle", attr: { type: "button" } });
@@ -158,7 +158,7 @@ class TabView implements ViewTabInstance {
 		const tall = (el.ownerDocument.defaultView?.innerHeight ?? 900) >= 640;
 		this.showTimeline = saved === "shown" ? true : saved === "hidden" ? false : tall;
 
-		this.timeline = top.createDiv({ cls: "sk-sessions-tl", attr: { role: "group", "aria-label": t("tab.timeline") } });
+		this.timeline = top.createDiv({ cls: "sk-sessions-tl", attr: { "data-sk-zone": "timeline", "data-sk-zone-grid": "", role: "group", "aria-label": t("tab.timeline") } });
 		this.track = this.timeline.createDiv({ cls: "sk-sessions-tl-track" });
 		// What the shapes mean, shown while the pointer is over the timeline: the state never depends on the color alone.
 		this.legend = top.createDiv({ cls: "sk-sessions-tl-legend", attr: { "aria-hidden": "true" } });
@@ -169,7 +169,9 @@ class TabView implements ViewTabInstance {
 		}
 		this.tip = this.root.createDiv({ cls: "sk-sessions-tl-tip" });
 
-		const bar = top.createDiv({ cls: "sk-sessions-tab-bar" });
+		const toolbar = top.createDiv({ cls: "sk-sessions-toolbar", attr: { "data-sk-zone": "toolbar" } });
+		toolbar.appendChild(head);
+		const bar = toolbar.createDiv({ cls: "sk-sessions-tab-bar" });
 		this.contextsEl = bar.createDiv({ cls: "sk-sessions-contexts", attr: { role: "group", "aria-label": t("tab.contexts") } });
 		this.archBtn = bar.createEl("button", { cls: "sk-btn is-ghost is-s sk-sessions-arch-toggle", attr: { type: "button", "data-focus-key": "arch" } });
 		this.archBtn.addEventListener("click", () => {
@@ -177,14 +179,14 @@ class TabView implements ViewTabInstance {
 			this.render();
 		});
 
-		this.list = this.main.createDiv({ cls: "sk-sessions-tab-list", attr: { role: "listbox", "aria-label": t("tab.list") } });
+		this.list = this.main.createDiv({ cls: "sk-sessions-tab-list", attr: { "data-sk-zone": "list", role: "listbox", "aria-label": t("tab.list") } });
 		if (!Platform.isMobile) {
 			this.list.addEventListener("mouseover", (e) => this.onListHover(e));
 			this.list.addEventListener("mouseleave", () => this.hoverSoon(null));
 		}
 		if (this.desk) {
 			this.helpBar(this.main.createDiv({ cls: "sk-sessions-desk-foot" }));
-			this.detail = this.root.createDiv({ cls: "sk-sessions-detail", attr: { role: "region", "aria-label": t("desk.label") } });
+			this.detail = this.root.createDiv({ cls: "sk-sessions-detail", attr: { "data-sk-zone": "detail", role: "region", "aria-label": t("desk.label") } });
 		}
 		try {
 			this.doneOpen = rt.app.loadLocalStorage(DONE_KEY) === "open";
@@ -247,6 +249,20 @@ class TabView implements ViewTabInstance {
 	/** A rename field or the context window is open: a change of layout of the Workbench waits for it. */
 	busy(): boolean {
 		return !this.destroyed && this.editing;
+	}
+
+	keys(): Array<[string, string]> {
+		return [
+			["↑ ↓", this.t("keyboard.move")],
+			["Home / End", this.t("keyboard.ends")],
+			["Enter", this.t("keyboard.open")],
+			["P", this.t("keyboard.pin")],
+			["E", this.t("keyboard.archive")],
+			["C", this.t("keyboard.context")],
+			["F2", this.t("keyboard.rename")],
+			["Delete", this.t("keyboard.delete")],
+			[Platform.isMacOS ? "/ / Cmd+F" : "/ / Ctrl+F", this.t("keyboard.search")],
+		];
 	}
 
 	/** The Workbench was revealed or this tab chosen: the keyboard acts on the tab ("/", Ctrl/Cmd+F). */
@@ -366,6 +382,7 @@ class TabView implements ViewTabInstance {
 		if (this.showTimeline) this.renderTimeline(all.filter((s) => this.showArchived || !s.archived), new Set(shown.map((s) => s.path)));
 		this.renderList(all, shown);
 		this.renderDetail();
+		this.markZoneItems();
 		if (had && !this.root.contains(this.doc.activeElement)) {
 			const same = key ? (Array.from(this.root.querySelectorAll<HTMLElement>("[data-focus-key]"))).find((el) => el.dataset.focusKey === key) : null;
 			if (same) same.focus({ preventScroll: true });
@@ -373,6 +390,10 @@ class TabView implements ViewTabInstance {
 			else this.search.focus({ preventScroll: true });
 		}
 		this.syncScope();
+	}
+
+	private markZoneItems(): void {
+		this.root.querySelectorAll<HTMLElement>("[data-sk-zone] button").forEach((button) => button.setAttr("data-sk-item", ""));
 	}
 
 	private selectedIndex(): number {
@@ -487,7 +508,7 @@ class TabView implements ViewTabInstance {
 		tl.bubbles.forEach((b, i) => {
 			const s = byPath.get(b.path)!;
 			// Its own tip shows on hover; the description is for screen readers only (an aria-label would add Obsidian's tooltip).
-			const el = this.track.createEl("button", { cls: `sk-sessions-bubble is-${b.state}`, attr: { type: "button", "data-focus-key": `bubble:${b.path}` } });
+			const el = this.track.createEl("button", { cls: `sk-sessions-bubble is-${b.state}`, attr: { type: "button", "data-sk-item": "", "data-focus-key": `bubble:${b.path}` } });
 			el.createSpan({ cls: "sk-sessions-sr", text: this.describe(s) });
 			el.style.left = `${b.x - b.r}px`;
 			el.style.bottom = `${30 + b.y - b.r}px`;
@@ -585,8 +606,9 @@ class TabView implements ViewTabInstance {
 		const selected = this.desk && this.selected === s.path;
 		const row = this.list.createDiv({
 			cls: `sk-sessions-row is-${state} is-${flow.kind}` + (selected ? " is-selected" : "") + (s.archived ? " is-archived" : ""),
-			attr: { role: "option", tabindex: tabbable ? "0" : "-1", "aria-selected": String(selected), "data-path": s.path, "data-focus-key": `row:${s.path}` },
+			attr: { role: "option", "data-sk-item": "", tabindex: tabbable ? "0" : "-1", "aria-selected": String(selected), "data-path": s.path, "data-focus-key": `row:${s.path}` },
 		});
+		if (tabbable) row.setAttr("data-sk-zone-focus", "");
 		const titleLine = row.createDiv({ cls: "sk-sessions-row-title" });
 		if (s.pin !== null && s.pin !== undefined) {
 			const pin = titleLine.createSpan({ cls: "sk-sessions-row-pin" });
@@ -748,7 +770,10 @@ class TabView implements ViewTabInstance {
 		const rows = this.rows();
 		if (!rows.length) return;
 		const target = rows[Math.max(0, Math.min(rows.length - 1, i))];
-		for (const r of rows) r.setAttr("tabindex", r === target ? "0" : "-1");
+		for (const r of rows) {
+			r.setAttr("tabindex", r === target ? "0" : "-1");
+			r.toggleAttribute("data-sk-zone-focus", r === target);
+		}
 		target.focus();
 		target.scrollIntoView({ block: "nearest" });
 	}
@@ -764,9 +789,11 @@ class TabView implements ViewTabInstance {
 				r.toggleClass("is-selected", on);
 				r.setAttr("aria-selected", String(on));
 				r.setAttr("tabindex", on ? "0" : "-1");
+				r.toggleAttribute("data-sk-zone-focus", on);
 			}
 			for (const b of Array.from(this.track.querySelectorAll<HTMLElement>(".sk-sessions-bubble"))) b.toggleClass("is-selected", b.dataset.focusKey === `bubble:${path}`);
 			this.renderDetail();
+			this.markZoneItems();
 		}
 		if (focus) {
 			const row = this.rowOf(path);
@@ -977,7 +1004,7 @@ class TabView implements ViewTabInstance {
 		this.pop?.close();
 		const current = s.context ?? null;
 		const all = this.rt.contexts();
-		const pop = this.root.createDiv({ cls: "sk-sessions-pop", attr: { role: "dialog", "aria-label": this.t("desk.context") } });
+		const pop = this.root.createDiv({ cls: "sk-sessions-pop", attr: { "data-sk-own-tab": "", role: "dialog", "aria-label": this.t("desk.context") } });
 		const field = pop.createDiv({ cls: "sk-sessions-pop-field" });
 		field.createSpan({ cls: "sk-sessions-ctx-hash", text: "#" });
 		const input = field.createEl("input", { attr: { type: "text", placeholder: this.t("desk.context-placeholder"), spellcheck: "false", "aria-label": this.t("desk.context-placeholder") } });

@@ -39,6 +39,18 @@ export class WorkbenchCore {
 			if (leaf?.view.getViewType() === WORKBENCH_VIEW_TYPE) this.lastActive = leaf;
 		}));
 		this.opener = new AutoOpener(plugin, this, startup);
+		// Commands to reach each tab from anywhere (no default hotkey: users pick theirs).
+		for (const [id, tab] of [["workbench-home", "home"], ["workbench-tasks", "tasks"], ["workbench-brainstorms", "sessions"]] as const) {
+			plugin.addCommand({
+				id,
+				name: plugin.t(`workbench.cmd.${tab}`),
+				checkCallback: (checking) => {
+					if (!this.get(tab)) return false;
+					if (!checking) void this.open({ tab });
+					return true;
+				},
+			});
+		}
 		// For every tab, whichever modules run (it used to come with the Tasks module only).
 		plugin.registerInterval(window.setInterval(() => {
 			if (this.views.size) this.refresh();

@@ -104,6 +104,8 @@ export interface TasksService {
 	getTasks(options?: { includeDone?: boolean }): Array<{ due: string | null; done: boolean }>;
 	on(event: "change", callback: () => void): () => void;
 	openWorkbench?(options?: WorkbenchOptions): Promise<void>;
+	/** The "task checked" sound, when the user turned it on. */
+	chime?(): void;
 }
 
 /** One idea session as the "sessions" service lists it. */

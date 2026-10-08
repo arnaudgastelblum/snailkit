@@ -13,6 +13,7 @@ const CARRY_RE = /\s*↻\d+(?=\s|$)/gu;
 const STAR_RE = /(^|\s)⭐️?(?=\s|$)/u;
 const BLOCK_ID_RE = /\s+\^[A-Za-z0-9-]+\s*$/;
 export const COMMENT_RE = /\s*%%(?:(?!%%).)*%%/g;
+export const NOTE_LINK_RE = /\[\[([^[\]|\r\n]+)\|📝\]\]/gu;
 const MARKER_RE = /%%([a-z][a-z0-9-]*):([A-Za-z0-9_.-]+)%%/g;
 
 export const PRIORITIES: Priority[] = ["high", "medium", "low"];
@@ -47,12 +48,14 @@ export function flagSet(flagTags: string): Set<string> {
 }
 
 export function tagsOf(text: string): string[] {
+	text = text.replace(NOTE_LINK_RE, " ");
 	const out: string[] = [];
 	for (const m of text.matchAll(TAG_RE)) if (!/^[\d/_-]+$/.test(m[2])) out.push(m[2].toLowerCase());
 	return out;
 }
 
 export function markersOf(text: string): Record<string, string> {
+	text = text.replace(NOTE_LINK_RE, " ");
 	const out: Record<string, string> = {};
 	for (const m of text.matchAll(MARKER_RE)) if (!(m[1] in out)) out[m[1]] = m[2];
 	return out;
@@ -60,6 +63,8 @@ export function markersOf(text: string): Record<string, string> {
 
 /** Splits a task text (what follows "- [ ] ") into its fields. */
 export function parseTaskText(text: string, flags: ReadonlySet<string>): TaskFields {
+	const noteLink = [...text.matchAll(NOTE_LINK_RE)][0]?.[1].replace(/\.md$/i, "") ?? null;
+	text = text.replace(NOTE_LINK_RE, " ");
 	const tags = tagsOf(text);
 	const primary = tags.find((tag) => !flags.has(tag)) ?? null;
 	let priority = PRIORITIES.find((p) => tags.includes(p)) ?? null;
@@ -81,6 +86,7 @@ export function parseTaskText(text: string, flags: ReadonlySet<string>): TaskFie
 		.replace(/\s+/g, " ")
 		.trim();
 	return {
+		noteLink,
 		tags,
 		primary,
 		priority,

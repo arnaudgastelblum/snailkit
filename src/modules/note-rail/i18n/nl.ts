@@ -143,6 +143,7 @@ export const nl: StringsOf<typeof en> = {
 	"settings.template-desc": "Notitie die in elke nieuwe dagnotitie wordt gekopieerd.",
 	"settings.template-none": "Geen sjabloon",
 	"rail.today": "Vandaag",
+	"rail.home": "Start",
 	"rail.today-error": "Kon de notitie van vandaag niet openen.",
 	"rail.search": "Search",
 	"settings.show-place": "Waar de notitie bij hoort",

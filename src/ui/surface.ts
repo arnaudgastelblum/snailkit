@@ -25,6 +25,17 @@ export interface SurfaceOptions {
 	sticky?(): boolean;
 }
 
+/**
+ * The CSS zoom an element is drawn at (1 without zoom): screen sizes over its own sizes. Rects
+ * are in screen pixels, styles in the element's own: divide by this to go from one to the other.
+ */
+export function zoomOf(el: HTMLElement): number {
+	const width = el.offsetWidth;
+	if (!width) return 1;
+	const z = el.getBoundingClientRect().width / width;
+	return Number.isFinite(z) && z > 0 ? z : 1;
+}
+
 export class Surface {
 	readonly cursorEl: HTMLElement;
 	private hi: HTMLElement | null = null;
@@ -111,14 +122,15 @@ export class Surface {
 		const box = this.box.getBoundingClientRect();
 		const rect = el.getBoundingClientRect();
 		if (!rect.width) return;
-		const x = rect.left - box.left - this.box.clientLeft + this.box.scrollLeft;
-		const y = rect.top - box.top - this.box.clientTop + this.box.scrollTop;
+		const z = zoomOf(this.box);
+		const x = (rect.left - box.left) / z - this.box.clientLeft + this.box.scrollLeft;
+		const y = (rect.top - box.top) / z - this.box.clientTop + this.box.scrollTop;
 		const cursor = this.cursorEl;
 		cursor.classList.toggle("is-snap", snap || !cursor.classList.contains("is-shown"));
 		cursor.classList.toggle("is-mouse", this.via === "mouse");
 		cursor.style.transform = `translate(${x}px, ${y}px)`;
-		cursor.style.width = `${rect.width}px`;
-		cursor.style.height = `${rect.height}px`;
+		cursor.style.width = `${rect.width / z}px`;
+		cursor.style.height = `${rect.height / z}px`;
 		const hue = el.ownerDocument.defaultView?.getComputedStyle(el).getPropertyValue("--sk-hue").trim() ?? "";
 		cursor.classList.toggle("is-gray", !hue || el.classList.contains("is-gray"));
 		if (hue) cursor.setCssProps({ "--sk-hue": hue });

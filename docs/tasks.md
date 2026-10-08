@@ -15,6 +15,9 @@ the two.
   one list, grouped by tag, with **Today** and **Upcoming** views.
 - **Handle them from there.** Check, prioritize, give a date, rename or move a task to another
   tag: the note is updated for you. Add one in a few keystrokes: `Call the bank !1 @tomorrow`.
+- **Develop them.** Each task can have its own note: write in the **Note** area of its details
+  and the note is created, linked from the task line with a small 📝. Long texts, images, links:
+  open it as a normal note with the arrow.
 
 ## Good to know
 

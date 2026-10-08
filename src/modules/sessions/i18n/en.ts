@@ -364,4 +364,13 @@ export const en = {
 	"tab.finish-it": "Finish it?",
 	"tri.keep-code": "This line holds a code block: delete it in the note itself.",
 	"tri.refreshed": "This line changed meanwhile: here it is as it is now.",
+	"keyboard.move": "Move in the list",
+	"keyboard.ends": "First / last brainstorm",
+	"keyboard.open": "Open brainstorm",
+	"keyboard.pin": "Pin / unpin",
+	"keyboard.archive": "Archive / restore",
+	"keyboard.context": "Change context",
+	"keyboard.rename": "Rename brainstorm",
+	"keyboard.delete": "Ask to delete",
+	"keyboard.search": "Search",
 };

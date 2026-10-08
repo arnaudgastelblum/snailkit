@@ -185,6 +185,8 @@ export interface TasksReader {
 	getTasks(options?: { includeDone?: boolean }): TaskInfoLite[];
 	on(event: "change", callback: () => void): () => void;
 	setDone(location: { path: string; line: number; raw: string }, done: boolean): Promise<unknown>;
+	/** The "task checked" sound, when the user turned it on. */
+	chime?(): void;
 	openWorkbench?(options?: { tab?: string; scope?: "all" | "today" }): Promise<void>;
 }
 

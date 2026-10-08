@@ -4,7 +4,7 @@
 import { MarkdownView, Notice, TFile, moment, normalizePath, type Editor, type WorkspaceLeaf } from "obsidian";
 import {
 	insertTaskLine, locateLine, mapTaskText, minimalChange, newTaskPath, retagText, retitleText,
-	setDoneLine, setDueText, setMarkerText, setPriorityText,
+	setDoneLine, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
 } from "./edit";
 import { parseTaskText, taskKey } from "./parse";
 import type { TaskIndex } from "./task-index";
@@ -131,6 +131,10 @@ export class TaskWriter {
 
 	setDue(ref: TaskRef, due: string | null, quiet = false): Promise<Written | null> {
 		return this.editText(ref, (text) => setDueText(text, due), quiet);
+	}
+
+	setNoteLink(task: Task, linkTarget: string | null, quiet = false): Promise<Written | null> {
+		return this.editText(task, (text) => setNoteLinkText(text, linkTarget), quiet);
 	}
 
 	setMarker(ref: TaskRef, name: string, value: string | null, quiet = false): Promise<Written | null> {

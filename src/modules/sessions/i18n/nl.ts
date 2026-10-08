@@ -367,4 +367,13 @@ export const nl: StringsOf<typeof en> = {
 	"tab.finish-it": "Afronden?",
 	"tri.keep-code": "Deze regel bevat een codeblok: verwijder hem in de notitie zelf.",
 	"tri.refreshed": "Deze regel is intussen veranderd: zo staat hij er nu.",
+	"keyboard.move": "Door de lijst bewegen",
+	"keyboard.ends": "Eerste / laatste brainstorm",
+	"keyboard.open": "Brainstorm openen",
+	"keyboard.pin": "Vastzetten / losmaken",
+	"keyboard.archive": "Archiveren / terugzetten",
+	"keyboard.context": "Context wijzigen",
+	"keyboard.rename": "Brainstorm hernoemen",
+	"keyboard.delete": "Verwijderen bevestigen",
+	"keyboard.search": "Zoeken",
 };

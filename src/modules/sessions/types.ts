@@ -107,4 +107,5 @@ export interface TasksWorkbench {
 	find?(location: { path: string; line: number; raw: string }): unknown;
 	/** Checks or unchecks a task found by `find`. */
 	setDone?(location: { path: string; line: number; raw: string }, done: boolean): Promise<unknown>;
+	chime?(): void;
 }

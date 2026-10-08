@@ -26,10 +26,11 @@
 	container: sk-home / inline-size;
 	scrollbar-width: thin;
 }
+/* Wide, like the other tabs of the Workbench: the whole view, 24 px from each edge. */
 .sk-home-col {
 	position: relative;
-	width: min(760px, calc(100% - 48px));
-	margin-left: max(24px, calc((100% - 760px) / 2));
+	width: calc(100% - 48px);
+	margin-left: 24px;
 	padding: 18px 0 72px;
 	transition: margin-left var(--sk-slow) var(--sk-ease), width var(--sk-slow) var(--sk-ease);
 }
@@ -173,9 +174,9 @@
 	display: none;
 }
 @container sk-home (min-width: 900px) {
+	/* Searching: the preview of the selected result takes the right side. */
 	.sk-home-col.is-searching {
-		width: min(760px, calc(100% - 354px));
-		margin-left: clamp(24px, calc((100% - 760px) / 2), calc(100% - 1090px));
+		width: calc(100% - 354px);
 	}
 }
 @container sk-home (max-width: 899px) {
@@ -1307,10 +1308,202 @@
 	}
 }
 
-/* The Map keeps its left edge on the column but may run to the right edge of the view, so the
-   third column shows long note names whole (the column itself stays 760 px). */
 .sk-home-col .sk-home-map {
-	width: calc(100cqw - max(24px, (100cqw - 760px) / 2) - 24px);
+	width: 100%;
 	max-width: none;
 }
 .sk-segm-thumb.sk-home-empty-thumb { width: 0; }
+
+/* Keep keyboard focus visible across Workbench zones. */
+.sk-home-tab [data-sk-item]:focus-visible,
+.sk-home-tab [data-sk-zone]:focus-visible {
+	outline: 2px solid var(--sk-accent);
+	outline-offset: 2px;
+}
+
+/* ---------- Wide Home (a page): navigator | view, like the Tasks tab ---------- */
+.sk-home-tab.is-wide {
+	overflow: hidden;
+	display: grid;
+	grid-template-columns: 236px minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr) auto;
+}
+.sk-home-tab.is-wide > .sk-home-nav { grid-row: 1; grid-column: 1; }
+.sk-home-tab.is-wide > .sk-home-scroll { grid-row: 1; grid-column: 2; }
+.sk-home-tab.is-wide > .sk-home-foot { grid-row: 2; grid-column: 1 / -1; }
+.sk-home-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-height: 0;
+	padding: 16px 10px 14px;
+	overflow: auto;
+	border-right: 1px solid var(--sk-line);
+	background: var(--background-primary-alt);
+}
+.sk-home-nav-sec {
+	padding: 18px 8px 6px;
+	color: var(--text-faint);
+	font-size: 11px;
+	font-weight: 650;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.sk-home-nav-sec:first-child { padding-top: 4px; }
+.sk-home-nav-item {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 10px;
+	min-height: 30px;
+	padding: 0 8px;
+	border-radius: var(--sk-radius-s);
+	color: var(--text-muted);
+	font-size: 13.5px;
+	cursor: var(--cursor);
+	user-select: none;
+	outline: none;
+	transition: background var(--sk-fast), color var(--sk-fast);
+}
+.sk-home-nav-item:hover { background: var(--sk-hover); color: var(--text-normal); }
+.sk-home-nav-item:focus-visible { box-shadow: 0 0 0 2px var(--sk-accent); }
+.sk-home-nav-item.is-on { background: var(--sk-accent-wash); color: var(--text-normal); font-weight: 550; }
+.sk-home-nav-ic { display: flex; flex: none; --icon-size: 16px; }
+.sk-home-nav-item .sk-home-nav-ic { color: var(--text-faint); }
+.sk-home-nav-item.is-on .sk-home-nav-ic { color: var(--sk-accent); }
+.sk-home-nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-home-nav-item kbd { margin-left: auto; font-size: 10.5px; opacity: 0.7; }
+.sk-home-n { margin-left: auto; color: var(--text-faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.sk-home-n.is-warn { color: var(--sk-home-warn); font-weight: 600; }
+.sk-home-nav button.sk-home-nav-new {
+	justify-content: center;
+	gap: 6px;
+	margin: 10px 4px 2px;
+	--icon-size: 15px;
+}
+
+/* The view: a header like the Tasks title, then the view itself, as tall as the page. */
+.sk-home-tab.is-wide .sk-home-col {
+	display: flex;
+	flex-direction: column;
+	width: auto;
+	min-height: 100%;
+	margin: 0;
+	padding: 0 32px 40px;
+}
+.sk-home-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 22px 0 14px;
+}
+.sk-home-head.is-hidden { display: none; }
+.sk-home-title { display: flex; align-items: baseline; gap: 12px; min-width: 0; flex: 1; }
+.sk-home-title h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+.sk-home-title-hint { color: var(--text-faint); font-size: 13px; }
+.sk-home-head button.sk-home-recent-btn { display: inline-flex; align-items: center; gap: 6px; }
+.sk-home-head button.sk-home-recent-btn kbd { font-size: 10.5px; opacity: 0.7; }
+.sk-home-tab.is-wide .sk-home-body { display: flex; flex: 1; flex-direction: column; }
+.sk-home-lens.is-main { flex: 1; margin-top: 18px; }
+/* The Map is the page: centered in all the room left. */
+.sk-home-lens.is-main[data-lens="map"] {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	min-height: 360px;
+}
+.sk-home-lens.is-main[data-lens="map"] .sk-home-map {
+	width: min(100%, 1180px);
+	margin: 0 auto;
+}
+.sk-home-lens.is-main[data-lens="pins"] .sk-home-pins { padding-top: 4px; }
+.sk-home-none { padding: 40px 0; color: var(--text-faint); font-size: 13.5px; text-align: center; }
+
+/* Recent notes: a drawer from the right edge, there while the mouse is. */
+.sk-home-edge {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 36px;
+	z-index: 5;
+	width: 22px;
+}
+.sk-home-edge-grip {
+	position: absolute;
+	top: 50%;
+	right: 5px;
+	width: 4px;
+	height: 56px;
+	margin-top: -28px;
+	border-radius: 4px;
+	background: var(--sk-line);
+	opacity: 0;
+	transition: opacity var(--sk-mid) ease, height 260ms var(--sk-spring), margin-top 260ms var(--sk-spring), background-color var(--sk-fast);
+}
+.sk-home-tab.is-wide:hover .sk-home-edge-grip { opacity: 0.8; }
+.sk-home-edge:hover .sk-home-edge-grip { height: 84px; margin-top: -42px; background: var(--sk-accent-line); opacity: 1; }
+.sk-home-drawer {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	bottom: 48px;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	width: min(340px, calc(100% - 48px));
+	padding: 14px 10px 10px 14px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-l);
+	background: var(--background-primary);
+	box-shadow: var(--sk-shadow-pop);
+	opacity: 0;
+	pointer-events: none;
+	transform: translateX(calc(100% + 28px));
+	transition: transform 420ms var(--sk-spring), opacity 220ms ease;
+}
+.sk-home-tab.drawer-open .sk-home-drawer { opacity: 1; pointer-events: auto; transform: none; }
+.sk-home-drawer-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 4px 10px;
+	color: var(--text-muted);
+	font-size: 12px;
+	font-weight: 650;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.sk-home-drawer-list { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.sk-home-drawer .sk-home-rr { margin: 0; }
+.sk-home-drawer .sk-home-m { margin-left: auto; padding-left: 8px; }
+.sk-home-drawer .sk-home-rec { display: block; }
+.sk-home-drawer .sk-home-rl { padding: 10px 4px 4px; color: var(--text-faint); font-size: 11.5px; }
+.sk-home-drawer .sk-home-rl:first-child { padding-top: 0; }
+.sk-home-drawer .sk-home-p { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+	.sk-home-tab.drawer-open .sk-home-drawer .sk-home-rr,
+	.sk-home-tab.drawer-open .sk-home-drawer .sk-home-rl {
+		animation: sk-home-drawer-in 380ms var(--sk-spring) both;
+		animation-delay: calc(var(--sk-i, 0) * 24ms + 80ms);
+	}
+}
+@keyframes sk-home-drawer-in {
+	from { opacity: 0; transform: translateX(16px); }
+}
+
+/* Zoom of the Map: − 100 % +, next to its help. */
+.sk-home-zoom {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: 8px;
+	padding: 2px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-s);
+	background: var(--sk-surface);
+}
+.sk-home-zoom button.sk-home-zoom-level {
+	min-width: 52px;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-muted);
+}
