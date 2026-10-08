@@ -37,7 +37,7 @@ export function actionLabel(w: Words, flow: Flow, action: CardAction): string {
 	return w.t(`flow.${action}`);
 }
 
-const ICONS: Record<CardAction, string> = { sort: "list-filter", finish: "check", "finish-anyway": "check", archive: "archive", unarchive: "archive-restore", reopen: "rotate-ccw", show: "eye", open: "file-pen-line" };
+export const ICONS: Record<CardAction, string> = { sort: "list-filter", finish: "check", "finish-anyway": "check", archive: "archive", unarchive: "archive-restore", reopen: "rotate-ccw", show: "eye", open: "file-pen-line" };
 
 /** A text whose number is bold: the key formatted with its count, the number wrapped in <b>. */
 export function countText(el: HTMLElement, text: string, n: number): void {

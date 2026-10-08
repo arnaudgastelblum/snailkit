@@ -22,6 +22,12 @@ the two.
 ## Good to know
 
 - Open the list from the ribbon, the Note menu or Home. Right click a task for every action.
+- **Flags** say how a task is done: `#quick` and `#deep` become chips over the list (**10 minutes**,
+  **Focus**) to pick what fits your time and energy; `#waiting` and `#someday` leave Today and get
+  their own entry. Declare them under **Flag tags** (one click adds the suggested ones).
+- Checking is a small pleasure: the task flies into **done today**, which rolls one up, the ring of
+  the day fills, and the sound climbs while you keep going. A clear day gets a little scene. Turn
+  it off with **Playful checking** (off by itself when your system asks for less motion).
 - Keyboard: `↑` `↓` to move, `X` to check, `T` for today, `N` for a new task.
 - Several at once: `Ctrl`/`Cmd`+click or `Shift`+click (or `Shift`+`↑` `↓`, `Ctrl`+`A`), then
   check, date, prioritize, tag or delete them together, or drag them onto a tag. One Undo for all.

@@ -90,6 +90,41 @@ export function filterSessions(list: readonly SessionInfo[], filter: SessionFilt
 		.sort(compareSessions);
 }
 
+// ----- the views of the navigator (page layout) -----
+
+/** In progress, to sort, finished, archived, or the brainstorms of one context ("ctx:work"). */
+export type SessionView = "all" | "live" | "sort" | "done" | "archived" | `ctx:${string}`;
+
+/** A brainstorm belongs to a view: archived ones only to "archived"; a context view holds in progress and finished. */
+export function inView(s: SessionInfo, view: string): boolean {
+	if (view === "archived") return !!s.archived;
+	if (s.archived) return false;
+	if (view === "all") return true;
+	if (view === "live") return !s.closed;
+	if (view === "sort") return stateOf(s) === "triage";
+	if (view === "done") return s.closed;
+	if (view.startsWith("ctx:")) return sameContext(s.context, view.slice(4));
+	return false;
+}
+
+/** The brainstorms of a view that match the search, pinned first, then newest first. */
+export function viewSessions(list: readonly SessionInfo[], view: string, query: string): SessionInfo[] {
+	return filterSessions(list, view === "archived" ? "archived" : "all", query).filter((s) => inView(s, view));
+}
+
+/** How many brainstorms each view holds (before the search), and each context (most used first). */
+export function viewCounts(list: readonly SessionInfo[]): { all: number; live: number; sort: number; done: number; archived: number; contexts: Array<[string, number]> } {
+	const live = list.filter((s) => !s.archived);
+	return {
+		all: live.length,
+		live: live.filter((s) => !s.closed).length,
+		sort: live.filter((s) => stateOf(s) === "triage").length,
+		done: live.filter((s) => s.closed).length,
+		archived: list.filter((s) => s.archived).length,
+		contexts: contextsOf(live).map((c) => [c, live.filter((s) => sameContext(s.context, c)).length] as [string, number]),
+	};
+}
+
 /** How many sessions each filter shows (before the search and the context). */
 export function filterCounts(list: readonly SessionInfo[]): Record<SessionFilter, number> {
 	const out: Record<SessionFilter, number> = { all: 0, open: 0, triage: 0, closed: 0, archived: 0 };

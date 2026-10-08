@@ -7,7 +7,7 @@ import { createTasksApi, resolveWorkbench, type ViewTab } from "../src/modules/t
 import { TasksHub } from "../src/modules/tasks/hub";
 import {
 	insertTaskLine, insertToken, locateLine, minimalChange, newTaskPath, removeTag, retagText, retitleText,
-	editLines, removeBlock, removeBlocks, restoreBlock, restoreBlocks, revertLines, setDoneLine, setDueLines, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
+	editLines, setFlagText, removeBlock, removeBlocks, restoreBlock, restoreBlocks, revertLines, setDoneLine, setDueLines, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
 } from "../src/modules/tasks/edit";
 import {
 	addDays, buildTree, countTasks, daysBetween, dueLabel, dueState, fallbackHue, findNode, inScope, isIsoDate,
@@ -993,4 +993,33 @@ test("bulk on the tasks of two notes: one write per note, one Undo for all", asy
 	assert.equal(files["B.md"], "");
 	assert.equal(await gone.undo(), true);
 	assert.equal(files["B.md"], b);
+});
+
+// ----- flags: chips, and tasks out of the day -----
+import { declaredFlags, flagCounts, hasFlag, isParked, parkingOf, SUGGESTED_FLAGS, withSuggestedFlags } from "../src/modules/tasks/group";
+
+test("flags: declared ones as chips, waiting and someday out of the day, suggested ones in one click", () => {
+	assert.deepEqual(declaredFlags("Quick, #deep, high, waiting, quick"), ["quick", "deep", "waiting"]);
+	assert.deepEqual(declaredFlags(""), []);
+	assert.deepEqual(parkingOf(declaredFlags("quick, waiting, someday")), ["waiting", "someday"]);
+	assert.deepEqual(parkingOf(declaredFlags("quick")), []);
+	const call = { tags: ["home", "quick"] };
+	const wait = { tags: ["work", "waiting"] };
+	assert.ok(hasFlag(call, "quick") && !hasFlag(call, "deep"));
+	assert.ok(isParked(wait, ["waiting", "someday"]));
+	// Not declared: nothing is taken out of the day.
+	assert.ok(!isParked(wait, parkingOf(declaredFlags("quick"))));
+	assert.deepEqual(flagCounts([call, wait, { tags: ["home"] }], ["quick", "waiting", "deep"]), { quick: 1, waiting: 1, deep: 0 });
+	assert.equal(withSuggestedFlags(""), SUGGESTED_FLAGS.join(", "));
+	assert.equal(withSuggestedFlags("urgent, quick"), "urgent, quick, deep, waiting, someday");
+	assert.equal(withSuggestedFlags(withSuggestedFlags("")), SUGGESTED_FLAGS.join(", "));
+});
+
+test("a flag on or off in the line: whole tag only, never twice, the date kept", () => {
+	assert.equal(setFlagText("Call the bank #home 📅 2026-10-09", "quick", true), "Call the bank #home 📅 2026-10-09 #quick");
+	assert.equal(setFlagText("Call the bank #home #quick", "quick", true), "Call the bank #home #quick");
+	assert.equal(setFlagText("Call the bank #home #Quick 📅 2026-10-09", "quick", false), "Call the bank #home 📅 2026-10-09");
+	// A longer tag that starts the same is not the flag.
+	assert.equal(setFlagText("Plan #quicker #home", "quick", false), "Plan #quicker #home");
+	assert.equal(setFlagText("Plan #quicker #home", "quick", true), "Plan #quicker #home #quick");
 });

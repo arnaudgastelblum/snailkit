@@ -32,6 +32,7 @@ export const fr: StringsOf<typeof en> = {
 	"today.old.one": "{count} tâche dans d'anciennes notes du jour",
 	"today.old.other": "{count} tâches dans d'anciennes notes du jour",
 	"today.new-brainstorm": "Nouveau brainstorm",
+	"today.new-task": "Nouvelle tâche",
 
 	"pins.title": "Épingles",
 	"pins.need-rail": "Activez le Menu de note pour épingler des notes.",

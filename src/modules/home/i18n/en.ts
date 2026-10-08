@@ -29,6 +29,7 @@ export const en = {
 	"today.old.one": "{count} task in older daily notes",
 	"today.old.other": "{count} tasks in older daily notes",
 	"today.new-brainstorm": "New brainstorm",
+	"today.new-task": "New task",
 
 	"pins.title": "Pins",
 	"pins.need-rail": "Turn on Note menu to pin notes.",

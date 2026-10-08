@@ -114,6 +114,52 @@ export function matchesQuery(task: Pick<Task, "title" | "path" | "tags">, query:
 	return words.every((w) => (w.startsWith("#") ? task.tags.some((t) => t.startsWith(w.slice(1))) : haystack.includes(w)));
 }
 
+// ----- flags: how a task is done, not what it is about -----
+
+/** Flags offered to start with: effort (quick, deep) and two that take a task out of the day (waiting, someday). */
+export const SUGGESTED_FLAGS: readonly string[] = ["quick", "deep", "waiting", "someday"];
+/** Flags that take a task out of Today and Upcoming (when they are declared): it waits on someone, or for one day. */
+export const PARKING_FLAGS: readonly string[] = ["waiting", "someday"];
+const PRIORITY_NAMES: readonly string[] = ["high", "medium", "low"];
+
+/** The flags of the setting, as the lists offer them (priorities left out: they have their own chips). */
+export function declaredFlags(flagTags: string): string[] {
+	const out: string[] = [];
+	for (const part of flagTags.split(",")) {
+		const f = part.trim().replace(/^#/, "").toLowerCase();
+		if (f && !PRIORITY_NAMES.includes(f) && !out.includes(f)) out.push(f);
+	}
+	return out;
+}
+
+/** The setting with the suggested flags added (those already there keep their place). */
+export function withSuggestedFlags(flagTags: string): string {
+	const have = declaredFlags(flagTags);
+	const all = [...flagTags.split(",").map((p) => p.trim()).filter(Boolean), ...SUGGESTED_FLAGS.filter((f) => !have.includes(f))];
+	return all.join(", ");
+}
+
+export function hasFlag(task: Pick<Task, "tags">, flag: string): boolean {
+	return task.tags.some((t) => t.toLowerCase() === flag);
+}
+
+/** The declared flags that take a task out of the day. */
+export function parkingOf(declared: readonly string[]): string[] {
+	return PARKING_FLAGS.filter((f) => declared.includes(f));
+}
+
+/** A task waiting on someone or kept for some day: out of Today and Upcoming. */
+export function isParked(task: Pick<Task, "tags">, parking: readonly string[]): boolean {
+	return parking.some((f) => hasFlag(task, f));
+}
+
+/** How many of the tasks carry each flag. */
+export function flagCounts(tasks: ReadonlyArray<Pick<Task, "tags">>, flags: readonly string[]): Record<string, number> {
+	const out: Record<string, number> = {};
+	for (const f of flags) out[f] = tasks.filter((t) => hasFlag(t, f)).length;
+	return out;
+}
+
 /** Priority filter: an empty list shows everything; "none" stands for tasks without priority. */
 export function passesPriority(task: Pick<Task, "priority">, filter: readonly string[]): boolean {
 	return !filter.length || filter.includes(task.priority ?? "none");

@@ -3,7 +3,7 @@
 import { moment, TFile } from "obsidian";
 import { isSideLeaf } from "../../core/workbench/state";
 import { TAB_ORDER, WORKBENCH_VIEW_TYPE, type WorkbenchTab } from "../../core/workbench/types";
-import { addDays, dueLabel, sinceDays } from "./group";
+import { addDays, declaredFlags, dueLabel, isParked, parkingOf, sinceDays } from "./group";
 import { plainTitle } from "./parse";
 import type { DayWords } from "./quick-add";
 import { resolveWorkbench, type TasksApi, type ViewAction, type ViewTab } from "./api";
@@ -11,8 +11,9 @@ import { TasksTab } from "./tab";
 import { TaskIndex } from "./task-index";
 import type { Context, Priority, Task, TaskNotesService } from "./types";
 import { TaskWriter, type Undo } from "./writer";
-import { insertToken, mapTaskText, retagText, setDoneLine, setPriorityText } from "./edit";
-import { playDoneSound } from "../../ui/sound";
+import { insertToken, mapTaskText, retagText, setDoneLine, setFlagText, setPriorityText } from "./edit";
+import { playDayClearSound, playDoneSound, playLandSound } from "../../ui/sound";
+import { nextRun, reducedMotion, type Run } from "../../ui/playful";
 
 /** Ids of Snailkit's own tabs: a companion plugin cannot take them (see addViewTab in api.ts). */
 const RESERVED_TABS = ["tasks", "home", "sessions"];
@@ -27,6 +28,12 @@ export class TasksHub {
 	readonly index: TaskIndex;
 	readonly writer: TaskWriter;
 	private lastUndo: { run: Undo; until: number } | null = null;
+	/** Tasks checked one after another: the sound climbs (playful). */
+	private run: Run = { step: 0, at: null };
+	/** Checked from Snailkit today when no date is stamped: [day, count]. */
+	private checkedToday: [string, number] = ["", 0];
+	/** The day whose end was already shown here (kept even when the device storage fails). */
+	private clearShown = "";
 	private disposed = false;
 	/** Buttons other plugins put in the header of the lists (see ViewAction in api.ts). */
 	readonly viewActions = new Set<() => ViewAction | null>();
@@ -186,15 +193,82 @@ export class TasksHub {
 		return !!this.lastUndo && Date.now() <= this.lastUndo.until;
 	}
 
-	/** The sound of a task checked by hand, when it is on in the settings. */
-	chime(): void {
-		if (this.ctx.settings.doneSound) playDoneSound();
+	/** Playful motion is on here (the setting, and the system does not ask for less motion). */
+	playful(win: Window = activeWindow): boolean {
+		return this.ctx.settings.playful && !reducedMotion(win);
 	}
 
-	async complete(task: Task): Promise<void> {
+	/** The sound of a check, at the very gesture; it climbs while you go on (playful). Counts nothing. */
+	checkSound(): void {
+		this.run = nextRun(this.run, Date.now());
+		if (this.ctx.settings.doneSound) playDoneSound(activeWindow, this.playful() ? this.run.step : 0);
+	}
+
+	/** `n` tasks were checked here (written): counted for "done today" when no date is stamped. */
+	private counted(n: number): void {
+		if (n <= 0) return;
+		const today = this.today();
+		this.checkedToday = this.checkedToday[0] === today ? [today, this.checkedToday[1] + n] : [today, n];
+	}
+
+	/** A task was checked by hand (here or by another tool, already written): its sound, and it counts. */
+	chime(): void {
+		this.checkSound();
+		this.counted(1);
+	}
+
+	/** The small knock of a task landing in the count of the day (playful, with the sound on). */
+	land(win: Window = activeWindow): void {
+		if (this.ctx.settings.doneSound && this.playful(win)) playLandSound(win, this.run.step);
+	}
+
+	/** How far the run of checks went (0: the first one). */
+	get runStep(): number {
+		return this.run.step;
+	}
+
+	/** Tasks done today: those stamped with today's date, else (no stamp) those checked here today. */
+	doneToday(): number {
+		const today = this.today();
+		const stamped = this.index.list.filter((t) => t.done && t.doneDate === today).length;
+		return this.ctx.settings.stampDone ? stamped : Math.max(stamped, this.checkedToday[0] === today ? this.checkedToday[1] : 0);
+	}
+
+	/** Open tasks due today (those from earlier days wait apart and never hold the day back). */
+	stillDue(): number {
+		const today = this.today();
+		const parking = parkingOf(declaredFlags(this.ctx.settings.flagTags));
+		return this.index.open().filter((t) => t.due === today && !isParked(t, parking)).length;
+	}
+
+	/** True once per day and per device: the end of the day was not shown yet (it is now marked). */
+	takeDayClear(): boolean {
+		const key = "snailkit-tasks-day-clear";
+		const today = this.today();
+		if (this.clearShown === today) return false;
+		this.clearShown = today;
+		try {
+			if (this.ctx.app.loadLocalStorage(key) === today) return false;
+			this.ctx.app.saveLocalStorage(key, today);
+		} catch {
+			// Not kept on the device: the marker in memory still shows it once per session.
+		}
+		return true;
+	}
+
+	/** The chord of a clear day (with the sound on). */
+	dayClearSound(win: Window = activeWindow): void {
+		if (this.ctx.settings.doneSound) playDayClearSound(win);
+	}
+
+	/** Checks a task; true when it was written. `quiet`: the caller already played the sound (at the very click). */
+	async complete(task: Task, quiet = false): Promise<boolean> {
 		const written = await this.writer.setDone(task, true);
-		if (written) this.chime();
-		if (written) this.offerUndo(this.ctx.t("toast.done", { title: plainTitle(task.title) }), written.undo);
+		if (!written) return false;
+		if (quiet) this.counted(1);
+		else this.chime();
+		this.offerUndo(this.ctx.t("toast.done", { title: plainTitle(task.title) }), written.undo);
+		return true;
 	}
 
 	/** Deletes a task (with its subtasks and description), with a toast that can undo it. */
@@ -233,8 +307,20 @@ export class TasksHub {
 		const stamp = this.ctx.settings.stampDone ? this.today() : null;
 		const { count, undo } = await this.writer.editMany(tasks.map((task) => ({ task, fn: (line: string) => setDoneLine(line, true, stamp) })));
 		if (!count) return;
-		this.chime();
+		this.checkSound();
+		this.counted(count);
 		this.offerUndo(this.ctx.tn("toast.bulk-done", count), undo);
+	}
+
+	/** A flag on or off for one task (quick, deep, waiting, someday...). */
+	async setFlag(task: Task, flag: string, on: boolean): Promise<void> {
+		await this.writer.editText(task, (text) => setFlagText(text, flag, on));
+	}
+
+	/** A flag on or off for many tasks: one write per note, one Undo. */
+	async setFlagAll(tasks: readonly Task[], flag: string, on: boolean): Promise<void> {
+		const { count, undo } = await this.writer.editMany(tasks.map((task) => ({ task, fn: (line: string) => mapTaskText(line, (text) => setFlagText(text, flag, on)) })));
+		if (count) this.offerUndo(this.ctx.tn(on ? "toast.bulk-flag-on" : "toast.bulk-flag-off", count, { flag }), undo);
 	}
 
 	async setPriorityAll(tasks: readonly Task[], priority: Priority | null): Promise<void> {

@@ -32,6 +32,7 @@ export const nl: StringsOf<typeof en> = {
 	"today.old.one": "{count} taak in oudere dagnotities",
 	"today.old.other": "{count} taken in oudere dagnotities",
 	"today.new-brainstorm": "Nieuwe brainstorm",
+	"today.new-task": "Nieuwe taak",
 
 	"pins.title": "Vastgepind",
 	"pins.need-rail": "Zet Notitiemenu aan om notities vast te pinnen.",

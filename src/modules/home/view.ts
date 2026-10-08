@@ -108,6 +108,7 @@ export class HomeView implements WorkbenchTabInstance {
 	private drawerPinned = false;
 	private readonly scroller: HTMLElement;
 	private readonly col: HTMLElement;
+	private readonly phoneActions: HTMLElement | null;
 	private readonly field: HTMLElement;
 	private readonly input: HTMLInputElement;
 	private readonly tokens: HTMLElement;
@@ -161,6 +162,7 @@ export class HomeView implements WorkbenchTabInstance {
 		const state = readState(host.state);
 		this.page = state.page ?? null;
 		this.lens = state.lens ?? startLens(rt.settings);
+		if (this.phone && this.lens === "map") this.lens = "domains";
 		this.mapState = state.map ?? null;
 
 		this.root = el.createDiv({ cls: "sk-home-tab", attr: { "data-layout": host.layout } });
@@ -174,6 +176,7 @@ export class HomeView implements WorkbenchTabInstance {
 		if (this.wide) this.nav = this.root.createDiv({ cls: "sk-home-nav", attr: { "data-sk-zone": "nav" } });
 		this.scroller = this.root.createDiv({ cls: "sk-home-scroll" });
 		this.col = this.scroller.createDiv({ cls: "sk-home-col" });
+		this.phoneActions = this.phone ? this.col.createDiv({ cls: "sk-home-phone-actions", attr: { "data-sk-zone": "actions" } }) : null;
 		if (this.wide) this.head = this.col.createDiv({ cls: "sk-home-head" });
 		this.field = this.col.createEl("label", { cls: "sk-home-field", attr: { "data-sk-zone": "search" } });
 		setIcon(this.field.createSpan({ cls: "sk-home-field-icon" }), "search");
@@ -209,7 +212,7 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 
 		if (this.wide && !this.touch) this.makeDrawer();
-		for (const el of [this.nav, this.drawer]) {
+		for (const el of [this.nav, this.drawer, this.phoneActions]) {
 			if (!el) continue;
 			this.listen(el, "click", (e) => this.onClick(e as MouseEvent));
 			this.listen(el, "auxclick", (e) => this.onAuxClick(e as MouseEvent));
@@ -277,7 +280,8 @@ export class HomeView implements WorkbenchTabInstance {
 	setState(raw: TabState): void {
 		const state = readState(raw);
 		const page = state.hasPage ? state.page ?? null : this.page;
-		const lens = state.lens ?? this.lens;
+		const requestedLens = state.lens ?? this.lens;
+		const lens = this.phone && requestedLens === "map" ? "domains" : requestedLens;
 		const mapChanged = !!state.map && JSON.stringify(state.map) !== JSON.stringify(this.map?.getState() ?? this.mapState);
 		if (state.map) this.mapState = state.map;
 		if (mapChanged) this.destroyMap();
@@ -557,6 +561,7 @@ export class HomeView implements WorkbenchTabInstance {
 		this.frame = this.makeFrame();
 		this.tasksByKey.clear();
 		this.body.empty();
+		this.drawPhoneActions();
 		this.col.toggleClass("on-page", !!this.page);
 		this.root.toggleClass("on-page", !!this.page);
 		if (this.page) {
@@ -601,6 +606,21 @@ export class HomeView implements WorkbenchTabInstance {
 	}
 
 	// ----- the Home -----
+
+	private drawPhoneActions(): void {
+		const row = this.phoneActions;
+		if (!row) return;
+		row.empty();
+		const add = (act: string, icon: string, label: string) => {
+			const button = this.item(row, "button", "sk-btn is-primary", { key: `chip:${act}`, act });
+			button.setAttr("data-sk-item", "");
+			button.tabIndex = 0;
+			setIcon(button.createSpan(), icon);
+			button.createSpan({ text: label });
+		};
+		if (this.startBrainstorm()) add("new-brainstorm", "zap", this.t("today.new-brainstorm"));
+		if (typeof this.rt.tasks()?.newTask === "function") add("new-task", "plus", this.t("today.new-task"));
+	}
 
 	private drawRoot(): void {
 		const f = this.frame!;
@@ -656,7 +676,7 @@ export class HomeView implements WorkbenchTabInstance {
 			}
 		}
 		// A new brainstorm, with Brainstorm on (its service starts one and opens it).
-		if (this.startBrainstorm()) this.chip(row, { key: "chip:new-brainstorm", act: "new-brainstorm", icon: "plus", label: this.t("today.new-brainstorm") });
+		if (!this.phone && this.startBrainstorm()) this.chip(row, { key: "chip:new-brainstorm", act: "new-brainstorm", icon: "plus", label: this.t("today.new-brainstorm") });
 	}
 
 	/** The Brainstorm service's start(), or null without it. */
@@ -736,7 +756,7 @@ export class HomeView implements WorkbenchTabInstance {
 				const segm = head.createDiv({ cls: "sk-segm sk-home-lens-segm", attr: { role: "group" } });
 				nameBy(segm, this.t("lens.label"));
 				segm.createDiv({ cls: "sk-segm-thumb", attr: { "aria-hidden": "true" } });
-				for (const lens of LENSES) {
+				for (const lens of this.availableLenses()) {
 					const b = segm.createEl("button", { cls: "sk-btn", text: this.t(`lens.${lens}`), attr: { type: "button", "aria-pressed": String(lens === this.lens) } });
 					b.dataset.lens = lens;
 					b.tabIndex = lens === this.lens ? 0 : -1;
@@ -773,6 +793,10 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 	}
 
+	private availableLenses(): HomeLens[] {
+		return this.phone ? LENSES.filter((lens) => lens !== "map") : LENSES;
+	}
+
 	/** The words right of the view switch ("" for none): none on phones; on touch, the Map unfolds by a tap. */
 	private lensHint(lens: HomeLens, hasDomains: boolean): string {
 		if (this.phone || (lens !== "tags" && !hasDomains)) return "";
@@ -781,6 +805,7 @@ export class HomeView implements WorkbenchTabInstance {
 
 	/** Switches the Home's view: the old one fades out, the new one comes in. */
 	private setLens(lens: HomeLens, viaKey = false, chosen = true): void {
+		if (this.phone && lens === "map") return;
 		if (this.wide) {
 			if (lens === this.lens && !this.page) return;
 			this.lens = lens;
@@ -1900,6 +1925,11 @@ export class HomeView implements WorkbenchTabInstance {
 				if (start) void start().catch((error: unknown) => console.error("[Snailkit] home: could not start a brainstorm", error));
 				return;
 			}
+			case "new-task": {
+				const tasks = this.rt.tasks();
+				if (typeof tasks?.newTask === "function") void tasks.newTask().catch((error: unknown) => console.error("[Snailkit] home: could not start a task", error));
+				return;
+			}
 			case "old":
 				this.go({ kind: "old-dailies" }, null, viaKey);
 				return;
@@ -2370,11 +2400,12 @@ export class HomeView implements WorkbenchTabInstance {
 		if (inMap) return;
 		const lensBtn = target?.closest?.<HTMLElement>(".sk-home-lens-segm [data-lens]");
 		if (lensBtn && plain) {
-			const i = LENSES.indexOf(lensBtn.dataset.lens as HomeLens);
+			const lenses = this.availableLenses();
+			const i = lenses.indexOf(lensBtn.dataset.lens as HomeLens);
 			if (key === "ArrowLeft" || key === "ArrowRight") {
 				e.preventDefault();
-				const j = Math.max(0, Math.min(LENSES.length - 1, i + (key === "ArrowRight" ? 1 : -1)));
-				this.setLens(LENSES[j], true);
+				const j = Math.max(0, Math.min(lenses.length - 1, i + (key === "ArrowRight" ? 1 : -1)));
+				this.setLens(lenses[j], true);
 				return;
 			}
 			if (key === "ArrowDown") {

@@ -1025,3 +1025,26 @@ test("deciding a question: Decided checks it with the date, a task, an idea, del
 	assert.equal(summarizeNote(after, closing).questions.filter((q) => q.explicit).length, 1);
 	assert.deepEqual(applyEdit(after, revertOf(after, done)!), DONE_NOTE);
 });
+
+// ----- the navigator of the Brainstorms tab -----
+import { inView, viewCounts, viewSessions } from "../src/modules/sessions/atelier";
+
+test("navigator views: in progress, to sort, finished, archived, one context", () => {
+	const base = { ideas: 1, tasks: 0, decide: 0, text: "", created: 1 };
+	const list = [
+		{ ...base, path: "A.md", title: "A", pending: 0, closed: false, context: "work" },
+		{ ...base, path: "B.md", title: "B", pending: 2, closed: false, context: "perso", created: 5 },
+		{ ...base, path: "C.md", title: "C", pending: 0, closed: true, context: "work" },
+		{ ...base, path: "D.md", title: "D", pending: 0, closed: true, archived: true, context: "work" },
+	];
+	assert.deepEqual(viewSessions(list, "live", "").map((s) => s.path), ["B.md", "A.md"]);
+	assert.deepEqual(viewSessions(list, "sort", "").map((s) => s.path), ["B.md"]);
+	assert.deepEqual(viewSessions(list, "done", "").map((s) => s.path), ["C.md"]);
+	assert.deepEqual(viewSessions(list, "archived", "").map((s) => s.path), ["D.md"]);
+	// A context holds what is in progress and what is finished, never the archive.
+	assert.deepEqual(viewSessions(list, "ctx:Work", "").map((s) => s.path), ["A.md", "C.md"]);
+	assert.ok(!inView(list[3], "ctx:work"));
+	assert.deepEqual(viewSessions(list, "live", "b").map((s) => s.path), ["B.md"]);
+	assert.deepEqual(viewSessions(list, "all", "").map((s) => s.path), ["B.md", "A.md", "C.md"]);
+	assert.deepEqual(viewCounts(list), { all: 3, live: 2, sort: 1, done: 1, archived: 1, contexts: [["work", 2], ["perso", 1]] });
+});

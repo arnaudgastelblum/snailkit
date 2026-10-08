@@ -34,6 +34,12 @@ export interface TasksSettings {
 	overdueFirst: boolean;
 	/** Today view: the "Waiting since earlier" block is open (remembered). */
 	earlierOpen: boolean;
+	/** The suggested flags were added once to the settings (a flag removed afterwards stays removed). */
+	flagsSuggested: boolean;
+	/** The flag chip on in the list ("" none): only tasks with that flag are shown. */
+	flagFilter: string;
+	/** Checking a task from the list plays with it: it flies into the count of the day, the sound climbs while you go on. */
+	playful: boolean;
 	/** Untagged checkboxes are listed (under "No tag") in notes changed in the last N days; 0: never. */
 	untaggedDays: number;
 }

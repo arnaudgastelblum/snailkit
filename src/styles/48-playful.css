@@ -1,0 +1,124 @@
+/* Playful motion shared by the tools (src/ui/playful): quiet, in the accent color. */
+.sk-fx-canvas {
+	position: fixed;
+	inset: 0;
+	z-index: var(--layer-tooltip, 70);
+	width: 100vw;
+	height: 100vh;
+	pointer-events: none;
+}
+.sk-fx-wave {
+	position: fixed;
+	z-index: var(--layer-tooltip, 70);
+	width: 22px;
+	height: 22px;
+	margin: -11px 0 0 -11px;
+	border: 1.5px solid var(--sk-accent);
+	border-radius: 50%;
+	pointer-events: none;
+}
+.sk-fx-plus {
+	position: fixed;
+	z-index: var(--layer-tooltip, 70);
+	color: var(--sk-accent-text);
+	font-size: 14px;
+	font-weight: 700;
+	pointer-events: none;
+}
+.sk-fx-flyer {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: var(--layer-tooltip, 70);
+	max-width: 260px;
+	padding: 6px 12px;
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-primary);
+	box-shadow: var(--shadow-l, 0 12px 28px rgba(0, 0, 0, 0.16));
+	color: var(--text-normal);
+	font-size: 14px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	pointer-events: none;
+	will-change: transform, opacity;
+}
+.sk-fx-sweep {
+	position: fixed;
+	inset: 0;
+	z-index: var(--layer-tooltip, 70);
+	background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--sk-accent) 16%, transparent) 50%, transparent 65%);
+	background-size: 300% 100%;
+	pointer-events: none;
+}
+.sk-fx-snail {
+	position: fixed;
+	bottom: 8px;
+	left: 0;
+	z-index: var(--layer-tooltip, 70);
+	width: 84px;
+	height: 46px;
+	color: var(--sk-accent);
+	pointer-events: none;
+}
+.sk-fx-closing {
+	position: fixed;
+	top: 40%;
+	left: 50%;
+	z-index: var(--layer-tooltip, 70);
+	max-width: calc(100vw - 32px);
+	padding: 18px 28px 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 16px;
+	background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+	box-shadow: var(--shadow-l, 0 16px 40px rgba(0, 0, 0, 0.2));
+	text-align: center;
+	pointer-events: none;
+	backdrop-filter: blur(6px);
+}
+.sk-fx-closing b {
+	display: block;
+	color: var(--text-normal);
+	font-size: clamp(20px, 3.2vw, 28px);
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+.sk-fx-closing span {
+	color: var(--text-muted);
+	font-size: 15px;
+}
+
+/* Rolling digits. */
+.sk-odo {
+	display: inline-flex;
+	height: 1.35em;
+	overflow: hidden;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.35em;
+	vertical-align: bottom;
+}
+.sk-odo > span {
+	display: inline-block;
+	height: 1.35em;
+	overflow: hidden;
+}
+.sk-odo i {
+	display: block;
+	font-style: normal;
+	transition: transform 520ms cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+.sk-odo i.is-still {
+	transition: none;
+}
+.sk-odo b {
+	display: block;
+	height: 1.35em;
+	font-weight: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-odo i {
+		transition: none;
+	}
+}

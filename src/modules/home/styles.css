@@ -1177,6 +1177,31 @@
 /* Phones: touch targets of 44 px, domains folded into headers, no drag. */
 .sk-home-tab.is-phone .sk-home-col {
 	padding-top: 14px;
+	padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+.sk-home-tab.is-phone .sk-home-phone-actions {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+	margin-bottom: 14px;
+}
+.sk-home-tab.is-phone .sk-home-phone-actions:empty {
+	display: none;
+}
+.sk-home-tab.is-phone .sk-home-phone-actions .sk-btn {
+	width: 100%;
+	min-width: 0;
+	height: auto;
+	min-height: 44px;
+	padding: 8px;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.sk-home-tab.is-phone .sk-home-phone-actions .sk-btn > span {
+	min-width: 0;
+}
+.sk-home-tab.is-phone :is(.sk-home-sech-r, .sk-home-how, .sk-home-hint, .sk-home-help) {
+	display: none;
 }
 .sk-home-tab.is-phone .sk-home-field {
 	height: 44px;
@@ -1187,18 +1212,26 @@
 	pointer-events: none;
 }
 .sk-home-tab.is-phone .sk-home-chips {
-	flex-wrap: nowrap;
-	margin: 0 -16px;
-	padding: 0 16px 2px;
-	overflow-x: auto;
-	scrollbar-width: none;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .sk-home-tab.is-phone .sk-home-chip {
-	flex: none;
-	height: 44px;
-	padding: 0 13px;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	height: auto;
+	min-height: 44px;
+	padding: 8px 13px;
 	border-radius: 10px;
 	font-size: 14px;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.sk-home-tab.is-phone .sk-home-chip-text {
+	min-width: 0;
+}
+.sk-home-tab.is-phone .sk-home-chip-icon {
+	flex-shrink: 0;
 }
 .sk-home-tab.is-phone :is(.sk-home-ln, .sk-home-rr, .sk-home-tg, .sk-home-br) {
 	height: 44px;

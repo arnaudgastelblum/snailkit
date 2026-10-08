@@ -188,6 +188,8 @@ export interface TasksReader {
 	/** The "task checked" sound, when the user turned it on. */
 	chime?(): void;
 	openWorkbench?(options?: { tab?: string; scope?: "all" | "today" }): Promise<void>;
+	/** Opens the task list with the field of a new task ready. */
+	newTask?(): Promise<void>;
 }
 
 export interface TaskInfoLite {

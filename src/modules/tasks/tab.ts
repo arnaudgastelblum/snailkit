@@ -2,14 +2,18 @@
 // panel, and navigator + list + details when the Workbench is a page. Everything it changes is
 // written in the notes. The Workbench (src/core/workbench) owns the view, the tab bar and the
 // layout; this tab owns everything inside its root, div.sk-tasks-view.
-import { Menu, Scope, type WorkspaceLeaf } from "obsidian";
-import { openTagPicker } from "../../ui/tag-picker";
+import { Menu, Platform, Scope, type WorkspaceLeaf } from "obsidian";
+import { openTagPicker, type TagPickerHandle } from "../../ui/tag-picker";
+
+/** A tag the task lines read back (the grammar of the Tasks API). */
+const TAG_NAME = /^[\p{L}\p{N}_][\p{L}\p{N}_/-]*$/u;
+import { cssColor, dayClear, dayProgress, dust, fly, odometer, plusOne, pop, spark, wave } from "../../ui/playful";
 import type { TabState, WorkbenchTabHost, WorkbenchTabInstance } from "../../core/workbench/types";
 import { richText } from "../../ui/settings-page";
-import { capsule, checkbox, colorFor, descriptionPreview, icon, kbd, renderInline, tagDot, TagSuggestModal } from "./components";
+import { capsule, checkbox, colorFor, descriptionPreview, icon, kbd, renderInline, tagDot } from "./components";
 import {
 	addDays, buildTree, countTasks, dueState, findNode, inScope, matchesQuery, moveInOrder, nextWeek, passesPriority,
-	sortTasks, todayGroups, upcomingGroups, type TagNode,
+	sortTasks, todayGroups, upcomingGroups, type TagNode, declaredFlags, flagCounts, hasFlag, isParked, parkingOf,
 } from "./group";
 import type { ViewAction } from "./api";
 import type { TasksHub } from "./hub";
@@ -93,6 +97,16 @@ export class TasksTab implements WorkbenchTabInstance {
 	private scopeEl: HTMLElement | null = null;
 	private hubTitleEl: HTMLElement | null = null;
 	private subEl: HTMLElement | null = null;
+	/** "N done today", with the ring of the day. */
+	private doneEl: HTMLElement | null = null;
+	/** The count shown last (it rolls only when it changes). */
+	private doneShown: number | null = null;
+	/** The flags the chips were built for (they are rebuilt when the settings change them). */
+	private chipSig = "";
+	/** The tag picker open from this tab, closed with it. */
+	private tagPop: TagPickerHandle | null = null;
+	/** Tasks being checked right now (a second click or X on the same task does nothing). */
+	private readonly checking = new Set<string>();
 	private sortLabel: HTMLElement | null = null;
 	private filterBtn: HTMLElement | null = null;
 	/** Buttons of other plugins (ViewAction), drawn again at each refresh. */
@@ -226,6 +240,8 @@ export class TasksTab implements WorkbenchTabInstance {
 	destroy(): void {
 		if (this.closed) return;
 		this.closed = true;
+		this.tagPop?.close();
+		this.tagPop = null;
 		this.notePreview?.unload();
 		this.notePreview = null;
 		if (this.scoped) this.hub.ctx.app.keymap.popScope(this.keyScope);
@@ -264,13 +280,107 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	private filtered(): Task[] {
 		const filter = this.settings.priorityFilter;
-		return this.hub.index.open().filter((t) => matchesQuery(t, this.st.query) && passesPriority(t, filter));
+		// The Waiting and Someday lists show all their tasks, whatever the chip on.
+		const flag = this.st.scope.startsWith("flag:") ? null : this.flagOn();
+		return this.hub.index.open().filter((t) => matchesQuery(t, this.st.query) && passesPriority(t, filter) && (!flag || hasFlag(t, flag)));
+	}
+
+	/** The flags of the settings (priorities left out). */
+	private flags(): string[] {
+		return declaredFlags(this.settings.flagTags);
+	}
+
+	/** Flags that take a task out of the day (waiting, someday): an entry of their own in the navigator. */
+	private parking(): string[] {
+		return parkingOf(this.flags());
+	}
+
+	/** Flags offered as chips over the list (quick, deep, the user's own). */
+	private chipFlags(): string[] {
+		const parking = this.parking();
+		return this.flags().filter((f) => !parking.includes(f));
+	}
+
+	/** The flag chip on, when it is still a declared flag. */
+	private flagOn(): string | null {
+		const f = this.settings.flagFilter;
+		return f && this.chipFlags().includes(f) ? f : null;
+	}
+
+	/** The flags as chips: how a task is done (quick, deep, the user's own), one at a time. Rebuilt when the flags change. */
+	private flagChips(chips: HTMLElement): void {
+		chips.querySelectorAll(".sk-tasks-flagchip").forEach((c) => c.remove());
+		this.chipSig = this.chipFlags().join("|");
+		for (const f of this.chipFlags()) {
+			const chip = chips.createEl("button", { cls: "sk-btn is-s sk-tasks-fchip sk-tasks-flagchip", attr: { type: "button", "aria-pressed": "false" } });
+			chip.dataset.flag = f;
+			icon(chip, this.flagIcon(f), "sk-tasks-flag-" + f);
+			chip.createSpan({ text: this.flagLabel(f) });
+			chip.createSpan({ cls: "sk-tasks-flagchip-n" });
+			chip.addEventListener("click", () => this.toggleFlagFilter(f));
+		}
+	}
+
+	/** Counts of the day: tasks waiting on someone or kept for some day leave Today and Upcoming. */
+	private dayCounts(open: readonly Task[]): ReturnType<typeof countTasks> {
+		const parking = this.parking();
+		const c = countTasks(open.filter((t) => !isParked(t, parking)), this.today());
+		return { ...c, all: open.length };
+	}
+
+	flagLabel(flag: string): string {
+		return ["quick", "deep", "waiting", "someday"].includes(flag) ? this.t("flag." + flag) : "#" + flag;
+	}
+
+	flagIcon(flag: string): string {
+		return ({ quick: "zap", deep: "target", waiting: "hourglass", someday: "cloud" } as Record<string, string>)[flag] ?? "hash";
+	}
+
+	/** A flag chip on or off. Playful: the rows that leave turn to dust, the others close ranks. */
+	private toggleFlagFilter(flag: string): void {
+		const next = this.settings.flagFilter === flag ? "" : flag;
+		const list = this.listEl;
+		const playful = this.hub.playful(this.rootEl.win);
+		const apply = () => {
+			const before = new Map<string, number>();
+			list?.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]").forEach((r) => before.set(r.dataset.key!, r.getBoundingClientRect().top));
+			this.settings.flagFilter = next;
+			void this.hub.ctx.saveSettings();
+			this.refresh();
+			if (!playful || !list) return;
+			let k = 0;
+			list.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]").forEach((r) => {
+				const was = before.get(r.dataset.key!);
+				if (was === undefined) {
+					r.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay: k++ * 25, fill: "backwards" });
+					return;
+				}
+				const dy = was - r.getBoundingClientRect().top;
+				if (Math.abs(dy) < 1) return;
+				r.animate([{ transform: `translateY(${dy}px)` }, { transform: `translateY(${-Math.sign(dy) * 3}px)`, offset: 0.7 }, { transform: "none" }], { duration: 460, delay: k++ * 26, easing: "cubic-bezier(0.25, 1, 0.35, 1)", fill: "backwards" });
+			});
+		};
+		if (!playful || !next || !list) {
+			apply();
+			return;
+		}
+		const leaving = Array.from(list.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]")).filter((r) => {
+			const t = this.hub.index.get(r.dataset.key ?? null);
+			return t && !hasFlag(t, next);
+		});
+		const faint = cssColor(this.rootEl, "--text-faint", "#999");
+		leaving.forEach((r, i) => {
+			this.rootEl.win.setTimeout(() => dust(this.rootEl.doc, r.getBoundingClientRect(), faint), i * 30);
+			r.animate([{ opacity: 1, filter: "blur(0px)", transform: "none" }, { opacity: 0, filter: "blur(3px)", transform: "translateX(14px)" }], { duration: 300, delay: i * 30, fill: "forwards", easing: "ease-in" });
+		});
+		this.rootEl.win.setTimeout(apply, leaving.length ? Math.min(300 + leaving.length * 30, 700) : 0);
 	}
 
 	/** Untagged tasks of recent notes, with the search and the priority filter applied. */
 	private untaggedShown(): Task[] {
 		const filter = this.settings.priorityFilter;
-		return this.hub.index.untagged.filter((t) => matchesQuery(t, this.st.query) && passesPriority(t, filter));
+		const flag = this.flagOn();
+		return this.hub.index.untagged.filter((t) => matchesQuery(t, this.st.query) && passesPriority(t, filter) && (!flag || hasFlag(t, flag)));
 	}
 
 	private sorted(tasks: readonly Task[]): Task[] {
@@ -295,6 +405,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		el.empty();
 		el.toggleClass("is-page", this.layout === "page");
 		el.toggleClass("is-side", this.layout === "side");
+		// On a phone: a lighter head (no title, no page button), one big New task button on top.
+		el.toggleClass("is-phone", Platform.isPhone);
 		const hub = el.createDiv({ cls: `sk-tasks-hub sk-tasks-${this.layout ?? "side"}` });
 		if (this.layout === "page") {
 			this.navEl = hub.createDiv({ cls: "sk-tasks-nav", attr: { "data-sk-zone": "nav" } });
@@ -339,6 +451,15 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.updateHead();
 		if (this.navEl) this.renderNav();
 		this.renderList();
+		// A tag with no group on screen yet (no task, another view): the add row stays on top, with that tag.
+		if (this.st.adding !== null && this.listEl) {
+			const want = this.st.adding;
+			const placed = Array.from(this.listEl.querySelectorAll<HTMLElement>(".sk-tasks-add"));
+			if (!placed.some((r) => (r.dataset.tag ?? "") === want)) {
+				for (const r of placed) r.remove();
+				this.listEl.prepend(this.addRow(this.listEl, want || null));
+			}
+		}
 		this.reconcilePicked();
 		if (this.layout === "side") {
 			this.listEl.removeAttribute("data-sk-zone");
@@ -386,25 +507,34 @@ export class TasksTab implements WorkbenchTabInstance {
 	private renderHead(): void {
 		const head = this.headEl!;
 		head.empty();
-		this.filterBtn = this.countEl = this.scopeEl = this.hubTitleEl = this.subEl = this.sortLabel = this.extEl = null;
+		this.filterBtn = this.countEl = this.scopeEl = this.hubTitleEl = this.subEl = this.sortLabel = this.extEl = this.doneEl = null;
+		this.doneShown = null;
 		if (this.layout === "side") {
 			const toolbar = head.createDiv({ attr: { "data-sk-zone": "toolbar" } });
 			const top = toolbar.createDiv({ cls: "sk-tasks-side-top" });
 			const title = top.createDiv({ cls: "sk-tasks-title" });
 			title.createSpan({ text: this.t("view.title") });
 			this.countEl = title.createSpan({ cls: "sk-tasks-count" });
+			this.doneEl = this.donePill(top);
 			this.iconButton(top, "arrow-up-down", this.t("sort.label"), (e) => this.sortMenu(e));
 			this.filterBtn = this.iconButton(top, "list-filter", this.t("filter.label"), (e) => this.filterMenu(e));
 			this.filterBtn.addClass("sk-tasks-filter-btn");
 			this.extEl = top.createDiv({ cls: "sk-tasks-ext" });
-			this.iconButton(top, "maximize-2", this.t("action.page"), () => void this.hub.activate("page", { tasks: true }));
-			this.iconButton(top, "plus", this.t("action.new-key"), () => this.startAdd(null));
+			this.iconButton(top, "maximize-2", this.t("action.page"), () => void this.hub.activate("page", { tasks: true })).addClass("sk-tasks-page-btn");
+			this.iconButton(top, "plus", this.t("action.new-key"), () => this.startAdd(null)).addClass("sk-tasks-new-btn");
+			if (Platform.isPhone) {
+				const add = toolbar.createEl("button", { cls: "sk-btn is-primary sk-tasks-phone-new", attr: { type: "button" } });
+				icon(add, "plus");
+				add.createSpan({ text: this.t("action.new") });
+				add.addEventListener("click", () => this.startAdd(null));
+			}
 			this.searchBox(toolbar);
 			this.scopeEl = head.createDiv({ cls: "sk-tasks-scopes", attr: { "data-sk-zone": "nav" } });
 		} else {
 			const titleRow = head.createDiv({ cls: "sk-tasks-ph-title" });
 			this.hubTitleEl = titleRow.createDiv({ cls: "sk-tasks-ph-name" });
 			this.subEl = titleRow.createDiv({ cls: "sk-tasks-ph-sub" });
+			this.doneEl = this.donePill(titleRow);
 			const tools = head.createDiv({ cls: "sk-tasks-ph-tools" });
 			this.searchBox(tools);
 			const chips = tools.createDiv({ cls: "sk-tasks-fchips" });
@@ -415,6 +545,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				chip.createSpan({ text: this.t("prio." + p) });
 				chip.addEventListener("click", () => void this.togglePriorityFilter(p));
 			}
+			this.flagChips(chips);
 			this.extEl = tools.createDiv({ cls: "sk-tasks-ext" });
 			const sort = tools.createEl("button", { cls: "sk-btn is-ghost" });
 			icon(sort, "arrow-up-down");
@@ -484,12 +615,53 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 	}
 
+	/** The pill of the day: a ring that fills as the tasks due are done, and the count rolling. */
+	private donePill(parent: HTMLElement): HTMLElement {
+		const pill = parent.createDiv({ cls: "sk-tasks-done" });
+		const svg = pill.createSvg("svg", { cls: "sk-tasks-ring", attr: { viewBox: "0 0 30 30", "aria-hidden": "true" } });
+		svg.createSvg("circle", { cls: "sk-tasks-ring-track", attr: { cx: "15", cy: "15", r: "12" } });
+		svg.createSvg("circle", { cls: "sk-tasks-ring-fill", attr: { cx: "15", cy: "15", r: "12" } });
+		svg.createSvg("path", { cls: "sk-tasks-ring-tick", attr: { d: "M10 15.5l3.2 3.2 6.8-7" } });
+		pill.createSpan({ cls: "sk-tasks-done-n" });
+		pill.createSpan({ cls: "sk-tasks-done-l" });
+		pill.createSpan({ cls: "sk-wb-sr sk-tasks-done-sr" });
+		return pill;
+	}
+
+	private updateDone(): void {
+		const pill = this.doneEl;
+		if (!pill) return;
+		const done = this.hub.doneToday();
+		const due = this.hub.stillDue();
+		pill.toggleClass("is-empty", !done && !due);
+		const n = pill.querySelector<HTMLElement>(".sk-tasks-done-n")!;
+		odometer(n, done, this.doneShown !== null && this.doneShown !== done && this.hub.playful(this.rootEl.win));
+		this.doneShown = done;
+		pill.querySelector(".sk-tasks-done-l")!.setText(this.hub.ctx.tn("done.today", done).replace(String(done), "").trim());
+		pill.querySelector(".sk-tasks-done-sr")!.setText(this.hub.ctx.tn("done.today", done));
+		const ring = pill.querySelector<SVGCircleElement>(".sk-tasks-ring-fill")!;
+		const c = 2 * Math.PI * 12;
+		ring.style.strokeDasharray = String(c);
+		ring.style.strokeDashoffset = String(c * (1 - dayProgress(done, due)));
+		pill.toggleClass("is-full", done > 0 && due === 0);
+	}
+
 	private updateHead(): void {
 		this.renderActions();
+		this.updateDone();
 		const open = this.hub.index.open();
-		const c = countTasks(open, this.today());
+		const c = this.dayCounts(open);
 		const filter = this.settings.priorityFilter;
-		this.filterBtn?.toggleClass("is-active", filter.length > 0);
+		this.filterBtn?.toggleClass("is-active", filter.length > 0 || !!this.flagOn());
+		const chipBox = this.headEl?.querySelector<HTMLElement>(".sk-tasks-fchips");
+		if (chipBox && this.chipFlags().join("|") !== this.chipSig) this.flagChips(chipBox);
+		this.headEl?.querySelectorAll<HTMLElement>(".sk-tasks-flagchip").forEach((chip) => {
+			const f = chip.dataset.flag ?? "";
+			chip.toggleClass("is-on", this.flagOn() === f);
+			chip.setAttr("aria-pressed", String(this.flagOn() === f));
+			const n = chip.querySelector(".sk-tasks-flagchip-n");
+			if (n) n.setText(String(flagCounts(open, [f])[f] ?? 0));
+		});
 		if (this.layout === "side") {
 			this.countEl?.setText(String(c.all));
 			const scopes = this.scopeEl!;
@@ -502,10 +674,25 @@ export class TasksTab implements WorkbenchTabInstance {
 				button.addEventListener("click", () => this.setScope(id));
 				if (id === "today") this.dropTarget(button, { due: true });
 			}
+			if (!this.st.scope.startsWith("tag:") && !this.st.scope.startsWith("flag:")) {
+				// One tag only: the shared picker, then the list of that tag and its sub-tags.
+				const pick = scopes.createEl("button", { cls: "sk-tasks-scope sk-tasks-scope-tag" });
+				icon(pick, "hash");
+				pick.createSpan({ text: this.t("scope.tag") });
+				pick.addEventListener("click", () => this.chooseTag(pick, null, [], (tag) => this.setScope("tag:" + tag.toLowerCase())));
+			}
 			if (this.st.scope.startsWith("tag:")) {
 				const tag = this.st.scope.slice(4);
 				const button = scopes.createEl("button", { cls: "sk-tasks-scope is-on is-tag", attr: { "aria-label": this.t("scope.all") } });
 				capsule(button, tag, this.hub);
+				icon(button, "x");
+				button.addEventListener("click", () => this.setScope("all"));
+			}
+			if (this.st.scope.startsWith("flag:")) {
+				const f = this.st.scope.slice(5);
+				const button = scopes.createEl("button", { cls: "sk-tasks-scope is-on is-tag", attr: { "aria-label": this.t("scope.all") } });
+				icon(button, this.flagIcon(f));
+				button.createSpan({ text: this.flagLabel(f) });
 				icon(button, "x");
 				button.addEventListener("click", () => this.setScope("all"));
 			}
@@ -514,6 +701,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			const title = this.hubTitleEl!;
 			title.empty();
 			if (scope.startsWith("tag:")) capsule(title, scope.slice(4), this.hub, "sk-tasks-cap-lg");
+			else if (scope.startsWith("flag:")) title.createEl("h1", { text: this.flagLabel(scope.slice(5)) });
 			else title.createEl("h1", { text: this.t("title." + scope) });
 			const sub = this.subEl!;
 			sub.empty();
@@ -525,10 +713,14 @@ export class TasksTab implements WorkbenchTabInstance {
 						? c.upcoming
 						: scope === "untagged"
 							? this.hub.index.untagged.length
-							: c.all;
+							: scope.startsWith("flag:")
+								? open.filter((t) => hasFlag(t, scope.slice(5))).length
+								: c.all;
 			sub.createSpan({ text: this.hub.ctx.tn("head.open", n) });
-			const dueToday = c.today - c.overdue;
-			if (this.settings.overdueFirst) {
+			const dueToday = scope.startsWith("flag:") ? 0 : c.today - c.overdue;
+			if (scope.startsWith("flag:")) {
+				// A list out of the day: no counts of the day here.
+			} else if (this.settings.overdueFirst) {
 				if (c.overdue) sub.createSpan({ cls: "sk-tasks-od", text: " · " + this.hub.ctx.tn("head.overdue", c.overdue) });
 				if (dueToday) sub.createSpan({ cls: "sk-tasks-td", text: " · " + this.hub.ctx.tn("head.today", dueToday) });
 			} else {
@@ -537,7 +729,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				if (c.overdue) sub.createSpan({ cls: "sk-tasks-earlier", text: " · " + this.hub.ctx.tn("head.earlier", c.overdue) });
 			}
 			this.sortLabel?.setText(this.t("sort." + this.sortMode()));
-			this.headEl?.querySelectorAll<HTMLElement>(".sk-tasks-fchip").forEach((chip) => chip.toggleClass("is-on", filter.includes(chip.dataset.prio ?? "")));
+			this.headEl?.querySelectorAll<HTMLElement>(".sk-tasks-fchip:not(.sk-tasks-flagchip)").forEach((chip) => chip.toggleClass("is-on", filter.includes(chip.dataset.prio ?? "")));
 		}
 	}
 
@@ -608,12 +800,19 @@ export class TasksTab implements WorkbenchTabInstance {
 					.onClick(() => void this.togglePriorityFilter(p)),
 			);
 		}
+		const flags = this.chipFlags();
+		if (flags.length) menu.addSeparator();
+		for (const f of flags) menu.addItem((item) => item.setTitle(this.flagLabel(f)).setIcon(this.flagIcon(f)).setChecked(this.flagOn() === f).onClick(() => this.toggleFlagFilter(f)));
+		// Waiting, Someday: lists of their own (the side panel has no navigator).
+		const parking = this.parking();
+		if (parking.length) menu.addSeparator();
+		for (const f of parking) menu.addItem((item) => item.setTitle(this.flagLabel(f)).setIcon(this.flagIcon(f)).setChecked(this.st.scope === "flag:" + f).onClick(() => this.setScope("flag:" + f)));
 		menu.addSeparator();
 		menu.addItem((item) =>
 			item
 				.setTitle(this.t("filter.focus"))
 				.setIcon("hash")
-				.onClick(() => new TagSuggestModal(this.hub, null, this.t("tag.focus-placeholder"), (tag) => this.setScope("tag:" + tag)).open()),
+				.onClick(() => this.chooseTag(this.filterBtn ?? this.rootEl, null, [], (tag) => this.setScope("tag:" + tag.toLowerCase()))),
 		);
 		menu.showAtMouseEvent(event);
 	}
@@ -623,13 +822,14 @@ export class TasksTab implements WorkbenchTabInstance {
 	private renderNav(): void {
 		const nav = this.navEl!;
 		nav.empty();
-		const c = countTasks(this.hub.index.open(), this.today());
-		const item = (id: string, iconName: string, n: number, warn = false) => {
+		const open = this.hub.index.open();
+		const c = this.dayCounts(open);
+		const item = (id: string, iconName: string, n: number, warn = false, label = this.t("title." + id)) => {
 			const it = nav.createDiv({ cls: "sk-tasks-nav-item" + (this.st.scope === id ? " is-on" : "") });
 			this.zoneItem(it);
 			it.dataset.scope = id;
 			icon(it, iconName);
-			it.createSpan({ cls: "sk-tasks-nav-label", text: this.t("title." + id) });
+			it.createSpan({ cls: "sk-tasks-nav-label", text: label });
 			if (n) it.createSpan({ cls: "sk-tasks-n" + (warn ? " is-warn" : ""), text: String(n) });
 			it.addEventListener("click", () => this.setScope(id));
 			return it;
@@ -637,6 +837,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		item("all", "layers", c.all);
 		this.dropTarget(item("today", "sun", c.today, c.overdue > 0 && this.settings.overdueFirst), { due: true });
 		item("upcoming", "calendar", c.upcoming);
+		// Waiting on someone, kept for some day: out of the day, one place each to look at them.
+		for (const f of this.parking()) item("flag:" + f, this.flagIcon(f), open.filter((t) => hasFlag(t, f)).length, false, this.flagLabel(f)).addClass("is-flag");
 		nav.createDiv({ cls: "sk-tasks-nav-sec", text: this.t("nav.tags") });
 		const walk = (node: TagNode) => {
 			const it = nav.createDiv({ cls: "sk-tasks-nav-item sk-tasks-nav-tag" + (this.st.scope === "tag:" + node.tag ? " is-on" : "") });
@@ -796,9 +998,12 @@ export class TasksTab implements WorkbenchTabInstance {
 		const list = this.listEl!;
 		list.empty();
 		const scope = this.st.scope;
-		const tasks = this.filtered();
+		const parking = this.parking();
+		const all = this.filtered();
+		// Waiting on someone or kept for some day: not in the day (their own entry shows them).
+		const tasks = scope === "today" || scope === "upcoming" ? all.filter((t) => !isParked(t, parking)) : all;
 		const today = this.today();
-		if (this.st.adding === "" && !scope.startsWith("tag:")) this.addRow(list, null);
+		if (this.st.adding === "" && !scope.startsWith("tag:") && !scope.startsWith("flag:")) this.addRow(list, null);
 		if (scope === "today") {
 			const first = this.settings.overdueFirst;
 			const groups = todayGroups(tasks, today, first);
@@ -827,21 +1032,27 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		let pool = tasks;
 		if (scope.startsWith("tag:")) pool = tasks.filter((t) => inScope(t.primary, scope.slice(4)));
+		if (scope.startsWith("flag:")) pool = tasks.filter((t) => hasFlag(t, scope.slice(5)));
 		const tree = this.tagTree(pool);
 		if (scope.startsWith("tag:")) {
 			const root = scope.slice(4);
 			const node = findNode(tree, root);
 			if (node) this.tagGroup(list, node, 0, this.layout === "page");
-			else if (this.st.adding !== null) this.addRow(list, root);
+			else if (this.st.adding !== null) this.addRow(list, this.st.adding || root);
 		} else tree.forEach((node) => this.tagGroup(list, node, 0));
 		const loose = scope === "all" ? this.untaggedShown() : [];
 		if (loose.length) this.untaggedGroup(list, loose);
+		if (!pool.length && scope.startsWith("flag:") && !this.st.query && !this.settings.priorityFilter.length) {
+			this.empty(list, this.flagIcon(scope.slice(5)), "empty.flag");
+			return;
+		}
 		if (!pool.length && !loose.length) {
-			if (this.st.query || this.settings.priorityFilter.length) {
+			if (this.st.query || this.settings.priorityFilter.length || this.flagOn()) {
 				this.empty(list, "search", "empty.search", () => {
 					this.st.query = "";
 					if (this.searchInput) this.searchInput.value = "";
 					this.settings.priorityFilter = [];
+					this.settings.flagFilter = "";
 					void this.hub.ctx.saveSettings();
 					this.refresh();
 				});
@@ -881,22 +1092,58 @@ export class TasksTab implements WorkbenchTabInstance {
 		for (const t of this.sorted(tasks)) this.row(body, t, false);
 	}
 
-	/** The shared tag picker under `anchor`: the chosen tag is written in the task's line. */
-	private tagUntagged(t: Task, anchor: HTMLElement): void {
-		const near = [...new Set(this.hub.index.list.filter((x) => x.path === t.path).map((x) => x.primary))];
-		openTagPicker(anchor, {
+	/**
+	 * The shared tag picker (the one of the Brainstorm capture) under `anchor`, a sheet on a phone:
+	 * starts on `current`, offers the tags of `near` first. A flag (#high, a flag tag of the settings)
+	 * marks a task, it never groups it: refused with a word.
+	 */
+	private chooseTag(anchor: HTMLElement, current: string | null, near: string[], onChoose: (tag: string) => void, onCancel?: () => void): void {
+		this.tagPop?.close();
+		// Where the focus goes back when the picker closes without a tag (the row, the field, the list).
+		const back = () => {
+			if (this.closed) return;
+			if (onCancel) onCancel();
+			else this.rootEl.focus({ preventScroll: true });
+		};
+		const handle = openTagPicker(anchor, {
 			t: (key, vars) => this.hub.ctx.t(key, vars),
 			colors: (tag) => this.hub.tagClasses(tag),
-			sources: { all: () => this.hub.index.allTags(), near: () => near },
-			onChoose: (tag) => {
-				// A flag (#high, a flag tag of the settings) marks a task, it never groups it.
-				if (this.hub.index.flags().has(tag.replace(/^#/, "").toLowerCase())) {
-					this.hub.ctx.toast(this.t("tag.is-flag", { tag: tag.replace(/^#/, "") }));
+			// Flags mark a task, they never group it: not offered. The current tag first, even nested.
+			sources: { all: () => this.hub.index.allTags().filter((x) => !this.hub.index.flags().has(x.replace(/^#/, "").toLowerCase())), near: () => near, chosen: () => current },
+			want: current,
+			onChoose: (raw) => {
+				if (this.tagPop === handle) this.tagPop = null;
+				if (this.closed) return;
+				const tag = raw.replace(/^#/, "");
+				if (this.hub.index.flags().has(tag.toLowerCase())) {
+					this.hub.ctx.toast(this.t("tag.is-flag", { tag }));
+					back();
 					return;
 				}
-				void this.hub.retag(t, tag);
+				// What the task lines can read back as a tag (a letter, a digit or _ first).
+				if (!TAG_NAME.test(tag)) {
+					this.hub.ctx.toast(this.t("tag.invalid", { tag }));
+					back();
+					return;
+				}
+				onChoose(tag);
+			},
+			onCancel: () => {
+				if (this.tagPop === handle) this.tagPop = null;
+				back();
 			},
 		});
+		this.tagPop = handle;
+	}
+
+	/** The tags of the task's note, offered first. */
+	private nearTags(path: string): string[] {
+		return [...new Set(this.hub.index.list.filter((x) => x.path === path).map((x) => x.primary).filter(Boolean))];
+	}
+
+	/** The shared tag picker under `anchor`: the chosen tag is written in the task's line. */
+	private tagUntagged(t: Task, anchor: HTMLElement): void {
+		this.chooseTag(anchor, null, this.nearTags(t.path), (tag) => void this.hub.retag(t, tag));
 	}
 
 	/**
@@ -1059,6 +1306,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			if (showTag && t.primary) capsule(title, t.primary, this.hub, "sk-tasks-cap-sm");
 			const icons = meta.createSpan({ cls: "sk-tasks-m-icons" });
 			this.subtaskCount(icons, t);
+			this.flagMarks(icons, t);
 			this.taskNoteMarker(icons, t);
 			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
 			icon(note, "file-text");
@@ -1074,6 +1322,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			}
 			if (showTag && t.primary) capsule(meta, t.primary, this.hub, "sk-tasks-cap-xs");
 			this.subtaskCount(meta, t);
+			this.flagMarks(meta, t);
 			this.taskNoteMarker(meta, t);
 			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
 			icon(note, "file-text");
@@ -1108,6 +1357,16 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.taskDrop(row, t);
 		if (this.layout === "side" && this.st.open === t.key) this.inlineDetail(parent, t);
 		return row;
+	}
+
+	/** The declared flags of a task, small and quiet: an icon and its word. */
+	private flagMarks(parent: HTMLElement, t: Task): void {
+		for (const f of this.flags()) {
+			if (!hasFlag(t, f)) continue;
+			const mark = parent.createSpan({ cls: "sk-tasks-flagmark sk-tasks-flag-" + f });
+			icon(mark, this.flagIcon(f));
+			mark.appendText(this.flagLabel(f));
+		}
 	}
 
 	private subtaskCount(parent: HTMLElement, t: Task): void {
@@ -1250,7 +1509,8 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	/** One tag for all the picked tasks (the tag picker of a single task, here for all). */
 	private pickTagAll(tasks: Task[]): void {
-		new TagSuggestModal(this.hub, null, this.t("tag.move-placeholder"), (tag) => void this.hub.retagAll(tasks, tag).then(() => this.clearPicked())).open();
+		const anchor = this.rootEl.querySelector<HTMLElement>(".sk-tasks-pickbar") ?? this.rootEl;
+		this.chooseTag(anchor, null, [], (tag) => void this.hub.retagAll(tasks, tag).then(() => this.clearPicked()));
 	}
 
 	/** Right click on a picked task: the actions for all of them. */
@@ -1263,6 +1523,15 @@ export class TasksTab implements WorkbenchTabInstance {
 		menu.addItem((item) => item.setTitle(this.t("pick.done")).setIcon("check").onClick(() => done(this.hub.completeAll(tasks))));
 		menu.addSeparator();
 		for (const p of [...PRIORITIES, null]) menu.addItem((item) => item.setTitle(this.t("menu.prio-" + (p ?? "none"))).setIcon(p ? "flag" : "flag-off").onClick(() => done(this.hub.setPriorityAll(tasks, p))));
+		const flags = this.flags();
+		if (flags.length) {
+			menu.addSeparator();
+			// All of them have it: off for all; else on for all.
+			for (const f of flags) {
+				const all = tasks.every((x) => hasFlag(x, f));
+				menu.addItem((item) => item.setTitle(this.flagLabel(f)).setIcon(this.flagIcon(f)).setChecked(all).onClick(() => done(this.hub.setFlagAll(tasks, f, !all))));
+			}
+		}
 		menu.addSeparator();
 		menu.addItem((item) => item.setTitle(this.t("menu.due-today")).setIcon("sun").onClick(() => done(this.hub.setDueAll(tasks, today))));
 		menu.addItem((item) => item.setTitle(this.t("menu.due-tomorrow")).setIcon("sunrise").onClick(() => done(this.hub.setDueAll(tasks, addDays(today, 1)))));
@@ -1309,6 +1578,11 @@ export class TasksTab implements WorkbenchTabInstance {
 					.setChecked(t.priority === p)
 					.onClick(() => void this.hub.setPriority(t, p)),
 			);
+		}
+		const flags = this.flags();
+		if (flags.length) {
+			menu.addSeparator();
+			for (const f of flags) menu.addItem((item) => item.setTitle(this.flagLabel(f)).setIcon(this.flagIcon(f)).setChecked(hasFlag(t, f)).onClick(() => void this.hub.setFlag(t, f, !hasFlag(t, f))));
 		}
 		menu.addSeparator();
 		menu.addItem((item) => item.setTitle(this.t("menu.due-today")).setIcon("sun").onClick(() => void this.hub.setDue(t, today)));
@@ -1397,14 +1671,23 @@ export class TasksTab implements WorkbenchTabInstance {
 		input.addEventListener("dblclick", (e) => e.stopPropagation());
 	}
 
-	private pickTag(t: Task): void {
-		const picker = new TagSuggestModal(this.hub, t.primary, this.t("tag.move-placeholder"), (tag) => void this.hub.retag(t, tag));
-		picker.modalEl.setAttr("data-sk-own-tab", "");
-		picker.open();
+	/** Another tag for a task: the shared picker, starting on its tag, under `anchor` (else its row). */
+	private pickTag(t: Task, anchor?: HTMLElement): void {
+		const at = anchor ?? this.rowOf(t.key) ?? this.rootEl;
+		this.chooseTag(
+			at,
+			t.primary || null,
+			this.nearTags(t.path),
+			(tag) => {
+				if (tag.toLowerCase() !== (t.primary ?? "").toLowerCase()) void this.hub.retag(t, tag);
+			},
+			() => (this.rowOf(t.key) ?? this.rootEl).focus({ preventScroll: true }),
+		);
 	}
 
 	private async complete(t: Task, rowEl?: HTMLElement): Promise<void> {
 		const row = rowEl ?? this.rowOf(t.key);
+		if (row?.isConnected && this.doneEl && this.hub.playful(this.rootEl.win)) return this.completePlayful(t, row);
 		this.animating++;
 		try {
 			await this.completeAnimation(row);
@@ -1413,6 +1696,75 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		await this.hub.complete(t);
 		if (!this.animating) this.refresh();
+	}
+
+	/**
+	 * Playful: the box squashes and fills, a thin wave and a few strokes leave it, the title is struck,
+	 * then a capsule of it flies into "done today", which rolls one up; the next task's box breathes.
+	 * The sound is played at the click and climbs while tasks are checked one after another.
+	 */
+	private async completePlayful(t: Task, row: HTMLElement): Promise<void> {
+		if (this.checking.has(t.key)) return;
+		this.checking.add(t.key);
+		const doc = this.rootEl.doc;
+		const accent = cssColor(this.rootEl, "--sk-accent", "#7f6df2");
+		const today = this.today();
+		// The end of the day only comes when tasks were due today and this check clears them.
+		const dueBefore = this.hub.stillDue();
+		this.hub.checkSound();
+		const step = this.hub.runStep;
+		row.addClass("is-done");
+		const box = row.querySelector<HTMLElement>(".sk-tasks-cb");
+		if (box) {
+			box.setAttr("aria-checked", "true");
+			const r = box.getBoundingClientRect();
+			wave(doc, r.left + r.width / 2, r.top + r.height / 2);
+			spark(doc, r.left + r.width / 2, r.top + r.height / 2, 10, accent);
+		}
+		// Counted until the flight and the write are both over: no redraw (and no roll) before it lands.
+		this.animating++;
+		let written = false;
+		try {
+			await sleep(430);
+			const title = row.querySelector<HTMLElement>(".sk-tasks-txt");
+			const target = this.doneEl;
+			// The pill shows before it is measured (hidden while nothing was done or due today).
+			target?.removeClass("is-empty");
+			const to = target?.isConnected ? target.getBoundingClientRect() : null;
+			const landed = title && to && to.width > 0 ? fly(doc, title.textContent ?? t.title, title.getBoundingClientRect(), to) : Promise.resolve();
+			row.style.height = row.offsetHeight + "px";
+			row.addClass("is-leaving");
+			this.rootEl.win.requestAnimationFrame(() => {
+				row.style.removeProperty("height");
+				row.addClass("is-collapsed");
+			});
+			const writing = this.hub.complete(t, true);
+			await sleep(320);
+			[written] = await Promise.all([writing, landed]);
+		} finally {
+			this.animating--;
+			this.checking.delete(t.key);
+		}
+		if (!this.closed && !this.animating) this.refresh();
+		// The tab went away meanwhile, or nothing was written: no landing, no scene.
+		if (this.closed || !written) return;
+		// It landed: the count rolls (refresh), the pill pops, "+1" rises, a soft knock.
+		const pill = this.doneEl;
+		if (pill?.isConnected) {
+			const pr = pill.getBoundingClientRect();
+			pop(pill);
+			plusOne(doc, pr.left + 22, pr.top - 6, step);
+			spark(doc, pr.left + 15, pr.top + pr.height / 2, 7 + step * 2, accent);
+		}
+		this.hub.land(this.rootEl.win);
+		const next = this.listEl?.querySelector<HTMLElement>(".sk-tasks-row[data-key] .sk-tasks-cb");
+		next?.animate([{ boxShadow: "0 0 0 0 transparent" }, { boxShadow: `0 0 0 6px ${cssColor(this.rootEl, "--sk-accent-wash", "rgba(127,109,242,0.15)")}`, offset: 0.5 }, { boxShadow: "0 0 0 0 transparent" }], { duration: 1100, easing: "ease-in-out" });
+		// The last task due today was just checked: the small scene, once a day.
+		if (t.due === today && dueBefore > 0 && this.hub.stillDue() === 0 && this.hub.takeDayClear()) {
+			if (pill?.isConnected) pill.animate([{ transform: "scale(1)" }, { transform: "scale(1.16)", offset: 0.4 }, { transform: "scale(1)" }], { duration: 900, easing: "cubic-bezier(0.2, 0.9, 0.3, 1.2)" });
+			this.hub.dayClearSound(this.rootEl.win);
+			void dayClear(doc, { title: this.t("day.clear-title"), sub: this.t("day.clear-sub") }, accent);
+		}
 	}
 
 	/** The box pops, dots burst out of it, the title is struck, then the row slides away and folds. */
@@ -1444,6 +1796,8 @@ export class TasksTab implements WorkbenchTabInstance {
 	// ----- quick add -----
 
 	startAdd(tag: string | null): void {
+		// Waiting and Someday have no row to add: a new task is written from All.
+		if (this.st.scope.startsWith("flag:")) this.setScope("all");
 		const scope = this.st.scope;
 		if (tag === null && scope.startsWith("tag:")) tag = scope.slice(4);
 		if (tag && this.settings.collapsed.includes(tag)) {
@@ -1460,10 +1814,40 @@ export class TasksTab implements WorkbenchTabInstance {
 	}
 
 	private addRow(parent: HTMLElement, tag: string | null): HTMLElement {
-		const row = parent.createDiv({ cls: "sk-tasks-row sk-tasks-add" });
+		const row = parent.createDiv({ cls: "sk-tasks-row sk-tasks-add", attr: { "data-tag": tag ?? "" } });
 		checkbox(row);
 		const main = row.createDiv({ cls: "sk-tasks-row-main" });
-		const input = main.createEl("input", { type: "text", attr: { "data-sk-own-tab": "", placeholder: this.t(tag ? "add.placeholder" : "add.placeholder-tag") } });
+		// The tag of the new task, as everywhere: a capsule (or "tag"), the shared picker on a click.
+		const line = main.createDiv({ cls: "sk-tasks-add-line" });
+		const tagBtn = line.createEl("button", { cls: "sk-tasks-add-tag" + (tag ? "" : " is-empty"), attr: { type: "button", "aria-label": this.t("add.choose-tag") } });
+		if (tag) capsule(tagBtn, tag, this.hub);
+		else {
+			icon(tagBtn, "tag");
+			tagBtn.createSpan({ text: this.t("row.tag-short") });
+		}
+		tagBtn.addEventListener("mousedown", (e) => e.preventDefault());
+		tagBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const caret = { start: input.selectionStart ?? input.value.length, end: input.selectionEnd ?? input.value.length };
+			const again = () => {
+				const live = this.listEl?.querySelector<HTMLInputElement>(".sk-tasks-add input");
+				if (!live) return;
+				live.focus({ preventScroll: true });
+				const n = live.value.length;
+				live.setSelectionRange(Math.min(caret.start, n), Math.min(caret.end, n));
+			};
+			this.chooseTag(
+				tagBtn,
+				tag,
+				[],
+				(chosen) => {
+					this.startAdd(chosen);
+					again();
+				},
+				again,
+			);
+		});
+		const input = line.createEl("input", { type: "text", attr: { "data-sk-own-tab": "", placeholder: this.t(tag ? "add.placeholder" : "add.placeholder-tag") } });
 		input.value = this.st.draft;
 		input.addEventListener("input", () => {
 			this.st.draft = input.value;
@@ -1505,7 +1889,8 @@ export class TasksTab implements WorkbenchTabInstance {
 			if (input.value.trim()) return;
 			window.setTimeout(() => {
 				const active = this.rootEl.doc.activeElement as HTMLElement | null;
-				if (this.st.adding !== null && !active?.closest(".sk-tasks-add") && !this.isEditing()) {
+				const picking = !!this.rootEl.doc.querySelector(".sk-tag-picker-pop");
+				if (this.st.adding !== null && !picking && !active?.closest(".sk-tasks-add") && !this.isEditing()) {
 					this.st.adding = null;
 					this.st.draft = "";
 					this.refresh();
@@ -1661,7 +2046,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			cap.addClass("is-clickable");
 			this.zoneItem(cap);
 			cap.setAttr("aria-label", this.t("menu.move"));
-			cap.addEventListener("click", () => this.pickTag(t));
+			cap.addEventListener("click", () => this.pickTag(t, cap));
 		});
 
 		prop(
@@ -1686,6 +2071,21 @@ export class TasksTab implements WorkbenchTabInstance {
 				}
 			},
 		);
+
+		const flags = this.flags();
+		if (flags.length) {
+			prop("flags", "zap", (value) => {
+				const row = value.createDiv({ cls: "sk-tasks-flagrow" });
+				for (const f of flags) {
+					const on = hasFlag(t, f);
+					const b = row.createEl("button", { cls: "sk-btn is-s sk-tasks-chip sk-tasks-flag-" + f + (on ? " is-on" : ""), attr: { type: "button", "aria-pressed": String(on) } });
+					icon(b, this.flagIcon(f));
+					b.createSpan({ text: this.flagLabel(f) });
+					this.zoneItem(b);
+					b.addEventListener("click", () => void hub.setFlag(t, f, !on));
+				}
+			});
+		}
 
 		prop(
 			"due",

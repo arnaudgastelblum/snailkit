@@ -30,6 +30,13 @@ export function insertToken(text: string, token: string): string {
 	return (head ? head + " " : "") + token + (m ? m[0] : "");
 }
 
+/** A flag on (written before the dates and markers) or off (every `#flag` removed). */
+export function setFlagText(text: string, flag: string, on: boolean): string {
+	const has = new RegExp(`(^|\\s)#${escapeRe(flag)}(?!${TAG_CHARS})`, "iu").test(text);
+	if (on) return has ? text : insertToken(text, "#" + flag);
+	return has ? removeTag(text, flag) : text;
+}
+
 /** Removes every `#tag` (whole tag, any case), with the space before it. */
 export function removeTag(text: string, tag: string): string {
 	const re = new RegExp(`(^|\\s+)#${escapeRe(tag)}(?!${TAG_CHARS})`, "giu");

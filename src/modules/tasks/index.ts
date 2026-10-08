@@ -7,6 +7,7 @@ import { createTasksApi } from "./api";
 import { TasksHub } from "./hub";
 import { TaskNotes } from "./task-note";
 import { playDoneSound } from "../../ui/sound";
+import { withSuggestedFlags } from "./group";
 import { parseFolderList, parseTagList } from "./parse";
 import type { TasksSettings } from "./types";
 import { en } from "./i18n/en";
@@ -22,7 +23,7 @@ export const tasks = defineModule<TasksSettings>({
 	demo: (el, t) => buildDemo(el, t),
 	defaults: {
 		excludedFolders: "",
-		flagTags: "",
+		flagTags: "quick, deep, waiting, someday",
 		stampDone: true,
 		newTaskNote: "",
 		sortMode: "notes",
@@ -36,10 +37,20 @@ export const tasks = defineModule<TasksSettings>({
 		overdueFirst: false,
 		earlierOpen: false,
 		untaggedDays: 30,
+		playful: true,
+		flagFilter: "",
+		flagsSuggested: false,
 	},
 	// The order of the tags is the user's arrangement: "Reset to defaults" keeps it.
-	keepOnReset: ["tagOrder", "taskOrder"],
+	keepOnReset: ["tagOrder", "taskOrder", "flagsSuggested"],
 	activate(ctx) {
+		// The suggested flags (quick, deep, waiting, someday), once for settings saved before they
+		// existed; the user's own flags stay, and a flag removed later is not added back.
+		if (!ctx.settings.flagsSuggested) {
+			ctx.settings.flagTags = withSuggestedFlags(ctx.settings.flagTags);
+			ctx.settings.flagsSuggested = true;
+			void ctx.saveSettings();
+		}
 		const hub = new TasksHub(ctx);
 		ctx.register(() => hub.dispose());
 		// Task notes: the note linked from a task line with 📝 (details, and the API for companions).
@@ -139,14 +150,22 @@ export const tasks = defineModule<TasksSettings>({
 		which.number("untaggedDays", page.t("settings.untagged"), { desc: page.t("settings.untagged-desc"), min: 0, max: 180 });
 		page.section(page.t("settings.today"))
 			.toggle("overdueFirst", page.t("settings.overdue-first"), { desc: page.t("settings.overdue-first-desc") });
-		page.section(page.t("settings.groups"))
-			.text("flagTags", page.t("settings.flags"), {
+		const groups = page.section(page.t("settings.groups"));
+		groups.text("flagTags", page.t("settings.flags"), {
 				desc: page.t("settings.flags-desc"),
 				placeholder: page.t("settings.flags-placeholder"),
 				normalize: (value) => parseTagList(value).join(", "),
 			});
+		// The suggested flags in one click (they can be removed from the list above).
+		groups.add(page.t("settings.flags-suggest"), { desc: page.t("settings.flags-suggest-desc") })
+			.addButton((b) => b.setButtonText(page.t("settings.flags-suggest-button")).onClick(async () => {
+				page.settings.flagTags = withSuggestedFlags(page.settings.flagTags);
+				await page.save();
+				page.refresh();
+			}));
 		const writing = page.section(page.t("settings.writing"));
 		writing.toggle("stampDone", page.t("settings.stamp"), { desc: page.t("settings.stamp-desc") });
+		writing.toggle("playful", page.t("settings.playful"), { desc: page.t("settings.playful-desc") });
 		writing.toggle("doneSound", page.t("settings.sound"), { desc: page.t("settings.sound-desc"), onChange: (on) => { if (on) playDoneSound(); } });
 		writing.text("newTaskNote", page.t("settings.target"), {
 			desc: page.t("settings.target-desc"),

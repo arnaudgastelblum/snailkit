@@ -32,6 +32,7 @@ export const es: StringsOf<typeof en> = {
 	"today.old.one": "{count} tarea en notas diarias anteriores",
 	"today.old.other": "{count} tareas en notas diarias anteriores",
 	"today.new-brainstorm": "Nueva lluvia de ideas",
+	"today.new-task": "Nueva tarea",
 
 	"pins.title": "Fijadas",
 	"pins.need-rail": "Activa Menú de nota para fijar notas.",

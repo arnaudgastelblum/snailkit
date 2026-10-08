@@ -6,10 +6,10 @@
 // alone, the actions in a menu.
 // The data comes from the runtime; the logic lives in atelier.ts.
 import { MarkdownView, Menu, Platform, Scope, setIcon, TFile } from "obsidian";
-import { ago, contextsOf, filterSessions, layoutTimeline, searchable, stateOf, tabCount, tabTone, type SessionInfo } from "./atelier";
+import { ago, contextsOf, filterSessions, layoutTimeline, searchable, stateOf, tabCount, tabTone, viewCounts, viewSessions, type SessionInfo } from "./atelier";
 import { capsule } from "./capsule";
-import { fillCard, miniFrieze, stateLabel, type CardAction, type Words } from "./card";
-import { leadOf, weekRecap, type Flow } from "./flow";
+import { actionLabel, fillCard, ICONS, leftoverText, miniFrieze, stateLabel, type CardAction, type Words } from "./card";
+import { leadOf, nextAction, weekRecap, type Flow } from "./flow";
 import { isTagName, type SummaryQuestion } from "./logic";
 import type { SessionsRuntime } from "./runtime";
 import type { ViewTab, ViewTabHost, ViewTabInstance } from "./types";
@@ -17,6 +17,7 @@ import type { ViewTab, ViewTabHost, ViewTabInstance } from "./types";
 const TIMELINE_KEY = "snailkit-sessions-timeline";
 const DONE_KEY = "snailkit-sessions-done-open";
 const RECAP_KEY = "snailkit-sessions-recap";
+const VIEW_KEY = "snailkit-sessions-view";
 
 /** The tab as the Workbench knows it, and the views it has mounted. */
 export class SessionsTab {
@@ -97,12 +98,15 @@ class TabView implements ViewTabInstance {
 	/** The To decide block shows every line (else the first few). */
 	private decideAll = false;
 	private archBtn: HTMLElement;
-	/** The card shown over a row (mouse only). */
-	private hoverCard: HTMLElement | null = null;
-	private hoverPath: string | null = null;
-	/** The session whose card asks before Finish (lines still wait), or null. */
+	/** The session whose row (or detail) asks before Finish (lines still wait), or null. */
 	private asking: string | null = null;
+	/** Page layout: the view chosen in the navigator ("live", "sort", "decide", "done", "archived", "ctx:<name>"). */
+	private view = "live";
 	private hoverTimer = 0;
+	/** The detail follows the pointer: it changes at once, without its entrance. */
+	private quietDetail = false;
+	/** Page layout: the navigator on the left. */
+	private nav: HTMLElement | null = null;
 	private contextsEl: HTMLElement;
 	private resize: ResizeObserver | null = null;
 	private list: HTMLElement;
@@ -128,9 +132,25 @@ class TabView implements ViewTabInstance {
 		this.root.tabIndex = -1;
 		this.root.toggleClass("is-phone", Platform.isPhone);
 		this.root.toggleClass("is-desk", this.desk);
+		if (this.desk) {
+			this.nav = this.root.createDiv({ cls: "sk-sessions-nav", attr: { "data-sk-zone": "nav", role: "navigation", "aria-label": t("tab.views") } });
+			try {
+				const saved: unknown = rt.app.loadLocalStorage(VIEW_KEY);
+				if (typeof saved === "string" && saved) this.view = saved;
+			} catch {
+				/* the default view */
+			}
+		}
 		this.main = this.desk ? this.root.createDiv({ cls: "sk-sessions-desk-main" }) : this.root;
 		const top = this.desk ? this.main.createDiv({ cls: "sk-sessions-desk-top" }) : this.root;
 
+		if (Platform.isPhone) {
+			// Phone: one big New brainstorm button on top, the colour of the primary button on a computer.
+			const add = top.createEl("button", { cls: "sk-btn is-primary sk-sessions-phone-new", attr: { type: "button" } });
+			setIcon(add.createSpan({ cls: "sk-sessions-card-icon" }), "zap");
+			add.createSpan({ text: t("tab.new") });
+			add.addEventListener("click", () => void rt.startSession());
+		}
 		this.leadEl = top.createDiv({ cls: "sk-sessions-lead", attr: { "data-sk-zone": "sentence" } });
 		this.decideEl = top.createDiv({ cls: "sk-sessions-decide", attr: { "data-sk-zone": "decide" } });
 		const head = top.createDiv({ cls: "sk-sessions-tab-head" });
@@ -151,7 +171,7 @@ class TabView implements ViewTabInstance {
 			this.render();
 		});
 		// A soft button: the Workbench keeps its one primary action for itself.
-		const add = head.createEl("button", { cls: "sk-btn sk-sessions-tab-new" + (narrow ? " is-icon" : ""), attr: { type: "button", "aria-label": t("tab.new") } });
+		const add = head.createEl("button", { cls: "sk-btn sk-sessions-tab-new" + (narrow ? " is-icon" : "") + (this.desk ? " is-hidden" : ""), attr: { type: "button", "aria-label": t("tab.new") } });
 		setIcon(add, "zap");
 		if (!narrow) add.createSpan({ text: t("tab.new") });
 		add.addEventListener("click", () => void rt.startSession());
@@ -163,7 +183,9 @@ class TabView implements ViewTabInstance {
 			/* none */
 		}
 		const tall = (el.ownerDocument.defaultView?.innerHeight ?? 900) >= 640;
-		this.showTimeline = saved === "shown" ? true : saved === "hidden" ? false : tall;
+		// No timeline on a phone: the list is what matters there.
+		this.showTimeline = Platform.isPhone ? false : saved === "shown" ? true : saved === "hidden" ? false : tall;
+		if (Platform.isPhone) this.timelineBtn.addClass("is-hidden");
 
 		this.timeline = top.createDiv({ cls: "sk-sessions-tl", attr: { "data-sk-zone": "timeline", "data-sk-zone-grid": "", role: "group", "aria-label": t("tab.timeline") } });
 		this.track = this.timeline.createDiv({ cls: "sk-sessions-tl-track" });
@@ -186,10 +208,17 @@ class TabView implements ViewTabInstance {
 			this.render();
 		});
 
-		this.list = this.main.createDiv({ cls: "sk-sessions-tab-list", attr: { "data-sk-zone": "list", role: "listbox", "aria-label": t("tab.list") } });
+		// Named by a hidden text: an aria-label would show as Obsidian's tooltip over the whole list.
+		const listName = this.main.createSpan({ cls: "sk-sessions-sr", text: t("tab.list"), attr: { id: `sk-sessions-list-${Math.random().toString(36).slice(2, 8)}` } });
+		this.list = this.main.createDiv({ cls: "sk-sessions-tab-list", attr: { "data-sk-zone": "list", role: "listbox", "aria-labelledby": listName.id } });
 		if (!Platform.isMobile) {
 			this.list.addEventListener("mouseover", (e) => this.onListHover(e));
-			this.list.addEventListener("mouseleave", () => this.hoverSoon(null));
+			this.list.addEventListener("mouseleave", () => window.cancelAnimationFrame(this.hoverTimer));
+		}
+		if (this.desk) {
+			// In the page, the navigator holds the views, the contexts and the archive: the bar above the list goes.
+			this.decideEl.addClass("is-hidden");
+			bar.addClass("is-hidden");
 		}
 		if (this.desk) {
 			this.helpBar(this.main.createDiv({ cls: "sk-sessions-desk-foot" }));
@@ -217,7 +246,8 @@ class TabView implements ViewTabInstance {
 				} else this.search.blur();
 			} else if (e.key === "ArrowDown" || e.key === "Enter") {
 				e.preventDefault();
-				this.focusRow(0);
+				if (this.desk && this.view === "decide") this.list.querySelector<HTMLElement>(".sk-sessions-decide-row")?.focus();
+				else this.focusRow(0);
 			}
 		});
 		this.root.addEventListener("keydown", (e) => {
@@ -308,7 +338,7 @@ class TabView implements ViewTabInstance {
 		if (this.destroyed) return;
 		this.destroyed = true;
 		this.pop?.close();
-		this.closeHover();
+		window.cancelAnimationFrame(this.hoverTimer);
 		for (const id of this.timers) window.clearTimeout(id);
 		window.clearTimeout(this.longPress);
 		if (this.scoped) this.rt.app.keymap.popScope(this.keyScope);
@@ -347,10 +377,132 @@ class TabView implements ViewTabInstance {
 		};
 	}
 
-	/** The rows on screen, in order. */
+	/** The rows on screen, in order. Page: the view of the navigator (To decide shows lines, not brainstorms). */
 	private shown(all: SessionInfo[] = this.rt.sessionInfos()): SessionInfo[] {
+		if (this.desk) return this.view === "decide" ? [] : viewSessions(all, this.view, this.query);
 		const g = this.groups(all);
 		return [...g.live, ...(this.doneOpen ? g.done : []), ...g.archived];
+	}
+
+	/** A view that no longer exists (a context gone, the archive emptied) falls back to In progress. */
+	private checkView(all: SessionInfo[]): void {
+		const c = viewCounts(all);
+		const ok = this.view === "all" || this.view === "live" || this.view === "sort" || this.view === "decide" || this.view === "done" || (this.view === "archived" && c.archived > 0) || (this.view.startsWith("ctx:") && c.contexts.some(([x]) => x.toLowerCase() === this.view.slice(4).toLowerCase()));
+		if (!ok) this.view = "live";
+	}
+
+	private setView(view: string): void {
+		if (this.view === view) return;
+		this.view = view;
+		this.asking = null;
+		try {
+			this.rt.app.saveLocalStorage(VIEW_KEY, view);
+		} catch {
+			/* not kept */
+		}
+		this.list.scrollTop = 0;
+		this.render();
+	}
+
+	private viewLabel(view: string): string {
+		if (view.startsWith("ctx:")) return "#" + view.slice(4);
+		return this.t({ all: "tab.view-all", live: "tab.group-live", sort: "tab.state-triage", decide: "decide.title", done: "tab.group-done", archived: "tab.group-archived" }[view] ?? "tab.group-live");
+	}
+
+	/**
+	 * The navigator (page): New brainstorm, the views with their counts, the contexts, and the week
+	 * in a quiet line at the bottom.
+	 */
+	private renderNav(all: SessionInfo[]): void {
+		const nav = this.nav;
+		if (!nav) return;
+		nav.empty();
+		const add = nav.createEl("button", { cls: "sk-btn is-primary sk-sessions-nav-new", attr: { type: "button", "data-focus-key": "nav:new" } });
+		setIcon(add.createSpan({ cls: "sk-sessions-card-icon" }), "plus");
+		add.createSpan({ text: this.t("tab.new") });
+		add.addEventListener("click", () => void this.rt.startSession());
+		const c = viewCounts(all);
+		const decide = this.rt.toDecide().length;
+		const item = (view: string, iconName: string, n: number, warn = false, cls = "") => {
+			const b = nav.createEl("button", { cls: "sk-sessions-nav-item" + (this.view === view ? " is-on" : "") + cls, attr: { type: "button", "aria-current": this.view === view ? "page" : "false", "data-focus-key": `nav:${view}`, title: this.viewLabel(view) } });
+			setIcon(b.createSpan({ cls: "sk-sessions-nav-ic" }), iconName);
+			b.createSpan({ cls: "sk-sessions-nav-label", text: this.viewLabel(view) });
+			if (n) b.createSpan({ cls: "sk-sessions-nav-n" + (warn ? " is-warn" : ""), text: String(n) });
+			b.addEventListener("click", () => this.setView(view));
+			return b;
+		};
+		item("all", "layers", c.all);
+		item("live", "zap", c.live);
+		item("sort", "list-filter", c.sort, c.sort > 0);
+		item("decide", "circle-help", decide);
+		item("done", "check-circle-2", c.done);
+		if (c.archived) item("archived", "archive", c.archived);
+		if (c.contexts.length) {
+			nav.createDiv({ cls: "sk-sessions-nav-sec", text: this.t("tab.contexts") });
+			for (const [ctx, n] of c.contexts) {
+				const b = item("ctx:" + ctx, "hash", n, false, " is-ctx");
+				const label = b.querySelector<HTMLElement>(".sk-sessions-nav-label");
+				if (label) {
+					label.empty();
+					label.appendChild(capsule(this.doc, ctx, this.rt.tagClasses(ctx)));
+				}
+				// The # shows only when the navigator keeps its icons alone.
+				b.querySelector(".sk-sessions-nav-ic")?.addClass("is-narrow-only");
+			}
+		}
+		const week = weekRecap(all.filter((s) => !s.archived), Date.now());
+		if (week.brainstorms) nav.createDiv({ cls: "sk-sessions-nav-foot", text: this.t("tab.recap", { brainstorms: this.tn("tab.recap-brainstorms", week.brainstorms), tasks: this.tn("flow.tasks", week.tasks) }) });
+	}
+
+	/** The head of the view (page): its name, what waits in a sentence, and the one action it calls for. */
+	private renderViewHead(all: SessionInfo[]): void {
+		const el = this.leadEl;
+		el.empty();
+		el.addClass("sk-sessions-vhead");
+		const line = el.createDiv({ cls: "sk-sessions-lead-line" });
+		const titleBox = line.createDiv({ cls: "sk-sessions-vhead-title" });
+		if (this.view.startsWith("ctx:")) titleBox.appendChild(capsule(this.doc, this.view.slice(4), this.rt.tagClasses(this.view.slice(4))));
+		else titleBox.createEl("h1", { text: this.viewLabel(this.view) });
+		const sub = titleBox.createSpan({ cls: "sk-sessions-vhead-sub" });
+		let action: { label: string; icon: string; run: () => void } | null = null;
+		if (this.view === "decide") {
+			const n = this.rt.toDecide().length;
+			sub.setText(n ? this.tn("tab.decide-sub", n) : this.t("tri.nothing-decide"));
+			if (n) action = { label: this.t("decide.sort"), icon: "list-filter", run: () => this.rt.startSort(null, this.root, "decide") };
+		} else if (this.view === "live" || this.view === "sort") {
+			const lead = leadOf(all.map((s) => this.rt.flowOf(s)));
+			const parts = [this.tn("tab.lead-live", lead.live)];
+			if (lead.untagged) parts.push(this.tn("tab.lead-untagged", lead.untagged));
+			if (lead.loose) parts.push(this.tn("flow.to-sort", lead.loose));
+			if (lead.undecided) parts.push(this.tn("flow.undecided", lead.undecided));
+			sub.setText(parts.join(" · "));
+			if (lead.untagged + lead.undecided + lead.loose) action = { label: this.t("tab.sort"), icon: "list-filter", run: () => this.rt.startSort(null, this.root) };
+		} else sub.setText(this.tn("tab.view-count", this.shown(all).length));
+		if (action) {
+			const b = line.createEl("button", { cls: "sk-btn is-primary", attr: { type: "button", "data-focus-key": "lead" } });
+			setIcon(b.createSpan({ cls: "sk-sessions-card-icon" }), action.icon);
+			b.createSpan({ text: action.label });
+			b.addEventListener("click", action.run);
+		}
+	}
+
+	/** To decide (page): the lines themselves; a line opens its note there, Decide sorts them one at a time. */
+	private renderDecideList(): void {
+		const queue = this.rt.toDecide();
+		if (!queue.length) {
+			this.list.createDiv({ cls: "sk-sessions-tab-empty", text: this.t("tri.nothing-decide") });
+			return;
+		}
+		const date = new Intl.DateTimeFormat(this.rt.ctx.lang, { day: "numeric", month: "short" });
+		const words = this.query.trim() ? searchable(this.query).split(/\s+/).filter(Boolean) : [];
+		for (const q of queue) {
+			if (words.length && !words.every((w) => searchable(q.text + " " + q.title).includes(w))) continue;
+			const row = this.list.createEl("button", { cls: "sk-sessions-decide-row is-list", attr: { type: "button", "data-sk-item": "", "data-focus-key": `decide:${q.path}:${q.line}` } });
+			row.createSpan({ cls: "sk-sessions-decide-box", attr: { "aria-hidden": "true" } });
+			row.createSpan({ cls: "sk-sessions-decide-text", text: q.text });
+			row.createSpan({ cls: "sk-sessions-decide-from", text: `${q.title} · ${date.format(q.created)}` + (q.closed ? ` · ${this.t("flow.closed")}` : "") });
+			row.addEventListener("click", (e) => this.host.open(q.path, q.line, e));
+		}
 	}
 
 	/**
@@ -371,23 +523,37 @@ class TabView implements ViewTabInstance {
 		const all = this.rt.sessionInfos();
 		const contexts = contextsOf(all.filter((s) => this.showArchived || !s.archived));
 		if (this.context && !contexts.some((c) => c.toLowerCase() === this.context!.toLowerCase())) this.context = null;
+		if (this.desk) this.checkView(all);
 		const shown = this.shown(all);
 		if (this.desk && (!this.selected || !shown.some((s) => s.path === this.selected))) this.selected = shown[0]?.path ?? null;
 		if (this.confirming && !all.some((s) => s.path === this.confirming)) this.confirming = null;
-		this.renderLead(all);
-		this.renderDecide();
-		this.renderContexts(contexts);
+		// The finish prompt goes once nothing waits any more (or the brainstorm is gone).
+		if (this.asking) {
+			const a = all.find((s) => s.path === this.asking);
+			if (!a || a.closed || !this.rt.flowOf(a).toSort) this.asking = null;
+		}
+		if (this.desk) {
+			this.renderNav(all);
+			this.renderViewHead(all);
+		} else {
+			this.renderLead(all);
+			this.renderDecide();
+			this.renderContexts(contexts);
+		}
 		this.archBtn.empty();
 		setIcon(this.archBtn.createSpan({ cls: "sk-sessions-card-icon" }), "archive");
 		this.archBtn.createSpan({ text: this.t(this.showArchived ? "tab.hide-archived" : "tab.show-archived") });
 		this.archBtn.setAttr("aria-pressed", String(this.showArchived));
 		this.archBtn.toggleClass("is-hidden", !this.showArchived && !all.some((s) => s.archived));
-		this.timeline.toggleClass("is-hidden", !this.showTimeline);
-		this.legend.toggleClass("is-hidden", !this.showTimeline);
+		// To decide lists lines, not brainstorms: no timeline there.
+		const tlShown = this.showTimeline && !(this.desk && this.view === "decide");
+		this.timeline.toggleClass("is-hidden", !tlShown);
+		this.legend.toggleClass("is-hidden", !tlShown);
 		this.timelineBtn.toggleClass("is-on", this.showTimeline);
 		this.timelineBtn.setAttr("aria-label", this.t(this.showTimeline ? "tab.timeline-hide" : "tab.timeline-show"));
 		this.timelineBtn.setAttr("aria-pressed", String(this.showTimeline));
-		if (this.showTimeline) this.renderTimeline(all.filter((s) => this.showArchived || !s.archived), new Set(shown.map((s) => s.path)));
+		const archVisible = this.desk ? this.view === "archived" : this.showArchived;
+		if (tlShown) this.renderTimeline(all.filter((s) => archVisible || !s.archived), new Set(shown.map((s) => s.path)));
 		this.renderList(all, shown);
 		this.renderDetail();
 		this.markZoneItems();
@@ -423,6 +589,16 @@ class TabView implements ViewTabInstance {
 		const queue = this.rt.toDecide();
 		el.toggleClass("is-hidden", !queue.length);
 		if (!queue.length) return;
+		if (Platform.isPhone) {
+			// Phone: one line; a tap sorts them one at a time.
+			el.addClass("is-line");
+			const line = el.createEl("button", { cls: "sk-sessions-decide-line", attr: { type: "button" } });
+			setIcon(line.createSpan({ cls: "sk-sessions-decide-icon" }), "circle-help");
+			line.createSpan({ text: this.tn("tab.decide-line", queue.length) });
+			setIcon(line.createSpan({ cls: "sk-sessions-decide-chev" }), "chevron-right");
+			line.addEventListener("click", () => this.rt.startSort(null, this.root, "decide"));
+			return;
+		}
 		const head = el.createDiv({ cls: "sk-sessions-decide-head" });
 		const title = head.createDiv({ cls: "sk-sessions-decide-title" });
 		setIcon(title.createSpan({ cls: "sk-sessions-decide-icon" }), "circle-help");
@@ -490,7 +666,7 @@ class TabView implements ViewTabInstance {
 			b.addEventListener("click", action.run);
 		}
 		const week = weekRecap(all.filter((s) => !s.archived), now);
-		if (!this.recapHidden && week.brainstorms) {
+		if (!this.recapHidden && week.brainstorms && !Platform.isPhone) {
 			const recap = el.createDiv({ cls: "sk-sessions-recap" });
 			recap.createSpan({ text: this.t("tab.recap", { brainstorms: this.tn("tab.recap-brainstorms", week.brainstorms), tasks: this.tn("flow.tasks", week.tasks) }) });
 			const x = recap.createEl("button", { cls: "sk-btn is-ghost is-icon is-s", attr: { type: "button" } });
@@ -617,10 +793,17 @@ class TabView implements ViewTabInstance {
 			this.list.createDiv({ cls: "sk-sessions-tab-empty", text: this.t("tab.empty") });
 			return;
 		}
-		const g = this.groups(all);
 		const date = new Intl.DateTimeFormat(this.rt.ctx.lang, { weekday: "short", day: "numeric", month: "short" });
 		const focusable = this.desk ? this.selected : shown[0]?.path ?? null;
 		const now = Date.now();
+		if (this.desk) {
+			if (this.view === "decide") this.renderDecideList();
+			else if (!shown.length) this.list.createDiv({ cls: "sk-sessions-tab-empty", text: this.t(this.query ? "tab.none" : "tab.none-view") });
+			else for (const s of shown) this.row(s, date, s.path === focusable, now);
+			this.list.scrollTop = scroll;
+			return;
+		}
+		const g = this.groups(all);
 		const group = (key: string, list: SessionInfo[], fold: boolean | null, empty: string | null) => {
 			const head = this.list.createDiv({ cls: "sk-sessions-group" + (fold === false ? " is-shut" : ""), attr: { role: "presentation" } });
 			if (fold === null) {
@@ -660,6 +843,7 @@ class TabView implements ViewTabInstance {
 			attr: { role: "option", "data-sk-item": "", tabindex: tabbable ? "0" : "-1", "aria-selected": String(selected), "data-path": s.path, "data-focus-key": `row:${s.path}` },
 		});
 		if (tabbable) row.setAttr("data-sk-zone-focus", "");
+		row.addClass("is-two");
 		const titleLine = row.createDiv({ cls: "sk-sessions-row-title" });
 		if (s.pin !== null && s.pin !== undefined) {
 			const pin = titleLine.createSpan({ cls: "sk-sessions-row-pin" });
@@ -668,8 +852,11 @@ class TabView implements ViewTabInstance {
 		}
 		titleLine.createSpan({ cls: "sk-sessions-row-name", text: s.title });
 		if (s.context) titleLine.createSpan({ cls: "sk-sessions-row-hash", text: `#${s.context}` });
-		miniFrieze(row, flow);
-		const word = row.createSpan({ cls: "sk-sessions-row-word" + (flow.kind === "ready" ? " is-ready" : "") });
+		row.createSpan({ cls: "sk-sessions-row-date", text: date.format(s.closed ? s.modified ?? s.created : s.modified ?? s.created) });
+		// What the card over the row used to say, on the row itself: the steps, where it stands, what it holds.
+		const meta = row.createDiv({ cls: "sk-sessions-row-meta" });
+		miniFrieze(meta, flow);
+		const word = meta.createSpan({ cls: "sk-sessions-row-word" + (flow.kind === "ready" ? " is-ready" : "") });
 		word.appendText(flow.kind === "ready" ? `${stateLabel(this.words, flow)} ✓` : stateLabel(this.words, flow));
 		if (flow.stale) {
 			const inv = word.createEl("button", { cls: "sk-sessions-row-invite", text: `· ${this.t("tab.finish-it")}`, attr: { type: "button", tabindex: "-1" } });
@@ -679,19 +866,43 @@ class TabView implements ViewTabInstance {
 					void this.rt.finish(s.path);
 					return;
 				}
-				// Lines still wait: the card over the row says so and offers to sort them first.
-				this.asking = s.path;
-				this.openHover(row);
-				this.hoverCard?.querySelector<HTMLElement>("button[data-action]")?.focus({ preventScroll: true });
+				// Lines still wait: the row says so and offers to sort them first.
+				this.askFinish(s.path);
 			});
 		}
-		row.createSpan({ cls: "sk-sessions-row-date", text: date.format(s.closed ? s.modified ?? s.created : s.modified ?? s.created) });
+		// What it holds; what waits is already in the state word.
+		const { ctx } = this.rt;
+		meta.createSpan({ cls: "sk-sessions-row-tally", text: [ctx.tn("ideas", s.ideas), ...(s.tasks ? [ctx.tn("desk.tasks-done", s.tasks, { done: s.done ?? 0 })] : [])].join(" · ") });
+		// Everything the card used to offer, on the row itself (shown on hover, focus and selection).
+		const acts = row.createDiv({ cls: "sk-sessions-row-acts" });
+		const button = (box: HTMLElement, action: CardAction, primary: boolean, label = actionLabel(this.words, flow, action)) => {
+			const b = box.createEl("button", { cls: "sk-btn is-s" + (primary ? " is-primary" : " is-ghost"), attr: { type: "button", tabindex: "-1", "data-action": action } });
+			setIcon(b.createSpan({ cls: "sk-sessions-card-icon" }), ICONS[action]);
+			b.createSpan({ text: label });
+			b.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.act(s.path, action, e);
+			});
+		};
+		if (this.asking === s.path) {
+			// Finish while lines still wait: one more line, what is left and the two ways out.
+			row.addClass("is-asking");
+			const ask = row.createDiv({ cls: "sk-sessions-row-ask" });
+			ask.createSpan({ cls: "sk-sessions-row-ask-text", text: leftoverText(this.words, flow) });
+			button(ask, "sort", true, this.t("flow.sort-first"));
+			button(ask, "finish-anyway", false);
+		} else {
+			const next = nextAction(flow);
+			if (next) button(acts, next, next !== "unarchive");
+			if (next === "sort") button(acts, "finish", false);
+			if (flow.kind === "closed") button(acts, "reopen", false);
+			button(acts, "open", false);
+		}
 		const more = row.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-sessions-row-more", attr: { type: "button", tabindex: "-1" } });
 		setIcon(more, "more-horizontal");
 		more.createSpan({ cls: "sk-sessions-sr", text: this.t("tab.more") });
 		more.addEventListener("click", (e) => {
 			e.stopPropagation();
-			this.closeHover();
 			this.menu(s.path, e);
 		});
 		if (this.confirming === s.path && !this.desk) this.confirmStrip(row.createDiv({ cls: "sk-sessions-row-confirm" }), s);
@@ -708,7 +919,6 @@ class TabView implements ViewTabInstance {
 		});
 		row.addEventListener("contextmenu", (e) => {
 			e.preventDefault();
-			this.closeHover();
 			this.menu(s.path, e);
 		});
 		// A long press opens the menu on touch screens (a click does not follow).
@@ -732,68 +942,8 @@ class TabView implements ViewTabInstance {
 		});
 	}
 
-	// ----- the card over a row -----
-
-	private onListHover(e: MouseEvent): void {
-		if (this.pop || this.editing) return;
-		const row = (e.target as HTMLElement).closest?.<HTMLElement>(".sk-sessions-row");
-		if (!row) return;
-		const path = row.dataset.path ?? null;
-		if (path === this.hoverPath && this.hoverCard) {
-			window.clearTimeout(this.hoverTimer);
-			return;
-		}
-		window.clearTimeout(this.hoverTimer);
-		this.hoverTimer = window.setTimeout(() => this.openHover(row), this.hoverCard ? 90 : 420);
-	}
-
-	private hoverSoon(_: null): void {
-		window.clearTimeout(this.hoverTimer);
-		this.hoverTimer = window.setTimeout(() => {
-			if (this.hoverCard && this.hoverCard.matches(":hover")) return;
-			this.closeHover();
-		}, 260);
-	}
-
-	private openHover(row: HTMLElement): void {
-		const path = row.dataset.path;
-		if (!path || this.destroyed || !row.isConnected) return;
-		const s = this.info(path);
-		if (!s) return;
-		const flow = this.rt.flowOf(s);
-		const fresh = !this.hoverCard;
-		const card = this.hoverCard ?? this.root.createDiv({ cls: "sk-sessions-card is-list", attr: { role: "dialog" } });
-		if (fresh) {
-			card.addEventListener("mouseenter", () => window.clearTimeout(this.hoverTimer));
-			card.addEventListener("mouseleave", () => this.hoverSoon(null));
-		}
-		this.hoverCard = card;
-		this.hoverPath = path;
-		for (const r of this.rows()) r.toggleClass("is-hover", r === row);
-		this.fillFor(card, s, flow, "list");
-		const box = this.root.getBoundingClientRect();
-		const mini = row.querySelector(".sk-sessions-mini") ?? row;
-		const rr = row.getBoundingClientRect();
-		const mr = mini.getBoundingClientRect();
-		const w = card.offsetWidth;
-		card.style.left = `${Math.max(8, Math.min(box.width - w - 8, mr.left - box.left - 20))}px`;
-		let top = rr.bottom - box.top + 4;
-		if (top + card.offsetHeight > box.height - 8) top = rr.top - box.top - card.offsetHeight - 4;
-		card.style.top = `${top}px`;
-		if (fresh && !reduced()) card.addClass("is-pop");
-	}
-
-	private closeHover(): void {
-		window.clearTimeout(this.hoverTimer);
-		if (this.asking === this.hoverPath) this.asking = null;
-		this.hoverCard?.remove();
-		this.hoverCard = null;
-		this.hoverPath = null;
-		for (const r of this.rows()) r.removeClass("is-hover");
-	}
-
-	/** Fills a card for a session (the hover card, the detail). */
-	private fillFor(el: HTMLElement, s: SessionInfo, flow: Flow, where: "list" | "detail"): void {
+	/** Fills the card of the detail (page) for a session. */
+	private fillFor(el: HTMLElement, s: SessionInfo, flow: Flow, where: "detail"): void {
 		const date = new Intl.DateTimeFormat(this.rt.ctx.lang, { weekday: "short", day: "numeric", month: "short" });
 		fillCard(el, this.words, flow, {
 			title: s.title,
@@ -809,21 +959,38 @@ class TabView implements ViewTabInstance {
 	private act(path: string, action: CardAction, e: MouseEvent): void {
 		const s = this.info(path);
 		if (action === "finish" && s && this.rt.flowOf(s).toSort > 0) {
-			// Lines still wait: the card says so and offers to sort them first.
-			this.asking = path;
-			const row = this.hoverPath === path ? this.rows().find((r) => r.dataset.path === path) : null;
-			if (row) this.openHover(row);
-			else this.renderDetail();
+			// Lines still wait: the row (and the detail) say so and offer to sort them first.
+			this.askFinish(path);
 			return;
 		}
 		this.asking = null;
-		this.closeHover();
 		const file = this.fileOf(path);
 		if (action === "sort") this.rt.startSort(path, this.root);
 		else if (action === "finish" || action === "finish-anyway") void this.rt.finish(path);
 		else if (action === "archive" || action === "unarchive") this.archive(path);
 		else if (action === "reopen" && file) this.rt.reopen(file);
 		else if (action === "open") this.host.open(path, null, e);
+	}
+
+	/** The finish prompt on the row (or in the detail), its first button focused. */
+	private askFinish(path: string): void {
+		this.confirming = null;
+		this.asking = path;
+		this.render();
+		const row = this.rowOf(path);
+		(row?.querySelector<HTMLElement>(".sk-sessions-row-ask button") ?? this.detail?.querySelector<HTMLElement>("button[data-action]"))?.focus({ preventScroll: true });
+	}
+
+	/** Page layout: the row under the pointer fills the detail, as a click would (after a short intent). */
+	private onListHover(e: MouseEvent): void {
+		if (!this.desk || this.pop || this.editing) return;
+		const row = (e.target as HTMLElement).closest?.<HTMLElement>(".sk-sessions-row");
+		if (!row || row.dataset.path === this.selected) return;
+		// At the next frame (one detail drawn per frame, however fast the pointer goes), with no entrance.
+		window.cancelAnimationFrame(this.hoverTimer);
+		this.hoverTimer = window.requestAnimationFrame(() => {
+			if (!this.destroyed && row.isConnected && row.matches(":hover") && row.dataset.path) this.select(row.dataset.path, false, true);
+		});
 	}
 
 	private suppressClick = 0;
@@ -849,7 +1016,7 @@ class TabView implements ViewTabInstance {
 	}
 
 	/** Selects a session (page layout): its row is marked and the detail follows. */
-	private select(path: string, focus: boolean): void {
+	private select(path: string, focus: boolean, quiet = false): void {
 		if (!this.desk) return;
 		if (this.selected !== path) {
 			this.selected = path;
@@ -862,7 +1029,9 @@ class TabView implements ViewTabInstance {
 				r.toggleAttribute("data-sk-zone-focus", on);
 			}
 			for (const b of Array.from(this.track.querySelectorAll<HTMLElement>(".sk-sessions-bubble"))) b.toggleClass("is-selected", b.dataset.focusKey === `bubble:${path}`);
+			this.quietDetail = quiet;
 			this.renderDetail();
+			this.quietDetail = false;
 			this.markZoneItems();
 		}
 		if (focus) {
@@ -874,6 +1043,21 @@ class TabView implements ViewTabInstance {
 
 	private onListKey(e: KeyboardEvent): void {
 		if (e.target instanceof HTMLInputElement) return;
+		// ← from an action of the row goes back to the row.
+		const inActs = (e.target as HTMLElement).closest?.(".sk-sessions-row-acts, .sk-sessions-row-ask");
+		if (inActs && (e.key === "ArrowLeft" || e.key === "Escape")) {
+			e.preventDefault();
+			e.stopPropagation();
+			const row = inActs.closest<HTMLElement>(".sk-sessions-row");
+			if (this.asking) {
+				const path = this.asking;
+				this.asking = null;
+				this.render();
+				this.select(path, true);
+				this.rowOf(path)?.focus();
+			} else row?.focus();
+			return;
+		}
 		const rows = this.rows();
 		const i = rows.indexOf(this.doc.activeElement as HTMLElement);
 		if (i < 0) return;
@@ -881,7 +1065,12 @@ class TabView implements ViewTabInstance {
 		const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
 		const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
 		let handled = true;
-		if (e.key === "ArrowDown") this.focusRow(i + 1);
+		if (e.key === "ArrowRight") {
+			// → goes to the first action of the row; ← comes back.
+			const act = rows[i].querySelector<HTMLElement>(".sk-sessions-row-acts button, .sk-sessions-row-ask button");
+			if (act) act.focus();
+			else handled = false;
+		} else if (e.key === "ArrowDown") this.focusRow(i + 1);
 		else if (e.key === "ArrowUp") {
 			if (i === 0) this.search.focus();
 			else this.focusRow(i - 1);
@@ -906,10 +1095,22 @@ class TabView implements ViewTabInstance {
 	// ----- actions -----
 
 	private menu(path: string, e: MouseEvent | null, anchor?: HTMLElement): void {
+		window.cancelAnimationFrame(this.hoverTimer);
+		if (this.asking) {
+			this.asking = null;
+			this.render();
+		}
 		const s = this.info(path);
 		if (!s) return;
 		const menu = new Menu();
 		menu.addItem((i) => i.setTitle(this.t("desk.open")).setIcon("file-pen-line").onClick(() => this.host.open(path, null)));
+		// The next steps of the brainstorm (the buttons of the row on a computer).
+		const flow = this.rt.flowOf(s);
+		const next = nextAction(flow);
+		const step = (action: CardAction) => menu.addItem((i) => i.setTitle(actionLabel(this.words, flow, action)).setIcon(ICONS[action]).onClick(() => this.act(path, action, new MouseEvent("click"))));
+		if (next) step(next);
+		if (next === "sort") step("finish");
+		if (flow.kind === "closed") step("reopen");
 		menu.addSeparator();
 		const pinned = s.pin !== null && s.pin !== undefined;
 		menu.addItem((i) => i.setTitle(this.t(pinned ? "desk.unpin" : "desk.pin")).setIcon(pinned ? "pin-off" : "pin").onClick(() => this.pin(path)));
@@ -967,6 +1168,7 @@ class TabView implements ViewTabInstance {
 	}
 
 	private askDelete(path: string): void {
+		this.asking = null;
 		this.confirming = path;
 		if (this.desk) this.select(path, false);
 		this.render();
@@ -1195,7 +1397,7 @@ class TabView implements ViewTabInstance {
 		}
 		const { ctx } = this.rt;
 		const data = this.rt.detailOf(s.path);
-		const body = el.createDiv({ cls: "sk-sessions-det-scroll" + (sameSession ? "" : " is-entering") });
+		const body = el.createDiv({ cls: "sk-sessions-det-scroll" + (sameSession || this.quietDetail ? "" : " is-entering") });
 
 		const titleRow = body.createDiv({ cls: "sk-sessions-det-title-row" });
 		const title = titleRow.createEl("h2", { cls: "sk-sessions-det-title", text: s.title });

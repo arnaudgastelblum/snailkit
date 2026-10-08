@@ -154,6 +154,8 @@ export interface TasksApi {
 	openTag(tag: string): Promise<boolean>;
 	/** Reveals the Workbench, selects a registered tab (else Tasks), and optionally its task scope. */
 	openWorkbench(options?: { tab?: string; scope?: "all" | "today" }): Promise<void>;
+	/** Opens the task list with the field of a new task ready (the "New task" command). */
+	newTask(): Promise<void>;
 }
 
 /** Resolves a Workbench destination without changing a view (`tabs`: the registered tabs). */
@@ -194,7 +196,7 @@ function location(value: TaskLocation): TaskRef | null {
 }
 
 /** Builds the API over the module's index and writer. `alive` turns false when the module stops. */
-export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () => boolean, hub?: Pick<TasksHub, "viewActions" | "addViewTab" | "refreshViews" | "showTag" | "openWorkbench"> & Partial<Pick<TasksHub, "ctx" | "taskNotes" | "chime">>): TasksApi {
+export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () => boolean, hub?: Pick<TasksHub, "viewActions" | "addViewTab" | "refreshViews" | "showTag" | "openWorkbench"> & Partial<Pick<TasksHub, "newTask">> & Partial<Pick<TasksHub, "ctx" | "taskNotes" | "chime">>): TasksApi {
 	const taskInfo = (task: Task) => info(task, task.noteLink ? hub?.ctx?.app.metadataCache.getFirstLinkpathDest(task.noteLink, task.path)?.path ?? null : null);
 	const after = (written: Written | null) => (written && alive() ? index.at(written.path, written.line) : null);
 	const run = async (value: TaskLocation, op: (task: Task) => Promise<Written | null>): Promise<TaskInfo | null> => {
@@ -231,6 +233,10 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 		openWorkbench: async (options) => {
 			if (!hub || !alive()) return;
 			await hub.openWorkbench(options);
+		},
+		newTask: async () => {
+			if (!hub?.newTask || !alive()) return;
+			await hub.newTask();
 		},
 		isReady: () => alive() && index.ready,
 		getTasks: (options) => (alive() ? [...index.list.filter((t) => options?.includeDone || !t.done), ...(options?.includeUntagged ? index.untagged : [])].map(taskInfo) : []),

@@ -3404,3 +3404,414 @@ button.sk-sessions-row-invite:hover {
 .sk-sessions-tab[data-layout="side"] .sk-sessions-toolbar {
 	gap: 10px;
 }
+
+/* The navigator of the page (like Home and Tasks): New brainstorm, the views, the contexts, the week. */
+.sk-sessions-nav {
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	gap: 1px;
+	width: 228px;
+	padding: 14px 10px 12px;
+	overflow: auto;
+	border-right: 1px solid var(--sk-line);
+	background: var(--background-primary-alt);
+}
+.sk-sessions-tab button.sk-btn.sk-sessions-nav-new {
+	justify-content: center;
+	gap: 6px;
+	margin: 0 0 12px;
+}
+.sk-sessions-tab button.sk-sessions-nav-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	height: auto;
+	min-height: 30px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 13.5px;
+	font-weight: 400;
+	text-align: left;
+	cursor: var(--cursor);
+}
+.sk-sessions-tab button.sk-sessions-nav-item:hover {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+.sk-sessions-tab button.sk-sessions-nav-item.is-on {
+	background: var(--sk-accent-wash);
+	color: var(--text-normal);
+	font-weight: 550;
+}
+.sk-sessions-nav-ic {
+	display: inline-flex;
+	color: var(--text-faint);
+}
+.sk-sessions-nav-item.is-on .sk-sessions-nav-ic {
+	color: var(--sk-accent);
+}
+.sk-sessions-nav-ic svg {
+	width: 16px;
+	height: 16px;
+}
+.sk-sessions-nav-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-sessions-nav-n {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+.sk-sessions-nav-n.is-warn {
+	color: var(--color-orange);
+	font-weight: 600;
+}
+.sk-sessions-nav-sec {
+	padding: 18px 8px 6px;
+	color: var(--text-faint);
+	font-size: 11px;
+	font-weight: 650;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.sk-sessions-nav-foot {
+	margin-top: auto;
+	padding: 14px 8px 0;
+	color: var(--text-faint);
+	font-size: 12.5px;
+	line-height: 1.5;
+}
+.sk-sessions-tab-bar.is-hidden,
+.sk-sessions-tab-new.is-hidden {
+	display: none;
+}
+
+/* The head of the view. */
+.sk-sessions-vhead .sk-sessions-lead-line {
+	align-items: center;
+}
+.sk-sessions-vhead-title {
+	display: flex;
+	flex: 1;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 12px;
+	min-width: 0;
+}
+.sk-sessions-vhead-title h1 {
+	margin: 0;
+	font-size: 24px;
+	font-weight: 680;
+	letter-spacing: -0.02em;
+	line-height: 1.3;
+}
+.sk-sessions-vhead-sub {
+	color: var(--text-muted);
+	font-size: 13.5px;
+}
+
+/* A row in two lines: the title and its date; the steps, where it stands, what it holds, its next action. */
+.sk-sessions-tab .sk-sessions-row.is-two {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-rows: auto auto;
+	row-gap: 4px;
+	column-gap: 12px;
+	min-height: 52px;
+	padding-right: 40px;
+}
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-title {
+	grid-row: 1;
+	grid-column: 1;
+}
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-date {
+	display: block;
+	grid-row: 1;
+	grid-column: 2;
+	width: auto;
+}
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-meta {
+	display: flex;
+	flex-wrap: nowrap;
+	grid-row: 2;
+	grid-column: 1;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	overflow: hidden;
+}
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-word {
+	flex: none;
+	width: auto;
+	max-width: none;
+	font-size: 12.5px;
+	white-space: nowrap;
+}
+.sk-sessions-row-tally {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-faint);
+	font-size: 12.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-sessions-row-tally::before {
+	content: "·";
+	margin-right: 10px;
+}
+.sk-sessions-row-acts {
+	display: flex;
+	grid-row: 2;
+	grid-column: 2;
+	justify-content: flex-end;
+	gap: 6px;
+	opacity: 0;
+	transition: opacity var(--sk-fast);
+}
+.sk-sessions-row:hover .sk-sessions-row-acts,
+.sk-sessions-row:focus-within .sk-sessions-row-acts,
+.sk-sessions-row:focus .sk-sessions-row-acts,
+.sk-sessions-row.is-selected .sk-sessions-row-acts,
+.sk-sessions-tab.is-phone .sk-sessions-row-acts {
+	opacity: 1;
+}
+.sk-sessions-row-acts .sk-btn {
+	height: 24px;
+	font-size: 12.5px;
+}
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-ask {
+	display: flex;
+	flex-wrap: wrap;
+	grid-row: 3;
+	grid-column: 1 / 3;
+	align-items: center;
+	gap: 8px;
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-confirm {
+	grid-row: 3;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-sessions-row-acts {
+		transition: none;
+	}
+}
+.sk-sessions-tab .sk-sessions-decide-row.is-list {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	width: 100%;
+	height: auto;
+	padding: 9px 10px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: none;
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: 14px;
+	text-align: left;
+	cursor: var(--cursor);
+}
+.sk-sessions-tab .sk-sessions-decide-row.is-list:hover,
+.sk-sessions-tab .sk-sessions-decide-row.is-list:focus-visible {
+	background: var(--sk-hover);
+}
+.sk-sessions-tab .sk-sessions-row.is-two {
+	position: relative;
+}
+.sk-sessions-tab .sk-sessions-row.is-two button.sk-btn.sk-sessions-row-more {
+	position: absolute;
+	top: 50%;
+	right: 6px;
+	transform: translateY(-50%);
+}
+
+/* A narrow page: the navigator keeps its icons only. */
+.sk-sessions-nav-ic.is-narrow-only {
+	display: none;
+}
+@container (max-width: 1100px) {
+	.sk-sessions-nav .sk-sessions-nav-ic.is-narrow-only {
+		display: inline-flex;
+	}
+	.sk-sessions-nav {
+		align-items: center;
+		width: 52px;
+		padding: 12px 6px;
+	}
+	.sk-sessions-nav .sk-sessions-nav-label,
+	.sk-sessions-nav .sk-sessions-nav-n,
+	.sk-sessions-nav .sk-sessions-nav-sec,
+	.sk-sessions-nav .sk-sessions-nav-foot,
+	.sk-sessions-nav .sk-sessions-nav-new span:not(.sk-sessions-card-icon) {
+		display: none;
+	}
+	.sk-sessions-tab button.sk-sessions-nav-item,
+	.sk-sessions-tab button.sk-btn.sk-sessions-nav-new {
+		justify-content: center;
+		width: 36px;
+		padding: 0;
+	}
+}
+/* Side panel and phone: the details of a row wrap rather than being cut. */
+.sk-sessions-tab:not(.is-desk) .sk-sessions-row.is-two .sk-sessions-row-meta {
+	flex-wrap: wrap;
+	row-gap: 2px;
+	overflow: visible;
+}
+.sk-sessions-tab:not(.is-desk) .sk-sessions-row.is-two .sk-sessions-row-word {
+	flex: 0 1 auto;
+	min-width: 0;
+	white-space: normal;
+}
+.sk-sessions-tab:not(.is-desk) .sk-sessions-row.is-two .sk-sessions-row-tally::before {
+	display: none;
+}
+.sk-sessions-tab.is-desk .sk-sessions-row.is-two .sk-sessions-row-word {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sk-sessions-tab.is-desk .sk-sessions-row-tally {
+	flex: 0 100 auto;
+}
+
+.sk-sessions-tab .sk-sessions-row.is-two {
+	flex: none;
+}
+/* Folded, the card takes no room at all. */
+.sk-sessions-tab .sk-sessions-row.is-two {
+	row-gap: 0;
+}
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-meta,
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-acts {
+	margin-top: 4px;
+}
+.sk-sessions-row-acts .sk-btn {
+	gap: 5px;
+}
+.sk-sessions-row-acts .sk-btn svg {
+	width: 13px;
+	height: 13px;
+}
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-ask {
+	display: flex;
+	grid-row: 3;
+	grid-column: 1 / 3;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	margin-top: 6px;
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+.sk-sessions-row-ask-text {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-sessions-row-ask .sk-btn {
+	flex: none;
+	height: 24px;
+	font-size: 12.5px;
+}
+.sk-sessions-row.is-asking .sk-sessions-row-acts {
+	display: none;
+}
+/* Hidden actions take no room: the state and the tally keep the whole line until the row is pointed or selected. */
+.sk-sessions-tab .sk-sessions-row.is-two .sk-sessions-row-acts {
+	display: none;
+	opacity: 1;
+}
+.sk-sessions-tab .sk-sessions-row.is-two:hover .sk-sessions-row-acts,
+.sk-sessions-tab .sk-sessions-row.is-two:focus-within .sk-sessions-row-acts,
+.sk-sessions-tab .sk-sessions-row.is-two.is-selected .sk-sessions-row-acts,
+.sk-sessions-tab.is-phone .sk-sessions-row.is-two .sk-sessions-row-acts {
+	display: flex;
+}
+.sk-sessions-tab .sk-sessions-row.is-two.is-asking .sk-sessions-row-acts {
+	display: none;
+}
+/* Page: the selection follows the pointer, so only the selected row shows its buttons, and it changes at once. */
+.sk-sessions-tab.is-desk .sk-sessions-row.is-two:hover:not(.is-selected):not(:focus-within) .sk-sessions-row-acts {
+	display: none;
+}
+.sk-sessions-tab.is-desk .sk-sessions-row {
+	transition: none;
+}
+
+/* Phone: lighter. One big New brainstorm button, no timeline, To decide on one line, rows without buttons (a tap opens, a long press gives the steps). */
+.sk-sessions-tab.is-phone button.sk-btn.sk-sessions-phone-new {
+	justify-content: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 44px;
+	font-size: 15px;
+}
+.sk-sessions-tab.is-phone .sk-sessions-tl,
+.sk-sessions-tab.is-phone .sk-sessions-tl-legend,
+.sk-sessions-tab.is-phone .sk-sessions-tl-toggle,
+.sk-sessions-tab.is-phone .sk-sessions-tab-new {
+	display: none;
+}
+.sk-sessions-tab.is-phone .sk-sessions-row.is-two .sk-sessions-row-acts,
+.sk-sessions-tab.is-phone .sk-sessions-row.is-two:hover .sk-sessions-row-acts {
+	display: none;
+}
+.sk-sessions-tab.is-phone .sk-sessions-decide.is-line {
+	padding: 0;
+	border: 0;
+	background: none;
+}
+.sk-sessions-tab.is-phone button.sk-sessions-decide-line {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 44px;
+	padding: 0 12px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+	background: var(--sk-surface);
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: 14.5px;
+	text-align: left;
+}
+.sk-sessions-decide-line .sk-sessions-decide-icon {
+	display: inline-flex;
+	color: var(--color-orange);
+}
+.sk-sessions-decide-chev {
+	display: inline-flex;
+	margin-left: auto;
+	color: var(--text-faint);
+}
+.sk-sessions-decide-line svg {
+	width: 16px;
+	height: 16px;
+}
+.sk-sessions-tab.is-phone .sk-sessions-row.is-two {
+	min-height: 56px;
+	padding-right: 12px;
+}
+.sk-sessions-tab.is-phone .sk-sessions-row.is-two button.sk-btn.sk-sessions-row-more {
+	display: none;
+}
+.sk-sessions-tab.is-phone .sk-sessions-tab-list {
+	padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
