@@ -18,6 +18,9 @@ import {
 	learn,
 	lineInfo,
 	looksLikeTask,
+	learnVerb,
+	infinitiveShape,
+	actionVerb,
 	newSessionText,
 	poseLines,
 	proposedTitle,
@@ -82,6 +85,195 @@ test("likely tasks: an action verb first in any of the four languages, or a Dutc
 	assert.ok(isQuestion("Do we keep the newsletter ?"));
 	assert.ok(isQuestion("¿Seguimos con esto"));
 	assert.ok(!isQuestion("No question here."));
+});
+
+test("likely tasks: an infinitive by its shape, in French and Spanish, with elisions and pronouns", () => {
+	for (const s of [
+		// French -er, -ir, -re
+		"Manger les spaghettis",
+		"Manger des pommes.",
+		"Améliorer le code source",
+		"Finir le rapport avant vendredi",
+		"Construire une cabane pour les enfants",
+		"Peindre la chambre",
+		"Résoudre le bug de connexion",
+		"Suivre la formation en ligne",
+		"Boire plus d'eau",
+		"Connaître les horaires du musée",
+		"Rompre le contrat",
+		// French elisions and pronouns before the infinitive
+		"S'inscrire au cours de yoga",
+		"M'occuper du jardin",
+		"S’en occuper demain",
+		"Lui envoyer le devis",
+		"Leur dire merci",
+		"En parler à Marc",
+		"Le rappeler demain",
+		"L'appeler ce soir",
+		// Spanish -ar, -er, -ir, with attached pronouns
+		"Cocinar para el domingo",
+		"Comer más fruta",
+		"Llamarle mañana",
+		"Inscribirse al gimnasio",
+		"Escribirle a Ana",
+		"Reunirnos con el equipo",
+		// Fillers still go first
+		"Penser à manger des légumes",
+		"Hay que cocinar para el domingo",
+		// One word, no other language to contradict it
+		"Ranger.",
+	]) assert.ok(looksLikeTask(s), s);
+	for (const s of [
+		// French false friends
+		"Hier soir, réunion avec Paul",
+		"Premier jet du plan",
+		"Dernier point de la réunion",
+		"Super idée pour la fête",
+		"Cher journal",
+		"Hiver très froid cette année",
+		"Lettre de motivation",
+		"Livre de Murakami",
+		"Ordre du jour chargé",
+		"Dossier client complet",
+		"Courrier du matin",
+		"Avenir de l'équipe",
+		"Plaisir de lire",
+		"Soir de fête",
+		"Notre équipe est solide",
+		"Entre nous, ça va",
+		"Chaque matin, du café",
+		"Pour la suite, on verra",
+		"Leur maison est grande",
+		"Affaire classée",
+		"Commentaire de Paul",
+		"Secrétaire absente",
+		"Être plus patient",
+		"Avoir plus de temps",
+		"Maître de conférence",
+		"Le dîner était bon",
+		"L'atelier de Paul",
+		// Subject followed by a finite verb
+		"Manger est important",
+		"Test is failing",
+		// Spanish false friends
+		"Ayer fui al cine",
+		"Lugar de la reunión",
+		"Hogar dulce hogar",
+		"Mujer del año",
+		"Taller de cerámica",
+		"Placer de leer",
+		"Suerte con el examen",
+		"Cuadernos para el colegio",
+		"Carlos viene mañana",
+		"Parte del dinero",
+		// English and Dutch words with Romance endings
+		"Never mind the rest",
+		"Later today we see",
+		"Cover the costs with the budget",
+		"Other ideas for the team",
+		"Calendar for the next year",
+		"Paper on the desk",
+		"Weer naar huis",
+		"Verder nog iets",
+		"Met de kinderen",
+		"Gisteren duurde de vergadering lang",
+		"Primer borrador del presupuesto",
+		// The date line of a new brainstorm, first names
+		"October 8, 2026 · 08:30",
+		"December 1, 2026 · 9:15",
+		"Olivier passe demain",
+		// Questions never, whatever the verb
+		"Manger des pommes ?",
+		"¿Llamarle mañana?",
+		"S'inscrire au yoga ?",
+	]) assert.ok(!looksLikeTask(s), s);
+});
+
+test("likely tasks: Dutch infinitives last, with separable prefixes and -eren; English list", () => {
+	for (const s of [
+		"De oma terugbellen",
+		"Morgen de offerte doorsturen",
+		"Het abonnement annuleren",
+		"Annuleren abonnement",
+		"Kinderen naar school brengen",
+		"Cadeau geven",
+		"Bring the chairs",
+		"Discuss the budget with Sam",
+		"Remind Sam about Friday",
+		"Follow-up with the bank",
+	]) assert.ok(looksLikeTask(s), s);
+	for (const s of [
+		"Twee weken",
+		"Mijn vrienden",
+		"Les gens annuleren",
+		"The children",
+	]) assert.ok(!looksLikeTask(s), s);
+	assert.deepEqual(infinitiveShape("manger"), ["fr", "es"]);
+	assert.deepEqual(infinitiveShape("cocinar"), ["es"]);
+	assert.deepEqual(infinitiveShape("prendre"), ["fr"]);
+	assert.deepEqual(infinitiveShape("llamarle"), ["es"]);
+	assert.deepEqual(infinitiveShape("reserveren"), ["nl"]);
+	assert.deepEqual(infinitiveShape("miroir"), []);
+	assert.deepEqual(infinitiveShape("recevoir"), ["fr"]);
+	assert.deepEqual(infinitiveShape("faire"), ["fr"]);
+	assert.deepEqual(infinitiveShape("commentaire"), []);
+	assert.deepEqual(infinitiveShape("hier"), []);
+	assert.deepEqual(infinitiveShape("chair"), []);
+	assert.equal(actionVerb("S'inscrire au yoga"), "inscrire");
+	assert.equal(actionVerb("Améliorer le code"), "ameliorer");
+	assert.equal(actionVerb("De verzekering bellen"), "bellen");
+});
+
+test("likely tasks learn from the user's gestures", () => {
+	// A sentence made a task teaches its first word.
+	assert.ok(!looksLikeTask("Gym with Tom"));
+	let verbs = learnVerb([], "Gym with Tom", true);
+	assert.deepEqual(verbs, [["gym", 1]]);
+	assert.ok(looksLikeTask("Gym on Friday", verbs));
+	assert.equal(actionVerb("Gym on Friday", verbs), "gym");
+	// Folded, without accents, past the fillers and the elisions.
+	assert.deepEqual(learnVerb([], "Penser à Écoper le bateau", true), [["ecoper", 1]]);
+	// A word already behind the dot is the one taught (Dutch: the last one).
+	assert.deepEqual(learnVerb([], "De verzekering bellen", true), [["bellen", 1]]);
+	// Nothing to learn from a question, an article or a number.
+	assert.deepEqual(learnVerb([], "Gym on Friday?", true), []);
+	assert.deepEqual(learnVerb([], "The gym", true), []);
+	assert.deepEqual(learnVerb([], "42 push-ups", true), []);
+	assert.deepEqual(learnVerb([], "Le dossier Dupont", true), []);
+	// A dotted sentence kept as an idea loses weight: twice for a shaped verb, four times for a known one.
+	let m = learnVerb([], "Manger des pommes", false);
+	assert.deepEqual(m, [["manger", -1]]);
+	assert.ok(looksLikeTask("Manger des pommes", m));
+	m = learnVerb(m, "Manger des pommes", false);
+	assert.ok(!looksLikeTask("Manger des pommes", m));
+	// Without a dot, nothing more is lowered.
+	assert.equal(learnVerb(m, "Manger des pommes", false), m);
+	let t: ReturnType<typeof learnVerb> = [];
+	for (let i = 0; i < 3; i++) t = learnVerb(t, "Trier les vêtements", false);
+	assert.ok(looksLikeTask("Trier les vêtements", t));
+	t = learnVerb(t, "Trier les vêtements", false);
+	assert.ok(!looksLikeTask("Trier les vêtements", t));
+	assert.deepEqual(t, [["trier", -4]]);
+	// Made a task again: it comes back; a word back to 0 is forgotten.
+	m = learnVerb(m, "Manger des pommes", true);
+	assert.ok(looksLikeTask("Manger des pommes", m));
+	m = learnVerb(m, "Manger des pommes", true);
+	assert.deepEqual(m, []);
+	// Weights stay within bounds.
+	let g: ReturnType<typeof learnVerb> = [];
+	for (let i = 0; i < 10; i++) g = learnVerb(g, "Gym with Tom", true);
+	assert.deepEqual(g, [["gym", 4]]);
+	// The most recent first, and a cap that keeps the surest words.
+	let many: ReturnType<typeof learnVerb> = [["sure", 4]];
+	for (let i = 0; i < 30; i++) many = learnVerb(many, `Word${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))} now`, true, 10);
+	assert.equal(many.length, 10);
+	assert.ok(many.some(([w]) => w === "sure"));
+	assert.equal(many[0][0], "worddb");
+	// Garbage in the settings is ignored.
+	assert.ok(!looksLikeTask("Gym on Friday", [["gym"] as unknown as [string, number]]));
+	assert.ok(looksLikeTask("Call Sam", null as unknown as []));
+	// Forgetting is an empty list, kept on reset like the learned tags.
+	assert.deepEqual(DEFAULTS.verbs, []);
 });
 
 test("fillers go away, titles are clean", () => {
@@ -594,7 +786,7 @@ const NOTE = ["", "[[Inbox]]", "October 5, 2026 · 07:48", "", "Three zones.", "
 
 test("the tally counts what was dropped and launched; the lines to sort, in order", () => {
 	const s = summarizeNote(NOTE, noClose);
-	assert.deepEqual(countsOf(s, bodyLineCount(NOTE, noClose)), { ideas: 6, tasks: 3, untagged: 1, undecided: 1, lines: 8 });
+	assert.deepEqual(countsOf(s, bodyLineCount(NOTE, noClose)), { ideas: 6, tasks: 3, untagged: 1, undecided: 1, loose: 0, lines: 8 });
 	assert.deepEqual(sortItems(s, NOTE, noClose).map((x) => [x.line, x.kind, x.text, x.description]), [
 		[7, "task", "Sort the boxes", ["The big ones."]],
 		[9, "decide", "Keep the mower?", []],
@@ -633,7 +825,8 @@ test("each decision rewrites the line found again, and is taken back exactly", (
 
 test("the tab's lead sentence and the recap of the week", () => {
 	const flows = [flowOf({ ...base, untagged: 2 }), flowOf(base), flowOf({ ...base, closed: true, untagged: 5 }), flowOf({ ...base, undecided: 1 })];
-	assert.deepEqual(leadOf(flows), { live: 3, untagged: 2, undecided: 1, ready: 1 });
+	assert.deepEqual(leadOf(flows), { live: 3, untagged: 2, undecided: 1, loose: 0, ready: 1 });
+	assert.equal(leadOf([flowOf({ ...base, loose: 4 })]).loose, 4);
 	const day = 86_400_000;
 	assert.deepEqual(weekRecap([{ created: 10 * day, tasks: 3 }, { created: 2 * day, tasks: 9 }, { created: 9.5 * day, tasks: 1 }], 10 * day), { brainstorms: 2, tasks: 4 });
 });
@@ -685,4 +878,107 @@ test("sorting never writes in code, never deletes a block that changed or holds 
 	const empty = linesOf(applyEdit(single, gone).join("\n"));
 	assert.deepEqual(empty, []);
 	assert.equal(applyEdit(empty, revertOf(empty, gone)!).join("\n"), "- [ ] Only");
+});
+
+// ----- sorting the free sentences (likely tasks, questions) -----
+import { keptPrints, leftover, looseItems, prunePrints } from "../src/modules/sessions/flow";
+import { fingerprint, markOf } from "../src/modules/sessions/logic";
+import { keepKept, keptIn, renameKept, withKept } from "../src/modules/sessions/atelier";
+
+const FREE = ["", "[[Inbox]]", "October 8, 2026", "", "Call the plumber about the leak.", "Buy paint for the hall.", "The garden looks nice in October.", "Should we repaint the hall?", "Send the photos to Sam.", ""];
+
+test("free sentences with a dot enter the sorting, in the order of the note, and count as to sort", () => {
+	const s = summarizeNote(FREE, noClose);
+	const items = sortItems(s, FREE, noClose);
+	assert.deepEqual(items.map((x) => [x.line, x.kind, x.text]), [
+		[4, "likely", "Call the plumber about the leak."],
+		[5, "likely", "Buy paint for the hall."],
+		[7, "question", "Should we repaint the hall?"],
+		[8, "likely", "Send the photos to Sam."],
+	]);
+	const loose = looseItems(FREE, noClose).length;
+	const flow = flowOf({ closed: false, archived: false, ...countsOf(s, bodyLineCount(FREE, noClose), loose) });
+	assert.equal(flow.kind, "sort");
+	assert.equal(flow.toSort, 4);
+	assert.equal(sortWord(flow), "lines");
+	assert.equal(nextAction(flow), "sort");
+	assert.deepEqual(leftover(flow), { sort: 4, decide: 0 });
+	// Untagged tasks and dotted sentences: still "lines".
+	assert.equal(sortWord({ untagged: 2, undecided: 0, loose: 1 }), "lines");
+	// Once every line is sorted (kept as ideas here), Finish.
+	const kept = new Set(items.map((x) => fingerprint(x.text)));
+	assert.equal(looseItems(FREE, noClose, { kept }).length, 0);
+	assert.equal(nextAction(flowOf({ closed: false, archived: false, ...countsOf(s, bodyLineCount(FREE, noClose), 0) })), "finish");
+});
+
+test("the dotted sentence is the editor's: a task first, else a question; kept ones are passed over; never in a description", () => {
+	assert.equal(markOf("Nice view. Call the plumber.")?.sentence.text, "Call the plumber.");
+	assert.equal(markOf("Is it red? Call the plumber.")?.kind, "task");
+	assert.equal(markOf("Is it red? Nice.")?.kind, "question");
+	assert.equal(markOf("Call the plumber. Is it red?", [], new Set([fingerprint("Call the plumber.")]))?.kind, "question");
+	assert.equal(markOf("A calm evening."), null);
+	const lines = ["- [ ] Paint the hall #home", "\tBuy paint first.", "", "\tCall Sam about it.", "Buy brushes.", "```", "Call nobody.", "```"];
+	assert.deepEqual(looseItems(lines, noClose).map((x) => x.text), ["Buy brushes."]);
+});
+
+test("each choice on a free sentence: caught like Ctrl+Enter, to decide, deleted alone, kept untouched; all taken back", () => {
+	const lines = ["", "Ideas", "", "Nice view. Call the plumber about the leak. Then rest.", "Buy paint for the hall."];
+	const [first, second] = looseItems(lines, noClose);
+	const task = decideLine(lines, first, "task", "home", "\t", noClose)!;
+	assert.deepEqual(task.inserted, ["Nice view.", "- [ ] Call the plumber about the leak #home", "Then rest."]);
+	assert.deepEqual(applyEdit(applyEdit(lines, task), revertOf(applyEdit(lines, task), task)!), lines);
+	const ask = decideLine(lines, second, "decide", null, "\t", noClose)!;
+	assert.deepEqual(ask.inserted, ["- [?] Buy paint for the hall"]);
+	const gone = decideLine(lines, first, "delete", null, "\t", noClose)!;
+	assert.deepEqual(gone.inserted, ["Nice view. Then rest."]);
+	const alone = decideLine(lines, second, "delete", null, "\t", noClose)!;
+	assert.deepEqual(alone.inserted, []);
+	const after = applyEdit(lines, alone);
+	assert.deepEqual(applyEdit(after, revertOf(after, alone)!), lines);
+	// Kept as an idea: nothing is written in the note.
+	assert.equal(decideLine(lines, first, "idea", null, "\t", noClose), null);
+	// A task needs its tag; a sentence edited meanwhile is left alone.
+	assert.equal(decideLine(lines, first, "task", null, "\t", noClose), null);
+	const edited = [...lines];
+	edited[4] = "Buy paint for the hall today.";
+	assert.equal(decideLine(edited, second, "decide", null, "\t", noClose), null);
+	// A question caught to decide keeps its question mark.
+	const q = looseItems(["Should we repaint the hall?"], noClose)[0];
+	assert.deepEqual(decideLine(["Should we repaint the hall?"], q, "decide", null, "\t", noClose)!.inserted, ["- [?] Should we repaint the hall?"]);
+});
+
+test("kept as an idea: remembered by print in the settings, never sorted again, even after a restart", () => {
+	const items = looseItems(FREE, noClose);
+	const call = items[0];
+	const prints = keptPrints(call, null);
+	assert.deepEqual(prints, [fingerprint("Call the plumber about the leak.")]);
+	// The print does not copy the sentence.
+	assert.ok(!prints[0].includes("plumber"));
+	let kept = withKept([], "Ideas.md", prints, true);
+	// Saved in data.json and read back at the next start.
+	const merged = mergeSettings(DEFAULTS, JSON.parse(JSON.stringify({ sessions: ["Ideas.md"], kept })));
+	const again = sortItems(summarizeNote(FREE, noClose), FREE, noClose, { kept: new Set(keptIn(merged.kept, "Ideas.md")) });
+	assert.ok(!again.some((x) => x.text === call.text));
+	assert.equal(again.length, 3);
+	// Older settings get an empty list.
+	assert.deepEqual(mergeSettings(DEFAULTS, { sessions: ["Old.md"] }).kept, []);
+	// The prints follow the note, leave with it, and Undo takes them back.
+	kept = renameKept(kept, "Ideas.md", "Folder/Ideas.md");
+	assert.deepEqual(keptIn(kept, "Folder/Ideas.md"), prints);
+	assert.deepEqual(keepKept(kept, ["Other.md"]), []);
+	assert.deepEqual(withKept(kept, "Folder/Ideas.md", prints, false), []);
+	// Only the sentences still in the note are remembered.
+	assert.deepEqual(prunePrints([...prints, "gone1"], FREE), prints);
+	// A task kept as an idea becomes "- Text": its sentence is remembered too, else it would come back with a dot.
+	const t = { kind: "task" as const, text: "Call Sam" };
+	assert.deepEqual(keptPrints(t, { inserted: ["- Call Sam"] }), [fingerprint("Call Sam")]);
+	assert.equal(looseItems(["- Call Sam"], noClose, { kept: new Set(keptPrints(t, { inserted: ["- Call Sam"] })) }).length, 0);
+});
+
+test("the sorting offers exactly the dotted lines: nested descriptions left out, a short numbered sentence kept in", () => {
+	const nested = ["- [ ] Parent #work", "\t- [ ] Child", "\tCall the plumber.", "Call the plumber again."];
+	assert.deepEqual(looseItems(nested, noClose).map((x) => x.line), [3]);
+	assert.deepEqual(looseItems(["Buy 2 pencils"], noClose).map((x) => x.text), ["Buy 2 pencils"]);
+	// The header of a new brainstorm never gets a dot.
+	assert.deepEqual(looseItems(["", "[[Inbox]]", "October 8, 2026", "", "Buy 2 pencils"], noClose).map((x) => x.line), [4]);
 });

@@ -3,7 +3,7 @@
 import { moment, TFile } from "obsidian";
 import { isSideLeaf } from "../../core/workbench/state";
 import { TAB_ORDER, WORKBENCH_VIEW_TYPE, type WorkbenchTab } from "../../core/workbench/types";
-import { dueLabel } from "./group";
+import { addDays, dueLabel, sinceDays } from "./group";
 import { plainTitle } from "./parse";
 import type { DayWords } from "./quick-add";
 import { resolveWorkbench, type TasksApi, type ViewAction, type ViewTab } from "./api";
@@ -209,6 +209,21 @@ export class TasksHub {
 
 	async setDue(task: Task, due: string | null): Promise<void> {
 		await this.writer.setDue(task, due);
+	}
+
+	/** Moves many tasks to a day, or removes their dates (`null`): one toast, one Undo for all. */
+	async setDueAll(tasks: readonly Task[], due: string | null): Promise<void> {
+		const { count, undo } = await this.writer.setDueAll(tasks, due);
+		if (!count) return;
+		const today = this.today();
+		const key = due === null ? "toast.bulk-cleared" : due === today ? "toast.bulk-today" : due === addDays(today, 1) ? "toast.bulk-tomorrow" : "toast.bulk-moved";
+		this.offerUndo(this.ctx.tn(key, count, { date: due ? this.dueText(due) : "" }), undo);
+	}
+
+	/** "6 days ago", "Yesterday": how long a task has waited, said without blame. */
+	sinceText(due: string): string {
+		const days = sinceDays(due, this.today());
+		return days === 1 ? this.ctx.t("due.yesterday") : this.ctx.tn("due.since", days);
 	}
 
 	/** Renames; resolves to the task's key afterwards (null when nothing was written). */

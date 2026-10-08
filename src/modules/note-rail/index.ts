@@ -44,6 +44,7 @@ export const noteRail = defineModule<NoteRailSettings>({
 		tasks.toggle("tasksIncludePinned", page.t("settings.tasks-pinned"), { desc: page.t("settings.tasks-pinned-desc") });
 		tasks.toggle("tasksIncludeVaultPins", page.t("settings.tasks-vault"), { desc: page.t("settings.tasks-vault-desc") });
 		tasks.toggle("tasksBadge", page.t("settings.tasks-badge"), { desc: page.t("settings.tasks-badge-desc") });
+		tasks.toggle("badgeOverdue", page.t("settings.badge-overdue"), { desc: page.t("settings.badge-overdue-desc") });
 
 		calendarSection(page);
 	},

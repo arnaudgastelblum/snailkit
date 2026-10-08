@@ -12,16 +12,16 @@ export const tasksPanel: PanelDefinition = {
 	id: "tasks",
 	icon: "list-checks",
 	isAvailable: (_env, view) => view.file?.extension === "md",
-	// With the Tasks module: what is due in the vault (overdue and today). Without: the open tasks of the note.
+	// With the Tasks module: what is due today in the vault (and what is overdue, when the setting says so). Without: the open tasks of the note.
 	badge: (env, view) => {
 		if (!env.settings.tasksBadge) return null;
 		const vault = env.vaultTasks();
-		if (vault) return dueBadge(vault).count;
+		if (vault) return dueBadge(vault, env.settings.badgeOverdue).count;
 		return view.file ? env.app.metadataCache.getFileCache(view.file)?.listItems?.filter((item) => item.task === " ").length || null : null;
 	},
 	badgeTone: (env) => {
 		const vault = env.settings.tasksBadge ? env.vaultTasks() : null;
-		return vault && dueBadge(vault).warn ? "warn" : null;
+		return vault && dueBadge(vault, env.settings.badgeOverdue).warn ? "warn" : null;
 	},
 	create: (ctx, body) => new TasksController(ctx, body),
 };

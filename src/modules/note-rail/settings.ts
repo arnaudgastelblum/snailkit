@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS: NoteRailSettings = {
 	tasksIncludePinned: true,
 	tasksIncludeVaultPins: false,
 	tasksBadge: true,
+	badgeOverdue: false,
 	calendarWeekStart: "monday",
 	calendarWeekNumbers: true,
 	calendarTaskDots: true,

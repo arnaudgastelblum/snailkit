@@ -1,6 +1,6 @@
 import type { TFile } from "obsidian";
 import type { SessionEntry } from "./atelier";
-import type { Learned } from "./logic";
+import type { Learned, LearnedVerbs } from "./logic";
 
 export interface SessionsSettings {
 	/** Folder of new sessions; empty: where Obsidian puts new notes. */
@@ -11,18 +11,24 @@ export interface SessionsSettings {
 	scope: "sessions" | "all";
 	/** Pale dots in the margin next to likely tasks and questions. */
 	dots: boolean;
+	/** The page of a finished brainstorm: the theme's secondary background, a veil of the accent color, or none. */
+	sealedBackground: "theme" | "accent" | "none";
 	/** Paths of the idea sessions (followed through renames). */
 	sessions: string[];
 	/** When each session began ([path, ms]): kept here, a synced copy of the note may get another file date. */
 	created: Array<[string, number]>;
 	/** Words of posed task titles and the tag chosen for them. */
 	learned: Learned;
+	/** First words of sentences: raised when one is made a task, lowered when a dotted one is not (likely tasks). */
+	verbs: LearnedVerbs;
 	/** Tags chosen recently, most recent first. */
 	recentTags: string[];
 	/** Pinned sessions, the last pinned first (followed through renames). */
 	pinned: string[];
 	/** Archived sessions: hidden from the list, the note untouched (followed through renames). */
 	archived: string[];
+	/** Free sentences kept as ideas while sorting, by note: [path, prints] (see `fingerprint`), never sorted again. */
+	kept: Array<[string, string[]]>;
 }
 
 export const DEFAULTS: SessionsSettings = {
@@ -30,12 +36,15 @@ export const DEFAULTS: SessionsSettings = {
 	parent: "",
 	scope: "sessions",
 	dots: true,
+	sealedBackground: "theme",
 	sessions: [],
 	created: [],
 	learned: [],
+	verbs: [],
 	recentTags: [],
 	pinned: [],
 	archived: [],
+	kept: [],
 };
 
 /** Published as the "sessions" service while the module is on (the rail's lightning button uses it). */

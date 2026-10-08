@@ -7,11 +7,11 @@ import { createTasksApi, resolveWorkbench, type ViewTab } from "../src/modules/t
 import { TasksHub } from "../src/modules/tasks/hub";
 import {
 	insertTaskLine, insertToken, locateLine, minimalChange, newTaskPath, removeTag, retagText, retitleText,
-	setDoneLine, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
+	revertLines, setDoneLine, setDueLines, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
 } from "../src/modules/tasks/edit";
 import {
 	addDays, buildTree, countTasks, daysBetween, dueLabel, dueState, fallbackHue, findNode, inScope, isIsoDate,
-	matchesQuery, moveInOrder, nextWeek, passesPriority, sortTasks, todayGroups, upcomingGroups,
+	matchesQuery, moveInOrder, nextWeek, passesPriority, sinceDays, sortTasks, todayGroups, upcomingGroups,
 } from "../src/modules/tasks/group";
 import {
 	flagSet, inlineParts, isInFolder, parseFolderList, parseTagList, parseTaskText, plainTitle, scanTasks, taskKey,
@@ -421,7 +421,9 @@ test("Today and Upcoming views, counts and filters", () => {
 		task({ title: "none", line: 8 }),
 	];
 	const groups = todayGroups(tasks, today);
-	assert.deepEqual(groups.overdue.map((t) => t.title), ["late", "later late"]);
+	// Today first; what waits since earlier, the most recent first. The former order on request.
+	assert.deepEqual(groups.overdue.map((t) => t.title), ["later late", "late"]);
+	assert.deepEqual(todayGroups(tasks, today, true).overdue.map((t) => t.title), ["late", "later late"]);
 	assert.deepEqual(groups.today.map((t) => t.title), ["high today", "low today"]);
 	assert.deepEqual(upcomingGroups(tasks, today).map((g) => [g.date, g.tasks.length]), [["2026-10-05", 2], ["2026-11-01", 1]]);
 	assert.deepEqual(countTasks(tasks, today), { all: 8, overdue: 2, today: 4, upcoming: 3 });
@@ -736,4 +738,80 @@ test("tasks can be put in the user's own order within their tag", () => {
 	const d = task({ title: "d", line: 0 });
 	assert.deepEqual(keys(sortTasks([a, b, c, d], "manual", order)), ["c", "a", "b", "d"], "a new task comes after the placed ones");
 	assert.deepEqual(keys(sortTasks([a, b, c], "notes", order)), ["a", "b", "c"], "other sorts ignore the order");
+});
+
+// ----- Today without a wall of overdue tasks -----
+
+test("Today: 3 due today first, 40 from earlier below, the most recent first; how long each waited", () => {
+	const today = "2026-10-08";
+	const tasks = [
+		...Array.from({ length: 40 }, (_, i) => task({ title: "old " + i, due: addDays(today, -1 - i), line: i })),
+		...[0, 1, 2].map((i) => task({ title: "today " + i, due: today, line: 100 + i })),
+	];
+	const groups = todayGroups(tasks, today);
+	assert.equal(groups.today.length, 3);
+	assert.equal(groups.overdue.length, 40);
+	assert.deepEqual(groups.overdue.slice(0, 2).map((t) => t.due), ["2026-10-07", "2026-10-06"]);
+	assert.equal(sinceDays("2026-10-02", today), 6);
+	assert.equal(sinceDays("2026-10-07", today), 1);
+	assert.equal(sinceDays("2026-10-09", today), 0);
+});
+
+test("moving many dates at once: found again line by line, taken back only where untouched", () => {
+	const lines = ["# Notes", "- [ ] Call #home 📅 2026-10-01", "- [ ] Write #work 📅 2026-09-20", "- [ ] Read #home"];
+	const refs = [{ line: 1, raw: lines[1] }, { line: 2, raw: lines[2] }, { line: 9, raw: "- [ ] Gone #home" }];
+	const moved = setDueLines(lines, refs, "2026-10-09")!;
+	assert.deepEqual(moved.lines.slice(1, 3), ["- [ ] Call #home 📅 2026-10-09", "- [ ] Write #work 📅 2026-10-09"]);
+	assert.equal(moved.changes.length, 2);
+	// Removing the dates.
+	assert.deepEqual(setDueLines(lines, refs, null)!.lines.slice(1, 3), ["- [ ] Call #home", "- [ ] Write #work"]);
+	// Nothing to change: no write.
+	assert.equal(setDueLines(moved.lines, [{ line: 1, raw: moved.lines[1] }], "2026-10-09"), null);
+	// Undo: every date back; a line edited since stays as the user left it.
+	assert.deepEqual(revertLines(moved.lines, moved.changes).lines, lines);
+	const edited = [...moved.lines];
+	edited[2] = "- [ ] Write the report #work 📅 2026-10-09";
+	const back = revertLines(edited, moved.changes);
+	assert.equal(back.restored, 1);
+	assert.equal(back.lines[1], lines[1]);
+	assert.equal(back.lines[2], edited[2]);
+});
+
+test("bulk Undo never puts a date on another task that came to read the same", () => {
+	const lines = ["- [ ] Call #home 📅 2026-10-01", "- [ ] Call #home 📅 2026-09-20"];
+	const moved = setDueLines(lines, lines.map((raw, line) => ({ line, raw })), "2026-10-09")!;
+	assert.equal(moved.lines[0], moved.lines[1]);
+	// The first one edited since: the second keeps its own date back, the first is left as is.
+	const edited = ["- [ ] Call Sam #home 📅 2026-10-09", moved.lines[1]];
+	const back = revertLines(edited, moved.changes);
+	assert.deepEqual(back.lines, ["- [ ] Call Sam #home 📅 2026-10-09", "- [ ] Call #home 📅 2026-09-20"]);
+	assert.equal(back.restored, 1);
+	// Both moved and still identical: each gets one of the two dates back (they cannot be told apart).
+	const shifted = ["# Top", moved.lines[0], moved.lines[1]];
+	assert.deepEqual(revertLines(shifted, moved.changes).lines.slice(1).sort(), [...lines].sort());
+});
+
+/** A line break, for notes built in tests. */
+const NL = String.fromCharCode(10);
+
+test("All to tomorrow: 40 tasks in two notes, one write per note, one Undo for all", async () => {
+	const a = Array.from({ length: 25 }, (_, i) => `- [ ] Task a${i} #home 📅 2026-09-${String(1 + (i % 28)).padStart(2, "0")}`).join(NL);
+	const b = Array.from({ length: 15 }, (_, i) => `- [ ] Task b${i} #work 📅 2026-08-${String(1 + i).padStart(2, "0")}`).join(NL);
+	const { index, writer, files } = fakeVault({ "A.md": a, "B.md": b });
+	await index.build();
+	const vault = (writer as unknown as { ctx: Context }).ctx.app.vault;
+	const process = vault.process.bind(vault);
+	let writes = 0;
+	vault.process = (async (file: TFile, fn: (data: string) => string) => {
+		writes++;
+		return process(file, fn);
+	}) as typeof vault.process;
+	const tasks = index.open().filter((t) => t.due && t.due < "2026-10-08");
+	assert.equal(tasks.length, 40);
+	const { count, undo } = await writer.setDueAll(tasks, "2026-10-09");
+	assert.equal(count, 40);
+	assert.equal(writes, 2);
+	assert.equal(index.open().filter((t) => t.due === "2026-10-09").length, 40);
+	assert.equal(await undo(), true);
+	assert.deepEqual([files["A.md"], files["B.md"]], [a, b]);
 });

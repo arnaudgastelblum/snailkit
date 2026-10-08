@@ -30,6 +30,10 @@ export interface TasksSettings {
 	taskNotePrefix: string;
 	/** A short sound when a task is checked by hand (never when a sync checks it). */
 	doneSound: boolean;
+	/** Today view: overdue tasks first, in warning colors (the former display). Off: today first, the rest folded below. */
+	overdueFirst: boolean;
+	/** Today view: the "Waiting since earlier" block is open (remembered). */
+	earlierOpen: boolean;
 }
 
 export type Context = ModuleContext<TasksSettings>;

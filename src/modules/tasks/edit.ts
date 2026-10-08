@@ -134,6 +134,61 @@ export function setDoneLine(line: string, done: boolean, stamp: string | null): 
 }
 
 /** Finds a line again: same place, else the only identical line of the note. Two candidates: -1. */
+/** One task line rewritten by a change made to many at once. */
+export interface LineChange {
+	at: number;
+	before: string;
+	after: string;
+}
+
+/**
+ * Sets the due date of several tasks of one note (`null` removes it), each found again by its line
+ * and text. Returns the new lines and what changed, or null when nothing did (no write needed).
+ */
+export function setDueLines(lines: readonly string[], refs: ReadonlyArray<{ line: number; raw: string }>, due: string | null): { lines: string[]; changes: LineChange[] } | null {
+	const out = [...lines];
+	const changes: LineChange[] = [];
+	for (const ref of refs) {
+		const at = locateLine(lines, ref.line, ref.raw);
+		if (at < 0 || changes.some((c) => c.at === at)) continue;
+		const next = mapTaskText(out[at], (text) => setDueText(text, due));
+		if (next === null || next === out[at]) continue;
+		changes.push({ at, before: out[at], after: next });
+		out[at] = next;
+	}
+	return changes.length ? { lines: out, changes } : null;
+}
+
+/**
+ * Takes back changes made by `setDueLines`, only on lines that still read as they were left.
+ * Each change takes one line: first those still at their place, then those found once elsewhere
+ * among the lines nobody else claimed. Two candidates: left alone (never a date put on another
+ * task that happens to read the same). Returns the lines and how many came back.
+ */
+export function revertLines(lines: readonly string[], changes: readonly LineChange[]): { lines: string[]; restored: number } {
+	const out = [...lines];
+	const taken = new Set<number>();
+	const place = new Map<LineChange, number>();
+	for (const c of changes) {
+		if (lines[c.at] === c.after && !taken.has(c.at)) {
+			taken.add(c.at);
+			place.set(c, c.at);
+		}
+	}
+	for (const c of changes) {
+		if (place.has(c)) continue;
+		const free: number[] = [];
+		lines.forEach((l, i) => {
+			if (l === c.after && !taken.has(i)) free.push(i);
+		});
+		if (free.length !== 1) continue;
+		taken.add(free[0]);
+		place.set(c, free[0]);
+	}
+	for (const [c, i] of place) out[i] = c.before;
+	return { lines: out, restored: place.size };
+}
+
 export function locateLine(lines: readonly string[], line: number, raw: string): number {
 	if (lines[line] === raw) return line;
 	const hits: number[] = [];

@@ -33,6 +33,8 @@ export const tasks = defineModule<TasksSettings>({
 		taskNotesFolder: "",
 		taskNotePrefix: "Task - ",
 		doneSound: true,
+		overdueFirst: false,
+		earlierOpen: false,
 	},
 	// The order of the tags is the user's arrangement: "Reset to defaults" keeps it.
 	keepOnReset: ["tagOrder", "taskOrder"],
@@ -98,6 +100,8 @@ export const tasks = defineModule<TasksSettings>({
 				placeholder: page.t("settings.excluded-placeholder"),
 				normalize: (value) => parseFolderList(value).join(", "),
 			});
+		page.section(page.t("settings.today"))
+			.toggle("overdueFirst", page.t("settings.overdue-first"), { desc: page.t("settings.overdue-first-desc") });
 		page.section(page.t("settings.groups"))
 			.text("flagTags", page.t("settings.flags"), {
 				desc: page.t("settings.flags-desc"),

@@ -5,7 +5,7 @@
 // discreet stamp, a tinted page, one warm sentence and Reopen.
 import { Platform, setIcon } from "obsidian";
 import { fillCard, stateLabel, type CardAction, type Words } from "./card";
-import { sortItems, type Flow } from "./flow";
+import { sortItems, type Flow, type SortItem } from "./flow";
 import { summarize } from "./logic";
 import type { SessionView } from "./editor";
 
@@ -29,6 +29,8 @@ export class Saisie {
 	private cleanups: Array<() => void> = [];
 	/** A landing to play once the note shows sealed (Finish was just pressed). */
 	private landing = false;
+	/** Finish was asked while lines still wait: the card asks first. */
+	private asking = false;
 
 	constructor(private sv: SessionView) {
 		const doc = sv.view.dom.ownerDocument;
@@ -95,6 +97,7 @@ export class Saisie {
 			return;
 		}
 		const flow = sv.rt.flowOfText(file.path, sv.view.state.doc.toString());
+		if (flow.toSort === 0) this.asking = false;
 		const prev = this.lastKind;
 		this.flow = flow;
 		this.lastKind = flow.kind;
@@ -188,6 +191,7 @@ export class Saisie {
 	private closeCard(): void {
 		window.clearTimeout(this.hoverTimer);
 		this.pinned = false;
+		if (!this.sheet) this.asking = false;
 		if (!this.card) return;
 		this.card.remove();
 		this.card = null;
@@ -210,6 +214,7 @@ export class Saisie {
 			aside: info ? date.format(info.created) : "",
 			where: "note",
 			staleDate: info?.modified ? date.format(info.modified) : undefined,
+			confirmFinish: this.asking,
 			onAction: (a) => this.act(a),
 		});
 	}
@@ -218,10 +223,20 @@ export class Saisie {
 		const file = this.sv.file;
 		if (!file) return;
 		const rt = this.sv.rt;
+		if (action === "finish" && this.flow && this.flow.toSort > 0) {
+			// Lines still wait: the card says so and offers to sort them first (it stays open).
+			this.asking = true;
+			this.pinned = !!this.card;
+			this.renderCard();
+			this.renderSheet();
+			(this.card ?? this.sheet?.el)?.querySelector<HTMLElement>("button[data-action]")?.focus({ preventScroll: true });
+			return;
+		}
+		this.asking = false;
 		this.closeCard();
 		this.closeSheet();
 		if (action === "sort") rt.startSort(file.path, this.pill);
-		else if (action === "finish") void rt.finish(file.path);
+		else if (action === "finish" || action === "finish-anyway") void rt.finish(file.path);
 		else if (action === "reopen") rt.reopen(file);
 		else if (action === "archive") rt.archiveWithUndo(file.path, true);
 		else if (action === "unarchive") rt.archiveWithUndo(file.path, false);
@@ -249,6 +264,7 @@ export class Saisie {
 
 	private closeSheet(): void {
 		if (!this.sheet) return;
+		this.asking = false;
 		this.sheet.el.remove();
 		this.sheet.back.remove();
 		this.sheet = null;
@@ -256,11 +272,13 @@ export class Saisie {
 
 	// ----- Show me: the lines that wait, one by one -----
 
-	private waiting(): number[] {
+	private waiting(): Array<{ line: number; kind: SortItem["kind"] }> {
 		const state = this.sv.view.state;
 		const lines: string[] = [];
 		for (let i = 1; i <= state.doc.lines; i++) lines.push(state.doc.line(i).text);
-		return sortItems(summarize(lines, this.sv.rt.isClosing), lines, this.sv.rt.isClosing).map((x) => x.line + 1);
+		const rt = this.sv.rt;
+		const opts = { verbs: rt.settings.verbs, kept: rt.keptOf(this.sv.file?.path ?? "") };
+		return sortItems(summarize(lines, rt.isClosing), lines, rt.isClosing, opts).map((x) => ({ line: x.line + 1, kind: x.kind }));
 	}
 
 	startShow(): void {
@@ -278,10 +296,10 @@ export class Saisie {
 		}
 		const n = items.length;
 		this.show.i = ((i % n) + n) % n;
-		const lineNo = items[this.show.i];
+		const item = items[this.show.i];
 		const state = this.sv.view.state;
-		const line = state.doc.line(lineNo);
-		const kind = /^\s*(?:[-*+]|\d+[.)])\s\[\?\]/.test(line.text) ? "undecided" : "untagged";
+		const line = state.doc.line(item.line);
+		const kind = { task: "untagged", decide: "undecided", likely: "likely", question: "question" }[item.kind];
 		this.sv.spotLine(line.from, scroll);
 		const doc = this.sv.view.dom.ownerDocument;
 		if (!this.nav) {
@@ -337,6 +355,9 @@ export class Saisie {
 		const sv = this.sv;
 		const doc = sv.view.dom.ownerDocument;
 		sv.view.scrollDOM.addClass("sk-sessions-sealed");
+		const bg = sv.rt.settings.sealedBackground;
+		sv.view.scrollDOM.toggleClass("is-bg-accent", bg === "accent");
+		sv.view.scrollDOM.toggleClass("is-bg-none", bg === "none");
 		const flow = this.flow!;
 		const w = this.words;
 		if (!this.band) {
@@ -377,7 +398,7 @@ export class Saisie {
 	}
 
 	private unseal(): void {
-		this.sv.view.scrollDOM.removeClass("sk-sessions-sealed");
+		this.sv.view.scrollDOM.removeClass("sk-sessions-sealed", "is-bg-accent", "is-bg-none");
 		this.band?.remove();
 		this.stamp?.remove();
 		this.band = null;

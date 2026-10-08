@@ -445,7 +445,10 @@ test("vault summary: overdue and today, done and undated tasks left out", () => 
 	assert.deepEqual(summaryParts({ overdue: 2, today: 1 }), [{ kind: "overdue", count: 2 }, { kind: "today", count: 1 }]);
 	assert.deepEqual(summaryParts({ overdue: 0, today: 3 }), [{ kind: "today", count: 3 }]);
 	assert.deepEqual(summaryParts({ overdue: 0, today: 0 }), []);
-	assert.deepEqual(dueBadge({ overdue: 2, today: 1 }), { count: 3, warn: true });
+	// Today only by default; overdue too (in orange) with "Include overdue in the badge".
+	assert.deepEqual(dueBadge({ overdue: 2, today: 1 }), { count: 1, warn: false });
+	assert.deepEqual(dueBadge({ overdue: 2, today: 0 }), { count: null, warn: false });
+	assert.deepEqual(dueBadge({ overdue: 2, today: 1 }, true), { count: 3, warn: true });
 	assert.deepEqual(dueBadge({ overdue: 0, today: 1 }), { count: 1, warn: false });
 	assert.deepEqual(dueBadge({ overdue: 0, today: 0 }), { count: null, warn: false });
 });

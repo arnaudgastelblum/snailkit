@@ -4,22 +4,41 @@
 export interface DueCounts {
 	overdue: number;
 	today: number;
+	/** Of the overdue ones: due yesterday (they just slipped). */
+	yesterday: number;
 }
 
-/** Open tasks due before `today` (overdue) and on `today` ("YYYY-MM-DD"). Undated and done tasks do not count. */
+/** The day before a "YYYY-MM-DD" day. */
+function dayBefore(day: string): string {
+	const d = new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10) - 1));
+	return d.toISOString().slice(0, 10);
+}
+
+/** Open tasks due before `today` (overdue, yesterday among them) and on `today` ("YYYY-MM-DD"). Undated and done tasks do not count. */
 export function dueCounts(tasks: Iterable<{ due: string | null; done: boolean }>, today: string): DueCounts {
-	const out: DueCounts = { overdue: 0, today: 0 };
+	const out: DueCounts = { overdue: 0, today: 0, yesterday: 0 };
+	const yesterday = dayBefore(today);
 	for (const task of tasks) {
 		if (task.done || !task.due || !/^\d{4}-\d{2}-\d{2}$/.test(task.due)) continue;
-		if (task.due < today) out.overdue++;
-		else if (task.due === today) out.today++;
+		if (task.due < today) {
+			out.overdue++;
+			if (task.due === yesterday) out.yesterday++;
+		} else if (task.due === today) out.today++;
 	}
 	return out;
 }
 
+/**
+ * How the "Tasks due" entry counts: the tasks of today, then the earlier ones apart, small and
+ * neutral ("3 · +12"). Orange only for what slipped yesterday: an old pile is not an alarm.
+ */
+export function dueEntry(counts: DueCounts): { count: number | null; earlier: number; warn: boolean } {
+	return { count: counts.today || null, earlier: counts.overdue, warn: counts.yesterday > 0 };
+}
+
 export type TodayChip =
 	| { kind: "daily"; exists: boolean }
-	| { kind: "due"; overdue: number; today: number }
+	| { kind: "due"; overdue: number; today: number; yesterday: number }
 	| { kind: "brainstorms"; count: number }
 	| { kind: "old"; count: number };
 
@@ -37,7 +56,7 @@ export interface TodayInput {
 /** The chips of the Today row, in their order, empty ones left out. */
 export function todayChips(input: TodayInput): TodayChip[] {
 	const out: TodayChip[] = [{ kind: "daily", exists: input.daily }];
-	if (input.due && (input.due.overdue || input.due.today)) out.push({ kind: "due", overdue: input.due.overdue, today: input.due.today });
+	if (input.due && (input.due.overdue || input.due.today)) out.push({ kind: "due", overdue: input.due.overdue, today: input.due.today, yesterday: input.due.yesterday });
 	if (input.toSort) out.push({ kind: "brainstorms", count: input.toSort });
 	if (input.old) out.push({ kind: "old", count: input.old });
 	return out;

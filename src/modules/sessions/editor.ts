@@ -7,7 +7,7 @@ import { editorInfoField, Platform, Scope, setIcon, type KeymapEventHandler, typ
 import { Composer } from "./compose";
 import { guardField, guardFilters, ours, refresh, spacerField } from "./guard";
 import { undo, undoDepth } from "./history";
-import { bodyStart, fish, groupTag, hiddenLines, indentWidth, isQuestion, lineInfo, looksLikeTask, sentenceAt, sentences, summarize, withoutTag, type LineInfo, type Sentence } from "./logic";
+import { bodyStart, fish, groupTag, hiddenLines, indentWidth, lineInfo, markOf, sentenceAt, summarize, withoutTag, type LineInfo, type Sentence } from "./logic";
 import { Saisie } from "./saisie";
 import type { SessionsRuntime } from "./runtime";
 
@@ -442,11 +442,8 @@ export class SessionView {
 	private markerOf(state: EditorState, n: number): Marker | null {
 		const info = this.lineKind(state, n);
 		if (!info || info.kind !== "free" || this.inDescription(state, n, info)) return null;
-		const all = sentences(info.body);
-		const task = all.find((s) => looksLikeTask(s.text));
-		if (task) return { line: n, kind: "task", sentence: task };
-		const q = all.find((s) => isQuestion(s.text));
-		return q ? { line: n, kind: "question", sentence: q } : null;
+		const mark = markOf(info.body, this.rt.settings.verbs, this.rt.keptOf(this.file?.path ?? ""));
+		return mark ? { line: n, ...mark } : null;
 	}
 
 	private findMarkers(state: EditorState): void {

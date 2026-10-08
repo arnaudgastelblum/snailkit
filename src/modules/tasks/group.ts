@@ -184,12 +184,21 @@ export function findNode(nodes: readonly TagNode[], tag: string): TagNode | null
 	return null;
 }
 
-/** Today view: overdue tasks (oldest first), then tasks due today (highest priority first). */
-export function todayGroups(tasks: readonly Task[], today: string): { overdue: Task[]; today: Task[] } {
+/**
+ * Today view: tasks due today (highest priority first), and those waiting since earlier, the most
+ * recent first (what slipped yesterday comes before an old pile). `overdueFirst`: the former
+ * order, overdue tasks shown first and the oldest first (the "Show overdue first" setting).
+ */
+export function todayGroups(tasks: readonly Task[], today: string, overdueFirst = false): { overdue: Task[]; today: Task[] } {
 	return {
-		overdue: tasks.filter((t) => t.due && t.due < today).sort((a, b) => compareDue(a, b) || comparePriority(a, b) || compareNotes(a, b)),
+		overdue: tasks.filter((t) => t.due && t.due < today).sort((a, b) => (overdueFirst ? compareDue(a, b) : compareDue(b, a)) || comparePriority(a, b) || compareNotes(a, b)),
 		today: tasks.filter((t) => t.due === today).sort((a, b) => comparePriority(a, b) || compareNotes(a, b)),
 	};
+}
+
+/** How long a task has been waiting: days from its date to today (1 for yesterday), 0 when not past. */
+export function sinceDays(due: string, today: string): number {
+	return Math.max(0, daysBetween(due, today));
 }
 
 /** Upcoming view: tasks due after today, one group per day, in date order. */

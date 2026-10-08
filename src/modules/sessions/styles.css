@@ -2496,9 +2496,16 @@ button.sk-sessions-pill:hover,
 }
 
 /* Sealed: a tinted page, a discreet stamp, one warm sentence and Reopen. */
+/* A finished brainstorm: the theme's secondary background (setting "sealedBackground"). */
 .sk-sessions-sealed {
-	background: color-mix(in srgb, var(--color-yellow, #d4b106) 4%, var(--background-primary));
+	background: var(--background-secondary);
 	transition: background 900ms var(--sk-ease);
+}
+.sk-sessions-sealed.is-bg-accent {
+	background: color-mix(in srgb, var(--sk-accent) 5%, var(--background-primary));
+}
+.sk-sessions-sealed.is-bg-none {
+	background: var(--background-primary);
 }
 .sk-sessions-sealed .cm-content {
 	padding-top: 64px !important;
@@ -2747,6 +2754,27 @@ button.sk-sessions-pill:hover,
 	border-style: dashed;
 	border-color: var(--color-orange);
 	border-radius: 50%;
+}
+/* A free sentence: the pale dot of the margin, or its question mark. */
+.sk-sessions-tri-kind.is-likely i {
+	width: 7px;
+	height: 7px;
+	margin: 0 2.5px;
+	border: 0;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--sk-accent) 55%, transparent);
+}
+.sk-sessions-tri-kind.is-question i {
+	width: 12px;
+	height: auto;
+	border: 0;
+	font-style: normal;
+	font-weight: 700;
+	text-align: center;
+	color: var(--color-orange);
+}
+.sk-sessions-tri-kind.is-question i::before {
+	content: "?";
 }
 .sk-sessions-tri-text {
 	margin: 8px 0 0;

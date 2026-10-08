@@ -30,7 +30,7 @@ import { autoChain, HomeMapSource, mapStateAt, usableState, VAULT_ROOT } from ".
 import { cleanRecents, dropRecent, groupRecents, pushRecent, renameRecent, RECENTS_KEPT, seedRecents } from "../src/modules/home/logic/recents";
 import { familyTags, hasTag, leafOf, tagFamilies } from "../src/modules/home/logic/tags";
 import { typesInSearch } from "../src/modules/home/logic/keys";
-import { dueCounts, oldDailyTasks, todayChips, toSortCount } from "../src/modules/home/logic/today";
+import { dueCounts, dueEntry, oldDailyTasks, todayChips, toSortCount } from "../src/modules/home/logic/today";
 import type { World } from "../src/modules/home/logic/world";
 import { cleanSettings, migrateSettings, splitFolders, startLens, LENSES, nextZoom, zoomLevel } from "../src/modules/home/settings-logic";
 import { applyOrder, cleanOrder, dropFromOrder, moveBefore, orderMentions, orderOf, renameInOrder, withOrder } from "../src/modules/home/logic/order";
@@ -369,10 +369,10 @@ test("a page lists sub-MOCs, notes (recent first), brainstorms, and its members"
 test("Today chips: empty ones left out", () => {
 	assert.deepEqual(todayChips({ daily: false, due: null, toSort: null, old: null }), [{ kind: "daily", exists: false }]);
 	assert.deepEqual(
-		todayChips({ daily: true, due: { overdue: 2, today: 0 }, toSort: 0, old: 12 }).map((c) => c.kind),
+		todayChips({ daily: true, due: { overdue: 2, today: 0, yesterday: 0 }, toSort: 0, old: 12 }).map((c) => c.kind),
 		["daily", "due", "old"],
 	);
-	assert.deepEqual(todayChips({ daily: true, due: { overdue: 0, today: 0 }, toSort: 3, old: 0 }).map((c) => c.kind), ["daily", "brainstorms"]);
+	assert.deepEqual(todayChips({ daily: true, due: { overdue: 0, today: 0, yesterday: 0 }, toSort: 3, old: 0 }).map((c) => c.kind), ["daily", "brainstorms"]);
 	const tasks = [
 		{ due: "2026-10-05", done: false },
 		{ due: "2026-10-06", done: false },
@@ -381,7 +381,12 @@ test("Today chips: empty ones left out", () => {
 		{ due: null, done: false },
 		{ due: "soon", done: false },
 	];
-	assert.deepEqual(dueCounts(tasks, "2026-10-06"), { overdue: 1, today: 1 });
+	assert.deepEqual(dueCounts(tasks, "2026-10-06"), { overdue: 1, today: 1, yesterday: 1 });
+	assert.deepEqual(dueCounts([{ due: "2026-09-30", done: false }, { due: "2026-10-31", done: false }], "2026-11-01"), { overdue: 2, today: 0, yesterday: 1 });
+	// "Tasks due": today's count, the earlier ones apart; orange only for what slipped yesterday.
+	assert.deepEqual(dueEntry({ overdue: 12, today: 3, yesterday: 0 }), { count: 3, earlier: 12, warn: false });
+	assert.deepEqual(dueEntry({ overdue: 12, today: 0, yesterday: 2 }), { count: null, earlier: 12, warn: true });
+	assert.deepEqual(dueEntry({ overdue: 0, today: 2, yesterday: 0 }), { count: 2, earlier: 0, warn: false });
 	assert.equal(toSortCount([{ state: "to-sort" }, { state: "open" }, { state: "to-sort" }]), 2);
 });
 

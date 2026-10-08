@@ -17,7 +17,7 @@ export const sessions = defineModule<SessionsSettings>({
 	strings: { en, fr, nl, es },
 	demo: (el, t) => buildDemo(el, t),
 	defaults: DEFAULTS,
-	keepOnReset: ["sessions", "created", "learned", "recentTags", "pinned", "archived"],
+	keepOnReset: ["sessions", "created", "learned", "verbs", "recentTags", "pinned", "archived", "kept"],
 	activate(ctx) {
 		new SessionsRuntime(ctx).start();
 	},
@@ -37,10 +37,17 @@ export const sessions = defineModule<SessionsSettings>({
 		const note = page.section(page.t("settings.note"));
 		note.dropdown("scope", page.t("settings.scope"), { sessions: page.t("scope.sessions"), all: page.t("scope.all") }, { desc: page.t("settings.scope-desc") });
 		note.toggle("dots", page.t("settings.dots"), { desc: page.t("settings.dots-desc") });
+		note.dropdown("sealedBackground", page.t("settings.sealed"), { theme: page.t("sealed.theme"), accent: page.t("sealed.accent"), none: page.t("sealed.none") }, { desc: page.t("settings.sealed-desc") });
 		note.add(page.t("settings.learned"), { desc: page.tn("settings.learned-desc", new Set(page.settings.learned.map(([w]) => w)).size) })
 			.addButton((b) => b.setButtonText(page.t("settings.forget")).setDisabled(!page.settings.learned.length).onClick(async () => {
 				page.settings.learned = [];
 				page.settings.recentTags = [];
+				await page.save();
+				page.refresh();
+			}));
+		note.add(page.t("settings.verbs"), { desc: page.tn("settings.verbs-desc", page.settings.verbs.length) })
+			.addButton((b) => b.setButtonText(page.t("settings.forget")).setDisabled(!page.settings.verbs.length).onClick(async () => {
+				page.settings.verbs = [];
 				await page.save();
 				page.refresh();
 			}));

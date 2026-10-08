@@ -16,7 +16,7 @@ import { mapStateAt, usableState, VAULT_ROOT } from "./logic/map";
 import { typesInSearch } from "./logic/keys";
 import { groupRecents } from "./logic/recents";
 import { familyTags, foldTag, hasTag, leafOf, tagFamilies } from "./logic/tags";
-import { dueCounts, oldDailyTasks, todayChips, toSortCount } from "./logic/today";
+import { dueCounts, dueEntry, oldDailyTasks, todayChips, toSortCount } from "./logic/today";
 import type { HomeRuntime } from "./runtime";
 import { moveUnder, parentLink } from "../../core/places/move";
 import { cleanNoteName, dropRefusal, freeNotePath } from "./logic/moves";
@@ -645,8 +645,8 @@ export class HomeView implements WorkbenchTabInstance {
 			if (chip.kind === "daily") {
 				this.chip(row, { key: "chip:daily", act: "daily", icon: "sun", label: chip.exists ? todayLabel(rt.ctx.lang, f.now) : this.t("today.create"), kbd: "T", title: this.t("today.daily-tip"), pin: daily?.path ?? null });
 			} else if (chip.kind === "due") {
-				const parts = [chip.overdue ? this.tn("today.overdue", chip.overdue) : "", chip.today ? this.tn("today.due", chip.today) : ""].filter(Boolean);
-				this.chip(row, { key: "chip:due", act: "due", icon: "list-checks", warn: chip.overdue > 0, label: parts.join(" · "), title: this.t("today.due-tip") });
+				const parts = [chip.today ? this.tn("today.due", chip.today) : "", chip.overdue ? this.tn("today.earlier", chip.overdue) : ""].filter(Boolean);
+				this.chip(row, { key: "chip:due", act: "due", icon: "list-checks", warn: dueEntry(chip).warn, label: parts.join(" · "), title: this.t("today.due-tip") });
 			} else if (chip.kind === "brainstorms") {
 				this.chip(row, { key: "chip:brainstorms", act: "brainstorms", icon: "zap", label: this.tn("today.brainstorms", chip.count) });
 			} else {
@@ -1399,14 +1399,23 @@ export class HomeView implements WorkbenchTabInstance {
 	// ----- the wide Home: navigator, header, recent drawer -----
 
 	/** One entry of the navigator: an icon, a label, a count (orange when something is late). */
-	private navItem(parent: HTMLElement, o: { key: string; act: string; arg?: string; icon: string; label: string; count?: number | null; warn?: boolean; on?: boolean; kbd?: string; pin?: string | null }): HTMLElement {
+	private navItem(parent: HTMLElement, o: { key: string; act: string; arg?: string; icon: string; label: string; count?: number | null; warn?: boolean; extra?: string; extraTip?: string; on?: boolean; kbd?: string; pin?: string | null }): HTMLElement {
 		const el = this.item(parent, "div", "sk-home-nav-item", { key: o.key, act: o.act, arg: o.arg, pin: o.pin ?? null });
 		el.setAttr("data-sk-item", "");
 		el.toggleClass("is-on", !!o.on);
 		setIcon(el.createSpan({ cls: "sk-home-nav-ic" }), o.icon);
 		el.createSpan({ cls: "sk-home-nav-label", text: o.label });
 		if (o.kbd && !this.touch) el.createEl("kbd", { text: o.kbd });
-		if (o.count) el.createSpan({ cls: "sk-home-n" + (o.warn ? " is-warn" : ""), text: String(o.count) });
+		if (o.count || o.extra) {
+			// With earlier tasks, the warning color goes to them only (today's count stays calm).
+			const n = el.createSpan({ cls: "sk-home-n" + (o.warn && !o.extra ? " is-warn" : "") });
+			if (o.count) n.appendText(String(o.count));
+			// Earlier tasks, apart and quiet: "3 · +12" (named by a hidden text, never a tooltip).
+			if (o.extra) {
+				const extra = n.createSpan({ cls: "sk-home-n-extra" + (o.warn ? " is-warn" : ""), text: (o.count ? " · " : "") + o.extra });
+				if (o.extraTip) extra.createSpan({ cls: "sk-home-sr", text: " " + o.extraTip });
+			}
+		}
 		return el;
 	}
 
@@ -1425,7 +1434,10 @@ export class HomeView implements WorkbenchTabInstance {
 		nav.createDiv({ cls: "sk-home-nav-sec", text: this.t("today.title") });
 		for (const chip of chips) {
 			if (chip.kind === "daily") this.navItem(nav, { key: "chip:daily", act: "daily", icon: "sun", label: chip.exists ? todayLabel(rt.ctx.lang, f.now) : this.t("today.create"), kbd: "T", pin: daily?.path ?? null });
-			else if (chip.kind === "due") this.navItem(nav, { key: "chip:due", act: "due", icon: "list-checks", label: this.t("nav.due"), count: chip.overdue + chip.today, warn: chip.overdue > 0 });
+			else if (chip.kind === "due") {
+				const due = dueEntry(chip);
+				this.navItem(nav, { key: "chip:due", act: "due", icon: "list-checks", label: this.t("nav.due"), count: due.count, warn: due.warn, extra: due.earlier ? `+${due.earlier}` : "", extraTip: due.earlier ? this.tn("today.earlier", due.earlier) : "" });
+			}
 			else if (chip.kind === "brainstorms") this.navItem(nav, { key: "chip:brainstorms", act: "brainstorms", icon: "zap", label: this.t("nav.to-sort"), count: chip.count });
 			else this.navItem(nav, { key: "chip:old", act: "old", icon: "calendar-clock", label: this.t("nav.old"), count: chip.count, on: this.page?.kind === "old-dailies" });
 		}

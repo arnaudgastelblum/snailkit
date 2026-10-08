@@ -302,6 +302,55 @@ body.theme-dark {
 .sk-tasks-grp-today .sk-tasks-grp-ic {
 	color: var(--sk-accent);
 }
+/* What waits since earlier: below today, folded by default, neutral (never red). */
+.sk-tasks-grp-earlier {
+	margin-top: 14px;
+}
+.sk-tasks-grp-earlier > .sk-tasks-grp-h {
+	cursor: default;
+	flex-wrap: wrap;
+	height: auto;
+	min-height: 30px;
+	row-gap: 2px;
+}
+.sk-tasks-grp-earlier > .sk-tasks-grp-h:hover {
+	background: none;
+}
+.sk-tasks-grp-toggle {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	height: 30px;
+	padding: 0 6px 0 2px;
+	border-radius: var(--sk-radius-s);
+	cursor: pointer;
+}
+.sk-tasks-grp-toggle:hover {
+	background: var(--sk-hover);
+}
+.sk-tasks-grp-toggle:focus-visible {
+	outline: 2px solid var(--sk-accent);
+	outline-offset: -2px;
+}
+.sk-tasks-grp-earlier.is-collapsed .sk-tasks-grp-chev {
+	transform: rotate(-90deg);
+}
+.sk-tasks-grp-acts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	margin-left: auto;
+}
+.sk-tasks-grp-acts .sk-btn {
+	color: var(--text-muted);
+	font-size: 12px;
+}
+.sk-tasks-m-due.is-since {
+	color: var(--text-faint);
+}
+.sk-tasks-ph-sub .sk-tasks-earlier {
+	color: var(--text-faint);
+}
 .sk-tasks-grp-day .sk-tasks-grp-ic {
 	color: var(--text-muted);
 }

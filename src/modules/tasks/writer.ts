@@ -3,8 +3,8 @@
 // again before writing, and nothing is written when it is gone.
 import { MarkdownView, Notice, TFile, moment, normalizePath, type Editor, type WorkspaceLeaf } from "obsidian";
 import {
-	insertTaskLine, locateLine, mapTaskText, minimalChange, newTaskPath, retagText, retitleText,
-	setDoneLine, setDueText, setMarkerText, setNoteLinkText, setPriorityText,
+	insertTaskLine, locateLine, mapTaskText, minimalChange, newTaskPath, retagText, retitleText, revertLines,
+	setDoneLine, setDueLines, setDueText, setMarkerText, setNoteLinkText, setPriorityText, type LineChange,
 } from "./edit";
 import { parseTaskText, taskKey } from "./parse";
 import type { TaskIndex } from "./task-index";
@@ -131,6 +131,53 @@ export class TaskWriter {
 
 	setDue(ref: TaskRef, due: string | null, quiet = false): Promise<Written | null> {
 		return this.editText(ref, (text) => setDueText(text, due), quiet);
+	}
+
+	/**
+	 * Sets the due date of many tasks at once (`null` removes it): one write per note. Resolves to
+	 * how many changed and one Undo that puts every date back (where the line was left untouched).
+	 */
+	async setDueAll(refs: readonly TaskRef[], due: string | null): Promise<{ count: number; undo: Undo }> {
+		const byPath = new Map<string, TaskRef[]>();
+		for (const ref of refs) byPath.set(ref.path, [...(byPath.get(ref.path) ?? []), ref]);
+		const done: Array<{ path: string; changes: LineChange[] }> = [];
+		let failed = false;
+		for (const [path, list] of byPath) {
+			// One note that cannot be written does not cost the others, nor their Undo.
+			let changes: LineChange[] = [];
+			try {
+				const written = await this.editFile(path, (lines) => {
+					const result = setDueLines(lines, list, due);
+					changes = result?.changes ?? [];
+					return result?.lines ?? null;
+				});
+				if (written !== null && changes.length) done.push({ path, changes });
+			} catch (error) {
+				failed = true;
+				console.error("[Snailkit] tasks: could not change the dates in " + path, error);
+			}
+		}
+		if (failed) new Notice(this.ctx.t("notice.some-failed"));
+		const count = done.reduce((n, d) => n + d.changes.length, 0);
+		const undo: Undo = async () => {
+			let all = true;
+			for (const { path, changes } of done) {
+				let restored = 0;
+				try {
+					await this.editFile(path, (lines) => {
+						const result = revertLines(lines, changes);
+						restored = result.restored;
+						return restored ? result.lines : null;
+					});
+				} catch (error) {
+					console.error("[Snailkit] tasks: could not undo the dates in " + path, error);
+				}
+				if (restored < changes.length) all = false;
+			}
+			if (!all) new Notice(this.ctx.t("notice.undo-failed"));
+			return all;
+		};
+		return { count, undo };
 	}
 
 	setNoteLink(task: Task, linkTarget: string | null, quiet = false): Promise<Written | null> {

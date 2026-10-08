@@ -96,6 +96,8 @@ class TabView implements ViewTabInstance {
 	/** The card shown over a row (mouse only). */
 	private hoverCard: HTMLElement | null = null;
 	private hoverPath: string | null = null;
+	/** The session whose card asks before Finish (lines still wait), or null. */
+	private asking: string | null = null;
 	private hoverTimer = 0;
 	private contextsEl: HTMLElement;
 	private resize: ResizeObserver | null = null;
@@ -417,11 +419,15 @@ class TabView implements ViewTabInstance {
 		if (!lead.live) {
 			p.appendText(this.t("tab.lead-free") + " ");
 			soft(this.t("tab.lead-free-2"));
-		} else if (lead.untagged + lead.undecided) {
+		} else if (lead.untagged + lead.undecided + lead.loose) {
 			p.appendText(this.tn("tab.lead-live", lead.live));
 			if (lead.untagged) {
 				soft(" · ");
 				p.appendText(this.tn("tab.lead-untagged", lead.untagged));
+			}
+			if (lead.loose) {
+				soft(" · ");
+				p.appendText(this.tn("flow.to-sort", lead.loose));
 			}
 			if (lead.undecided) {
 				soft(" · ");
@@ -624,7 +630,14 @@ class TabView implements ViewTabInstance {
 			const inv = word.createEl("button", { cls: "sk-sessions-row-invite", text: `· ${this.t("tab.finish-it")}`, attr: { type: "button", tabindex: "-1" } });
 			inv.addEventListener("click", (e) => {
 				e.stopPropagation();
-				void this.rt.finish(s.path);
+				if (!flow.toSort) {
+					void this.rt.finish(s.path);
+					return;
+				}
+				// Lines still wait: the card over the row says so and offers to sort them first.
+				this.asking = s.path;
+				this.openHover(row);
+				this.hoverCard?.querySelector<HTMLElement>("button[data-action]")?.focus({ preventScroll: true });
 			});
 		}
 		row.createSpan({ cls: "sk-sessions-row-date", text: date.format(s.closed ? s.modified ?? s.created : s.modified ?? s.created) });
@@ -727,6 +740,7 @@ class TabView implements ViewTabInstance {
 
 	private closeHover(): void {
 		window.clearTimeout(this.hoverTimer);
+		if (this.asking === this.hoverPath) this.asking = null;
 		this.hoverCard?.remove();
 		this.hoverCard = null;
 		this.hoverPath = null;
@@ -742,15 +756,26 @@ class TabView implements ViewTabInstance {
 			asideReady: flow.kind === "ready",
 			where,
 			staleDate: s.modified ? date.format(s.modified) : undefined,
+			confirmFinish: this.asking === s.path,
 			onAction: (a, e) => this.act(s.path, a, e),
 		});
 	}
 
 	private act(path: string, action: CardAction, e: MouseEvent): void {
+		const s = this.info(path);
+		if (action === "finish" && s && this.rt.flowOf(s).toSort > 0) {
+			// Lines still wait: the card says so and offers to sort them first.
+			this.asking = path;
+			const row = this.hoverPath === path ? this.rows().find((r) => r.dataset.path === path) : null;
+			if (row) this.openHover(row);
+			else this.renderDetail();
+			return;
+		}
+		this.asking = null;
 		this.closeHover();
 		const file = this.fileOf(path);
 		if (action === "sort") this.rt.startSort(path, this.root);
-		else if (action === "finish") void this.rt.finish(path);
+		else if (action === "finish" || action === "finish-anyway") void this.rt.finish(path);
 		else if (action === "archive" || action === "unarchive") this.archive(path);
 		else if (action === "reopen" && file) this.rt.reopen(file);
 		else if (action === "open") this.host.open(path, null, e);

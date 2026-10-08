@@ -2,9 +2,9 @@
 // tab and its detail: the frieze of the four steps, the tally (what was dropped and launched), a
 // soft invitation, and one button for the next step.
 import { setIcon } from "obsidian";
-import { nextAction, sortWord, stepStates, STEPS, type Flow } from "./flow";
+import { leftover, nextAction, sortWord, stepStates, STEPS, type Flow } from "./flow";
 
-export type CardAction = "sort" | "finish" | "archive" | "unarchive" | "reopen" | "show" | "open";
+export type CardAction = "sort" | "finish" | "finish-anyway" | "archive" | "unarchive" | "reopen" | "show" | "open";
 
 export interface Words {
 	t(key: string, vars?: Record<string, string | number>): string;
@@ -16,17 +16,28 @@ export function stateLabel(w: Words, flow: Flow): string {
 	if (flow.kind !== "sort") return w.t(`flow.${flow.kind}`);
 	const parts = [w.t("flow.write")];
 	if (flow.untagged) parts.push(w.tn("flow.untagged", flow.untagged));
+	if (flow.loose) parts.push(w.tn("flow.to-sort", flow.loose));
 	if (flow.undecided) parts.push(w.tn("flow.undecided", flow.undecided));
 	return parts.join(" · ");
+}
+
+/** "Still waiting: 2 to sort, 1 to decide.": what Finish would leave, or "" when nothing waits. */
+export function leftoverText(w: Words, flow: Flow): string {
+	const left = leftover(flow);
+	const parts: string[] = [];
+	if (left.sort) parts.push(w.tn("flow.to-sort", left.sort));
+	if (left.decide) parts.push(w.tn("flow.undecided", left.decide));
+	return parts.length ? w.t("flow.left", { parts: parts.join(", ") }) : "";
 }
 
 /** The label of the next step's button ("Sort 3 lines", "Finish"...), or "". */
 export function actionLabel(w: Words, flow: Flow, action: CardAction): string {
 	if (action === "sort") return w.tn(sortWord(flow) === "tasks" ? "flow.sort-tasks" : "flow.sort-lines", flow.toSort);
+	if (action === "finish-anyway") return w.t("flow.finish-anyway");
 	return w.t(`flow.${action}`);
 }
 
-const ICONS: Record<CardAction, string> = { sort: "list-filter", finish: "check", archive: "archive", unarchive: "archive-restore", reopen: "rotate-ccw", show: "eye", open: "file-pen-line" };
+const ICONS: Record<CardAction, string> = { sort: "list-filter", finish: "check", "finish-anyway": "check", archive: "archive", unarchive: "archive-restore", reopen: "rotate-ccw", show: "eye", open: "file-pen-line" };
 
 /** A text whose number is bold: the key formatted with its count, the number wrapped in <b>. */
 export function countText(el: HTMLElement, text: string, n: number): void {
@@ -88,6 +99,8 @@ export interface CardOptions {
 	where: "note" | "list" | "detail";
 	/** "Nothing new since {date}" when stale. */
 	staleDate?: string;
+	/** Finish was asked while lines still wait: the card says what is left and offers to sort them first. */
+	confirmFinish?: boolean;
 	onAction(action: CardAction, e: MouseEvent): void;
 }
 
@@ -106,17 +119,26 @@ export function fillCard(el: HTMLElement, w: Words, flow: Flow, o: CardOptions):
 	else if (flow.stale && o.staleDate) invite = w.t("flow.invite-stale", { date: o.staleDate });
 	else if (flow.kind === "ready") invite = w.t("flow.invite-ready");
 	if (invite) el.createEl("p", { cls: "sk-sessions-card-invite", text: invite });
+	const left = o.confirmFinish && !flow.closed && !flow.archived ? leftoverText(w, flow) : "";
+	if (left) el.createEl("p", { cls: "sk-sessions-card-invite is-left", text: left });
 	const acts = el.createDiv({ cls: "sk-sessions-card-acts" });
-	const button = (action: CardAction, primary: boolean) => {
+	const button = (action: CardAction, primary: boolean, label = actionLabel(w, flow, action)) => {
 		const b = acts.createEl("button", { cls: "sk-btn is-s" + (primary ? " is-primary" : " is-ghost"), attr: { type: "button", "data-action": action } });
 		setIcon(b.createSpan({ cls: "sk-sessions-card-icon" }), ICONS[action]);
-		b.createSpan({ text: actionLabel(w, flow, action) });
+		b.createSpan({ text: label });
 		b.addEventListener("click", (e) => o.onAction(action, e));
 		return b;
 	};
+	if (left) {
+		button("sort", true, w.t("flow.sort-first"));
+		button("finish-anyway", false);
+		return;
+	}
 	const next = nextAction(flow);
 	if (next) button(next, next !== "unarchive" && o.where !== "detail");
 	if (next === "sort" && o.where === "note") button("show", false);
+	// Lines still wait: Finish stays at hand, quietly, and asks first.
+	if (next === "sort") button("finish", false);
 	if (flow.kind === "closed") button("reopen", false);
 	if (o.where === "list") {
 		acts.createSpan({ cls: "sk-sessions-card-gap" });

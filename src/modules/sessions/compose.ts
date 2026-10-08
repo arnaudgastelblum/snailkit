@@ -38,6 +38,8 @@ export class Composer {
 	/** How many of them were its description already (editing a task). */
 	private wasDescription = 0;
 	readonly edit: boolean;
+	/** The sentence caught (a new task, not an edit): it teaches its verb once placed. */
+	private readonly caught: string | null;
 	/** The line numbers, in the text as composed. */
 	taskLine: number;
 	/** The region the catch rewrote, and what it was. */
@@ -96,6 +98,7 @@ export class Composer {
 		if (info.kind === "task") {
 			const split = SessionView.splitTask(line.text);
 			this.edit = true;
+			this.caught = null;
 			this.tag = split.tag;
 			lines = [split.text];
 			task = 0;
@@ -103,6 +106,7 @@ export class Composer {
 			this.caret = line.text.length;
 		} else {
 			this.edit = false;
+			this.caught = info.kind === "decide" ? info.body : info.body.slice(start, end);
 			const f = info.kind === "decide" ? fish(line.text, 0, info.body.length, " ") : fish(line.text, start, end);
 			lines = f.lines;
 			task = f.task;
@@ -1144,6 +1148,7 @@ export class Composer {
 		});
 		this.sv.rememberPose(undoDepth(this.view.state));
 		if (tag) this.sv.rt.learnTag(titleText, tag);
+		if (this.caught !== null) this.sv.rt.learnVerb(this.caught, true);
 
 		// The landing: the task springs into place, the description settles line by line.
 		const taskPos = from + taskOffset;

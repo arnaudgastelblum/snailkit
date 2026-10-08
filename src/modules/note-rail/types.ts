@@ -54,6 +54,8 @@ export interface NoteRailSettings {
 	tasksIncludeVaultPins: boolean;
 	/** Tasks: open task count as a badge on the rail button. */
 	tasksBadge: boolean;
+	/** Tasks: the badge also counts overdue tasks (orange then). Off: today only. */
+	badgeOverdue: boolean;
 
 	/** Calendar: "monday", "sunday" or "language" (the first day of the week of Snailkit's language). */
 	calendarWeekStart: string;

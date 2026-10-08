@@ -36,6 +36,8 @@ export interface SessionInfo {
 	untagged?: number;
 	/** Lines written in the body. */
 	lines?: number;
+	/** Free sentences with a pale dot, still to sort. */
+	loose?: number;
 }
 
 /** Open, to sort (open with tasks without a tag or lines to decide), or closed. */
@@ -301,6 +303,35 @@ export function keepIn(list: readonly string[], paths: readonly string[]): strin
 /** Adds the path in front, or removes it when it is there. */
 export function toggleIn(list: readonly string[], path: string): string[] {
 	return list.includes(path) ? list.filter((p) => p !== path) : [path, ...list];
+}
+
+// ----- free sentences kept as ideas, by note -----
+
+export type KeptList = Array<[string, string[]]>;
+
+/** The prints kept in a note. */
+export function keptIn(list: KeptList, path: string): string[] {
+	const hit = list.find((e) => Array.isArray(e) && e[0] === path && Array.isArray(e[1]));
+	return hit ? hit[1].filter((p) => typeof p === "string") : [];
+}
+
+/** The list with prints added to a note (`on`) or taken out of it; a note left without any is dropped. At most `cap` per note, the latest kept. */
+export function withKept(list: KeptList, path: string, prints: readonly string[], on: boolean, cap = 300): KeptList {
+	const old = keptIn(list, path);
+	const next = on ? [...old.filter((p) => !prints.includes(p)), ...prints].slice(-cap) : old.filter((p) => !prints.includes(p));
+	const rest = list.filter((e) => Array.isArray(e) && e[0] !== path);
+	return next.length ? [...rest, [path, next]] : rest;
+}
+
+/** The list after a rename: the prints follow the note. */
+export function renameKept(list: KeptList, from: string, to: string): KeptList {
+	return list.filter(([p]) => p !== to).map(([p, prints]) => [p === from ? to : p, prints] as [string, string[]]);
+}
+
+/** Only the notes still tracked. */
+export function keepKept(list: KeptList, paths: readonly string[]): KeptList {
+	const keep = new Set(paths);
+	return list.filter((e) => Array.isArray(e) && keep.has(e[0]));
 }
 
 // ----- age -----

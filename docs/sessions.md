@@ -15,10 +15,11 @@ moment.
    write. The rest will come.*
 2. **Sort.** Go through the note once. Each sentence becomes a **task** with its tag, a
    **question** to decide later, or stays an **idea**. Snailkit points at the sentences that sound
-   like actions, and **Sort** takes them one at a time: press `1` task, `2` to decide, `3` idea,
-   `4` delete.
+   like actions or questions, and **Sort** takes them one at a time, with the tasks still without
+   a tag: press `1` task, `2` to decide, `3` idea, `4` delete. A sentence kept as an idea is never
+   offered again.
 3. **Finish.** One line sums the session up, *13 ideas dropped, 4 launched*, and the note is
-   sealed. Mind lighter.
+   sealed. Mind lighter. If lines still wait, the pill says so and offers to sort them first.
 4. **Archive.** Your new tasks are already in the Tasks list with all the others. The brainstorm
    can rest.
 
@@ -28,3 +29,6 @@ moment.
 - The **Brainstorms** tab of the Workbench shows them all on a timeline, with what is left to sort.
 - Everything stays in the note, in plain Markdown: `- [ ] Call the insurer #home/car`.
 - On a phone, tap a sentence to make it a task.
+- The dots learn from you. A sentence you make a task teaches its first word as an action verb, a
+  dotted sentence you keep as an idea or delete makes that word count less. **Likely tasks** in
+  the settings forgets it all.

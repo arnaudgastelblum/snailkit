@@ -3,7 +3,7 @@
 // never what is left), the lines the sorting mode offers one at a time, and how each decision
 // rewrites the note (and how it is taken back). No Obsidian here: tested in test/sessions.test.ts.
 import { locateRaw } from "./atelier";
-import { bodyStart, candidateRange, groupTag, hiddenLines, lineInfo, poseLines, type Summary } from "./logic";
+import { bodyStart, candidateRange, fingerprint, fish, groupTag, hiddenLines, indentWidth, isTagLine, lineInfo, markOf, poseLines, sentences, type LearnedVerbs, type Summary } from "./logic";
 
 /** Where a brainstorm stands. */
 export type FlowKind = "new" | "write" | "sort" | "ready" | "closed" | "archived";
@@ -23,6 +23,8 @@ export interface FlowInput {
 	untagged: number;
 	/** "- [?]" lines. */
 	undecided: number;
+	/** Free sentences with a pale dot (likely tasks, questions) not kept as ideas. */
+	loose?: number;
 	/** Lines written (not blank) in the body of the note. */
 	lines: number;
 	/** Last change (ms), and now: a brainstorm left for a week is invited to finish. */
@@ -31,10 +33,11 @@ export interface FlowInput {
 }
 
 export interface Flow extends FlowInput {
+	loose: number;
 	kind: FlowKind;
 	/** The current step, 0 (Write) to 3 (Archive); 4 once archived (every step done). */
 	step: number;
-	/** Lines the sorting mode would offer: untagged tasks and lines to decide. */
+	/** Lines the sorting mode would offer: untagged tasks, lines to decide, dotted free sentences. */
 	toSort: number;
 	/** No change for 7 days or more, still open: a soft invitation to finish it. */
 	stale: boolean;
@@ -44,7 +47,8 @@ const WEEK = 7 * 86_400_000;
 
 /** Where a brainstorm stands, from its counts. "Sort" comes first when something waits for a choice. */
 export function flowOf(input: FlowInput): Flow {
-	const toSort = input.untagged + input.undecided;
+	const loose = input.loose ?? 0;
+	const toSort = input.untagged + input.undecided + loose;
 	let kind: FlowKind;
 	if (input.archived) kind = "archived";
 	else if (input.closed) kind = "closed";
@@ -54,12 +58,13 @@ export function flowOf(input: FlowInput): Flow {
 	else kind = "write";
 	const step = { new: 0, write: 0, sort: 1, ready: 2, closed: 3, archived: 4 }[kind];
 	const stale = !input.closed && !input.archived && input.modified !== undefined && input.now !== undefined && input.now - input.modified >= WEEK;
-	return { ...input, kind, step, toSort, stale };
+	return { ...input, loose, kind, step, toSort, stale };
 }
 
 /** The counts of a flow, from the summary of a note. */
-export function countsOf(s: Summary, lines: number): Pick<FlowInput, "ideas" | "tasks" | "untagged" | "undecided" | "lines"> {
+export function countsOf(s: Summary, lines: number, loose = 0): Pick<FlowInput, "ideas" | "tasks" | "untagged" | "undecided" | "loose" | "lines"> {
 	return {
+		loose,
 		ideas: s.ideas,
 		tasks: s.tasks.length,
 		untagged: s.tasks.filter((t) => !t.tag && !t.done).length,
@@ -103,9 +108,14 @@ export function nextAction(flow: Pick<Flow, "kind">): NextAction {
 	}
 }
 
-/** What the "Sort" button names: tasks only, lines to decide only, or lines (both). */
-export function sortWord(flow: Pick<Flow, "untagged" | "undecided">): "tasks" | "lines" {
-	return flow.untagged && !flow.undecided ? "tasks" : "lines";
+/** What the "Sort" button names: tasks only (untagged tasks and nothing else), or lines. */
+export function sortWord(flow: Pick<FlowInput, "untagged" | "undecided" | "loose">): "tasks" | "lines" {
+	return flow.untagged && !flow.undecided && !flow.loose ? "tasks" : "lines";
+}
+
+/** What still waits before Finish, said in one sentence: lines to sort, to decide, or both. */
+export function leftover(flow: Pick<Flow, "untagged" | "undecided" | "loose">): { sort: number; decide: number } {
+	return { sort: flow.untagged + flow.loose, decide: flow.undecided };
 }
 
 // ----- the sorting mode -----
@@ -114,8 +124,13 @@ export interface SortItem {
 	/** 0-based line, and the line as read (found again before any change). */
 	line: number;
 	raw: string;
-	kind: "task" | "decide";
+	/** A task without tag, a "- [?]" line, a free sentence that looks like a task, a free question. */
+	kind: "task" | "decide" | "likely" | "question";
+	/** The text shown: the title, or the dotted sentence of a free line. */
 	text: string;
+	/** For a free sentence: where it is in the body of its line. */
+	start?: number;
+	end?: number;
 	/** The description lines of a task, trimmed. */
 	description: string[];
 	/** The line and its description exactly as shown: Delete removes them only if they still read so. */
@@ -127,14 +142,86 @@ export function linesOf(text: string): string[] {
 	return text === "" ? [] : text.split(/\r?\n/);
 }
 
-/** The lines a brainstorm offers to sort, in the order of the note: open tasks without a tag, lines to decide. */
-export function sortItems(s: Summary, lines: readonly string[], isClosing: (line: string) => boolean): SortItem[] {
+/** What the sorting mode reads besides the note: the user's verbs, the sentences kept as ideas. */
+export interface LooseOptions {
+	verbs?: LearnedVerbs;
+	kept?: ReadonlySet<string>;
+}
+
+/**
+ * The free lines with a pale dot, as the editor draws them: a sentence that looks like a task (else
+ * a question), not kept as an idea, on a free line of the body that is not a task's description.
+ */
+export function looseItems(lines: readonly string[], isClosing: (line: string) => boolean, opts: LooseOptions = {}): SortItem[] {
+	const hidden = hiddenLines(lines);
+	const out: SortItem[] = [];
+	// From the first line, as the editor: a short line with a digit ("Buy 2 pencils") is not taken for a date header.
+	for (let i = 0; i < lines.length; i++) {
+		const raw = lines[i];
+		if (hidden[i] || isClosing(raw)) continue;
+		const info = lineInfo(raw);
+		if (info.kind !== "free" || isTagLine(raw) || inDescription(lines, i, info.indent)) continue;
+		const mark = markOf(info.body, opts.verbs, opts.kept);
+		if (!mark) continue;
+		const s = mark.sentence;
+		out.push({ line: i, raw, kind: mark.kind === "task" ? "likely" : "question", text: s.text, start: s.start, end: s.end, description: [], block: [raw] });
+	}
+	return out;
+}
+
+/**
+ * An indented line whose nearest less indented line above (blank lines skipped, 60 lines at most)
+ * is a task or a line to decide: its description, never a new idea. The editor's rule, exactly.
+ */
+export function inDescription(lines: readonly string[], i: number, indent: string): boolean {
+	const own = indentWidth(indent);
+	if (!own) return false;
+	for (let k = i - 1; k >= 0 && k >= i - 60; k--) {
+		if (!lines[k].trim()) continue;
+		const other = lineInfo(lines[k]);
+		if (indentWidth(other.indent) < own) return other.kind === "task" || other.kind === "decide";
+	}
+	return false;
+}
+
+/** How many free lines wait to be sorted (see `looseItems`). */
+export function looseCount(lines: readonly string[], isClosing: (line: string) => boolean, opts: LooseOptions = {}): number {
+	return looseItems(lines, isClosing, opts).length;
+}
+
+/**
+ * The lines a brainstorm offers to sort, in the order of the note: open tasks without a tag, lines
+ * to decide, and free sentences with a pale dot.
+ */
+export function sortItems(s: Summary, lines: readonly string[], isClosing: (line: string) => boolean, opts: LooseOptions = {}): SortItem[] {
 	const block = (line: number) => lines.slice(line, line + 1 + candidateRange(lines, line, isClosing).description);
 	const out: SortItem[] = [
 		...s.tasks.filter((t) => !t.tag && !t.done).map((t) => ({ line: t.line, raw: t.raw, kind: "task" as const, text: t.title, description: t.description, block: block(t.line) })),
 		...s.questions.filter((q) => q.explicit).map((q) => ({ line: q.line, raw: q.raw, kind: "decide" as const, text: q.text, description: [], block: block(q.line) })),
+		...looseItems(lines, isClosing, opts),
 	];
 	return out.sort((a, b) => a.line - b.line);
+}
+
+/**
+ * The prints to remember when a line is kept as an idea: the dotted sentence of a free line, or,
+ * for a task or a line to decide, every sentence of the line it becomes (else it would come back
+ * with a dot).
+ */
+export function keptPrints(item: Pick<SortItem, "kind" | "text">, edit: Pick<LineEdit, "inserted"> | null): string[] {
+	if (item.kind === "likely" || item.kind === "question") return [fingerprint(item.text)];
+	const line = edit?.inserted[0];
+	return line === undefined ? [] : sentences(lineInfo(line).body).map((x) => fingerprint(x.text));
+}
+
+/** The prints kept in a note, without those of sentences it no longer holds. */
+export function prunePrints(prints: readonly string[], lines: readonly string[]): string[] {
+	const present = new Set<string>();
+	for (const l of lines) {
+		const info = lineInfo(l);
+		if (info.kind === "free") for (const x of sentences(info.body)) present.add(fingerprint(x.text));
+	}
+	return prints.filter((p, i) => present.has(p) && prints.indexOf(p) === i);
 }
 
 export type Choice = "task" | "decide" | "idea" | "delete";
@@ -171,13 +258,30 @@ function placeOf(lines: readonly string[], item: Pick<SortItem, "line" | "raw">)
  * - decide: "- [?] Text" (a line to decide stays as it is: null change);
  * - idea: the line without its checkbox ("- Text");
  * - delete: the line and its description, exactly as shown, are removed.
+ * A free sentence (likely task, question) is caught as Ctrl/Cmd+Enter catches it: what comes before
+ * stays on its line, what comes after goes below; "idea" writes nothing (null); "delete" removes the
+ * sentence only, and the line when nothing else is left on it.
  */
-export function decide(lines: readonly string[], item: Pick<SortItem, "line" | "raw" | "block">, choice: Choice, tag: string | null, unit: string, isClosing: (line: string) => boolean): LineEdit | null {
+export function decide(lines: readonly string[], item: Pick<SortItem, "line" | "raw" | "block"> & Partial<Pick<SortItem, "kind" | "text" | "start" | "end">>, choice: Choice, tag: string | null, unit: string, isClosing: (line: string) => boolean): LineEdit | null {
 	const at = placeOf(lines, item);
 	if (at === null) return null;
 	const raw = lines[at];
 	if (hiddenLines(lines)[at] || isClosing(raw)) return null;
 	const info = lineInfo(raw);
+	const edit = (removed: string[], inserted: string[]): LineEdit => ({ at, removed, inserted, before: at > 0 ? lines[at - 1] : null, after: at + removed.length < lines.length ? lines[at + removed.length] : null });
+	if (item.kind === "likely" || item.kind === "question") {
+		const { start, end } = item;
+		if (info.kind !== "free" || start === undefined || end === undefined || info.body.slice(start, end) !== item.text) return null;
+		if (choice === "idea") return null;
+		if (choice === "delete") {
+			const rest = [info.body.slice(0, start).trim(), info.body.slice(end).trim()].filter(Boolean).join(" ");
+			return edit([raw], rest ? [info.indent + info.marker + rest] : []);
+		}
+		if (choice === "task" && !tag) return null;
+		const caught = fish(raw, start, end, choice === "task" ? " " : "?");
+		if (choice === "task") caught.lines[caught.task] = poseLines({ taskLine: caught.lines[caught.task], tag, candidates: [], count: 0, wasDescription: 0, unit })[0];
+		return edit([raw], caught.lines);
+	}
 	const sortable = info.kind === "decide" || (info.kind === "task" && info.box === " " && !groupTag(info.body));
 	if (!sortable) return null;
 	let removed = [raw];
@@ -196,7 +300,7 @@ export function decide(lines: readonly string[], item: Pick<SortItem, "line" | "
 		removed = [...block];
 		inserted = [];
 	}
-	return { at, removed, inserted, before: at > 0 ? lines[at - 1] : null, after: at + removed.length < lines.length ? lines[at + removed.length] : null };
+	return edit(removed, inserted);
 }
 
 /** The lines with the edit applied. */
@@ -255,16 +359,19 @@ export interface Lead {
 	live: number;
 	untagged: number;
 	undecided: number;
+	/** Free sentences with a pale dot. */
+	loose: number;
 	ready: number;
 }
 
 /** The sentence at the top of the tab: how many are in progress, what waits (summed over them). */
-export function leadOf(list: ReadonlyArray<Pick<Flow, "kind" | "untagged" | "undecided">>): Lead {
+export function leadOf(list: ReadonlyArray<Pick<Flow, "kind" | "untagged" | "undecided"> & { loose?: number }>): Lead {
 	const live = list.filter((f) => f.kind !== "closed" && f.kind !== "archived");
 	return {
 		live: live.length,
 		untagged: live.reduce((n, f) => n + f.untagged, 0),
 		undecided: live.reduce((n, f) => n + f.undecided, 0),
+		loose: live.reduce((n, f) => n + (f.loose ?? 0), 0),
 		ready: live.filter((f) => f.kind === "ready").length,
 	};
 }

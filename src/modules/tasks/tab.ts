@@ -308,6 +308,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.notePreview?.detach();
 		const focusedScope = this.rootEl.doc.activeElement?.closest<HTMLElement>("[data-scope]")?.dataset.scope;
 		const focusedRow = this.rootEl.doc.activeElement?.closest<HTMLElement>(".sk-tasks-row[data-key]")?.dataset.key;
+		const focusedEarlier = !!this.rootEl.doc.activeElement?.closest(".sk-tasks-grp-earlier .sk-tasks-grp-toggle");
 		const scroll = this.listEl.scrollTop;
 		const addInput = this.listEl.querySelector<HTMLInputElement>(".sk-tasks-add input");
 		const adding = addInput && this.rootEl.doc.activeElement === addInput ? { value: addInput.value, pos: addInput.selectionStart ?? 0 } : null;
@@ -337,6 +338,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		this.listEl.scrollTop = scroll;
 		if (focusedRow && this.st.sel) this.rowOf(this.st.sel)?.focus({ preventScroll: true });
+		if (focusedEarlier) this.listEl.querySelector<HTMLElement>(".sk-tasks-grp-earlier .sk-tasks-grp-toggle")?.focus({ preventScroll: true });
 		if (focusedScope) Array.from(this.rootEl.querySelectorAll<HTMLElement>("[data-scope]")).find((item) => item.dataset.scope === focusedScope)?.focus({ preventScroll: true });
 		this.rootEl.querySelectorAll<HTMLElement>("[data-sk-zone] button").forEach((button) => button.setAttr("data-sk-item", ""));
 		if (adding) {
@@ -475,7 +477,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				const button = scopes.createEl("button", { cls: "sk-tasks-scope" + (this.st.scope === id ? " is-on" : "") });
 				button.dataset.scope = id;
 				button.createSpan({ text: this.t("scope." + id) });
-				if (n) button.createSpan({ cls: "sk-tasks-scope-n" + (id === "today" && c.overdue ? " is-warn" : ""), text: String(n) });
+				if (n) button.createSpan({ cls: "sk-tasks-scope-n" + (id === "today" && c.overdue && this.settings.overdueFirst ? " is-warn" : ""), text: String(n) });
 				button.addEventListener("click", () => this.setScope(id));
 				if (id === "today") this.dropTarget(button, { due: true });
 			}
@@ -502,9 +504,15 @@ export class TasksTab implements WorkbenchTabInstance {
 						? c.upcoming
 						: c.all;
 			sub.createSpan({ text: this.hub.ctx.tn("head.open", n) });
-			if (c.overdue) sub.createSpan({ cls: "sk-tasks-od", text: " · " + this.hub.ctx.tn("head.overdue", c.overdue) });
 			const dueToday = c.today - c.overdue;
-			if (dueToday) sub.createSpan({ cls: "sk-tasks-td", text: " · " + this.hub.ctx.tn("head.today", dueToday) });
+			if (this.settings.overdueFirst) {
+				if (c.overdue) sub.createSpan({ cls: "sk-tasks-od", text: " · " + this.hub.ctx.tn("head.overdue", c.overdue) });
+				if (dueToday) sub.createSpan({ cls: "sk-tasks-td", text: " · " + this.hub.ctx.tn("head.today", dueToday) });
+			} else {
+				// Today first; what waits since earlier is said after it, without warning colors.
+				if (dueToday) sub.createSpan({ cls: "sk-tasks-td", text: " · " + this.hub.ctx.tn("head.today", dueToday) });
+				if (c.overdue) sub.createSpan({ cls: "sk-tasks-earlier", text: " · " + this.hub.ctx.tn("head.earlier", c.overdue) });
+			}
 			this.sortLabel?.setText(this.t("sort." + this.sortMode()));
 			this.headEl?.querySelectorAll<HTMLElement>(".sk-tasks-fchip").forEach((chip) => chip.toggleClass("is-on", filter.includes(chip.dataset.prio ?? "")));
 		}
@@ -604,7 +612,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			return it;
 		};
 		item("all", "layers", c.all);
-		this.dropTarget(item("today", "sun", c.today, c.overdue > 0), { due: true });
+		this.dropTarget(item("today", "sun", c.today, c.overdue > 0 && this.settings.overdueFirst), { due: true });
 		item("upcoming", "calendar", c.upcoming);
 		nav.createDiv({ cls: "sk-tasks-nav-sec", text: this.t("nav.tags") });
 		const walk = (node: TagNode) => {
@@ -766,9 +774,16 @@ export class TasksTab implements WorkbenchTabInstance {
 		const today = this.today();
 		if (this.st.adding === "" && !scope.startsWith("tag:")) this.addRow(list, null);
 		if (scope === "today") {
-			const groups = todayGroups(tasks, today);
-			if (groups.overdue.length) this.smartGroup(list, "overdue", this.t("group.overdue"), "alert-circle", groups.overdue);
-			if (groups.today.length || !groups.overdue.length) this.smartGroup(list, "today", this.t("group.today"), "sun", groups.today);
+			const first = this.settings.overdueFirst;
+			const groups = todayGroups(tasks, today, first);
+			if (first) {
+				if (groups.overdue.length) this.smartGroup(list, "overdue", this.t("group.overdue"), "alert-circle", groups.overdue);
+				if (groups.today.length || !groups.overdue.length) this.smartGroup(list, "today", this.t("group.today"), "sun", groups.today);
+			} else {
+				if (groups.today.length) this.smartGroup(list, "today", this.t("group.today"), "sun", groups.today);
+				else if (groups.overdue.length) this.empty(list, "sun", "empty.today-clear");
+				if (groups.overdue.length) this.earlierGroup(list, groups.overdue);
+			}
 			if (!groups.overdue.length && !groups.today.length) this.empty(list, "sun", "empty.today");
 			return;
 		}
@@ -818,6 +833,49 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (kind === "today") this.dropTarget(group, { due: true });
 		const body = group.createDiv({ cls: "sk-tasks-grp-body" });
 		for (const t of tasks) this.row(body, t, true);
+	}
+
+	/**
+	 * What waits since earlier, below today: folded by default (remembered), neutral colors, and
+	 * three actions that move every task of the block at once (one Undo for all).
+	 */
+	private earlierGroup(parent: HTMLElement, tasks: Task[]): void {
+		const open = this.settings.earlierOpen || !!this.st.query;
+		const group = parent.createDiv({ cls: "sk-tasks-grp sk-tasks-grp-earlier" + (open ? "" : " is-collapsed") });
+		const head = group.createDiv({ cls: "sk-tasks-grp-h" });
+		const toggle = head.createDiv({ cls: "sk-tasks-grp-toggle", attr: { "aria-expanded": String(open), "data-focus-key": "earlier" } });
+		// An item of the list's zone (Tab, arrows), like the rows; Enter or Space folds or unfolds.
+		this.zoneItem(toggle);
+		icon(toggle, "chevron-down", "sk-tasks-grp-chev");
+		toggle.createSpan({ cls: "sk-tasks-grp-lbl", text: this.t("group.earlier") });
+		toggle.createSpan({ cls: "sk-tasks-grp-count", text: String(tasks.length) });
+		const flip = () => {
+			// The list is drawn again; refresh() gives the focus back to the toggle.
+			this.settings.earlierOpen = !this.settings.earlierOpen;
+			void this.hub.ctx.saveSettings();
+			this.refresh();
+		};
+		toggle.addEventListener("click", flip);
+		toggle.addEventListener("keydown", (e) => {
+			if (e.key !== " ") return;
+			e.preventDefault();
+			flip();
+		});
+		const acts = head.createDiv({ cls: "sk-tasks-grp-acts" });
+		const today = this.today();
+		const act = (key: string, due: string | null) => {
+			const b = acts.createEl("button", { cls: "sk-btn is-ghost is-s", text: this.t(key), attr: { type: "button" } });
+			b.addEventListener("click", (e) => {
+				e.stopPropagation();
+				void this.hub.setDueAll(tasks, due);
+			});
+		};
+		act("earlier.today", today);
+		act("earlier.tomorrow", addDays(today, 1));
+		act("earlier.clear", null);
+		if (!open) return;
+		const body = group.createDiv({ cls: "sk-tasks-grp-body" });
+		for (const t of tasks) this.row(body, t, true, true);
 	}
 
 	private tagGroup(parent: HTMLElement, node: TagNode, depth: number, headless = false): void {
@@ -888,7 +946,8 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	// ----- rows -----
 
-	private row(parent: HTMLElement, t: Task, showTag: boolean): HTMLElement {
+	/** A task row. `since`: in the block of what waits since earlier, its date says how long, without warning colors. */
+	private row(parent: HTMLElement, t: Task, showTag: boolean, since = false): HTMLElement {
 		const today = this.today();
 		const row = parent.createDiv({
 			cls: "sk-tasks-row" + (t.priority ? " p-" + t.priority : "") + (this.st.sel === t.key ? " is-sel" : "") + (this.freshKey === t.key ? " is-new" : ""),
@@ -921,7 +980,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		renderInline(title.createSpan({ cls: "sk-tasks-txt" }), t.title);
 		descriptionPreview(main, t.description);
 		const meta = (this.layout === "page" ? row : main).createDiv({ cls: "sk-tasks-row-meta" });
-		const state = dueState(t.due, today);
+		const state = since ? "since" : dueState(t.due, today);
+		const dueWords = (due: string) => (since ? this.hub.sinceText(due) : this.hub.dueText(due));
 		if (this.layout === "page") {
 			if (showTag) capsule(title, t.primary, this.hub, "sk-tasks-cap-sm");
 			const icons = meta.createSpan({ cls: "sk-tasks-m-icons" });
@@ -932,12 +992,12 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.sessionMarker(note, t.path);
 			note.createEl("b", { text: noteName(t.path) });
 			const due = meta.createSpan({ cls: "sk-tasks-m-due" + (state ? " is-" + state : "") });
-			if (t.due) due.appendText(this.hub.dueText(t.due));
+			if (t.due) due.appendText(dueWords(t.due));
 		} else {
 			if (t.due) {
 				const due = meta.createSpan({ cls: "sk-tasks-m-due is-" + state });
-				icon(due, state === "overdue" ? "alert-circle" : "calendar");
-				due.appendText(this.hub.dueText(t.due));
+				icon(due, state === "overdue" ? "alert-circle" : since ? "clock" : "calendar");
+				due.appendText(dueWords(t.due));
 			}
 			if (showTag) capsule(meta, t.primary, this.hub, "sk-tasks-cap-xs");
 			this.subtaskCount(meta, t);

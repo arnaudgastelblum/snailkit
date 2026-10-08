@@ -13,6 +13,7 @@ import {
 	dayPart,
 	hhmm,
 	learn,
+	learnVerb,
 	newSessionText,
 	proposedTitle,
 	remember,
@@ -22,9 +23,9 @@ import {
 } from "./logic";
 import { TAB_ORDER } from "../../core/workbench/types";
 import type { PlacesService, SessionsService, SessionsSettings, TagColorsService, TasksWorkbench } from "./types";
-import { contextOf, contextsOf, createdAt, keepCreated, keepIn, renameCreated, renameIn, searchable, serviceList, toggleIn, triageOf, locateRaw, withContext, withCreated, type SessionInfo, type Triage } from "./atelier";
+import { contextOf, contextsOf, createdAt, keepCreated, keepIn, keepKept, keptIn, renameCreated, renameKept, withKept, renameIn, searchable, serviceList, toggleIn, triageOf, locateRaw, withContext, withCreated, type SessionInfo, type Triage } from "./atelier";
 import { SessionsTab } from "./tab";
-import { applyEdit, bodyLineCount, countsOf, flowOf, linesOf, type Flow, type LineEdit } from "./flow";
+import { applyEdit, bodyLineCount, countsOf, flowOf, linesOf, looseCount, type Flow, type LineEdit } from "./flow";
 import { Sorter } from "./tri";
 
 
@@ -35,7 +36,9 @@ export class SessionsRuntime {
 	/** Read from each session's text: closed or not, how many choices still wait. */
 	private state = new Map<string, { closed: boolean; pending: number }>();
 	/** Counts and searchable text of each session, for the Sessions tab of the Workbench. */
-	private details = new Map<string, { summary: Summary; triage: Triage; context: string | null; text: string; lines: number }>();
+	private details = new Map<string, { summary: Summary; triage: Triage; context: string | null; text: string; lines: number; loose: number }>();
+	/** The prints kept as ideas, by note, as last built from the settings. */
+	private keptCache: { from: SessionsSettings["kept"]; byPath: Map<string, Set<string>> } | null = null;
 	/** The sorting mode, while it is open. */
 	sorter: Sorter | null = null;
 	/** Counts the requests to open the sorting mode: only the last one opens. */
@@ -51,6 +54,8 @@ export class SessionsRuntime {
 	stopped = false;
 	/** Sessions, pins and archive as last seen by syncTracked. */
 	private trackedSnapshot = "";
+	/** Sentences kept as ideas and learned verbs as last counted. */
+	private countsSnapshot = "";
 	readonly isClosing: (line: string) => boolean;
 
 	constructor(readonly ctx: ModuleContext<SessionsSettings>) {
@@ -134,6 +139,7 @@ export class SessionsRuntime {
 			this.settings.created = renameCreated(this.settings.created, oldPath, file.path);
 			this.settings.pinned = renameIn(this.settings.pinned, oldPath, file.path);
 			this.settings.archived = renameIn(this.settings.archived, oldPath, file.path);
+			this.settings.kept = renameKept(this.settings.kept, oldPath, file.path);
 			const s = this.state.get(oldPath);
 			this.state.delete(oldPath);
 			if (s) this.state.set(file.path, s);
@@ -150,6 +156,7 @@ export class SessionsRuntime {
 			this.settings.created = keepCreated(this.settings.created, this.settings.sessions);
 			this.settings.pinned = keepIn(this.settings.pinned, this.settings.sessions);
 			this.settings.archived = keepIn(this.settings.archived, this.settings.sessions);
+			this.settings.kept = keepKept(this.settings.kept, this.settings.sessions);
 			this.state.delete(file.path);
 			this.details.delete(file.path);
 			this.tab.changed();
@@ -171,6 +178,12 @@ export class SessionsRuntime {
 		ctx.onSettingsChange(() => {
 			this.refreshViews();
 			this.syncTracked();
+			// Sentences kept as ideas or verbs changed elsewhere (another device, Forget): counted again.
+			if (this.countsKey() !== this.countsSnapshot) {
+				this.countsSnapshot = this.countsKey();
+				this.countsSnapshot = this.countsKey();
+			void this.readAll();
+			}
 		});
 		ctx.onServicesChange(() => this.refreshViews());
 		// The Brainstorms tab of the Workbench (a view of the core): there whether Tasks is on or not.
@@ -258,10 +271,11 @@ export class SessionsRuntime {
 		const lines = text.split(/\r?\n/);
 		const last = [...lines].reverse().find((l) => l.trim()) ?? "";
 		const summary = summarize(lines, this.isClosing);
+		const loose = this.looseOf(path, lines);
 		const before = this.state.get(path);
-		const next = { closed: this.isClosing(last), pending: summary.pending };
+		const next = { closed: this.isClosing(last), pending: summary.pending + loose };
 		this.state.set(path, next);
-		this.details.set(path, { summary, triage: triageOf(summary), context: contextOf(lines.slice(0, 40)), text: searchable(text.slice(0, 20000)), lines: bodyLineCount(lines, this.isClosing) });
+		this.details.set(path, { summary, triage: triageOf(summary), context: contextOf(lines.slice(0, 40)), text: searchable(text.slice(0, 20000)), lines: bodyLineCount(lines, this.isClosing), loose });
 		this.tab.changed();
 		if (!before || before.closed !== next.closed || (before.pending > 0) !== (next.pending > 0)) this.changed();
 		this.updateStatus();
@@ -304,11 +318,13 @@ export class SessionsRuntime {
 		const created = keepCreated(this.settings.created, kept);
 		const pinned = keepIn(this.settings.pinned, kept);
 		const archived = keepIn(this.settings.archived, kept);
-		if (kept.length === this.settings.sessions.length && created.length === this.settings.created.length && pinned.length === this.settings.pinned.length && archived.length === this.settings.archived.length) return;
+		const ideas = keepKept(this.settings.kept, kept);
+		if (kept.length === this.settings.sessions.length && created.length === this.settings.created.length && pinned.length === this.settings.pinned.length && archived.length === this.settings.archived.length && ideas.length === this.settings.kept.length) return;
 		this.settings.sessions = kept;
 		this.settings.created = created;
 		this.settings.pinned = pinned;
 		this.settings.archived = archived;
+		this.settings.kept = ideas;
 		void this.ctx.saveSettings();
 	}
 
@@ -366,6 +382,7 @@ export class SessionsRuntime {
 				undecided: d?.triage.undecided ?? 0,
 				untagged: d?.triage.untagged ?? 0,
 				lines: d?.lines ?? 0,
+				loose: d?.loose ?? 0,
 			});
 		}
 		if (recorded) this.saveSoon();
@@ -557,6 +574,7 @@ export class SessionsRuntime {
 		this.settings.created = keepCreated(this.settings.created, this.settings.sessions);
 		this.settings.pinned = keepIn(this.settings.pinned, this.settings.sessions);
 		this.settings.archived = keepIn(this.settings.archived, this.settings.sessions);
+		this.settings.kept = keepKept(this.settings.kept, this.settings.sessions);
 		this.state.delete(file.path);
 		this.details.delete(file.path);
 		await this.ctx.saveSettings();
@@ -694,7 +712,7 @@ export class SessionsRuntime {
 
 	/** Where a session stands, from what was last read of it. */
 	flowOf(s: SessionInfo, now = Date.now()): Flow {
-		return flowOf({ closed: s.closed, archived: !!s.archived, ideas: s.ideas, tasks: s.tasks, untagged: s.untagged ?? 0, undecided: s.undecided ?? 0, lines: s.lines ?? 0, modified: s.modified, now });
+		return flowOf({ closed: s.closed, archived: !!s.archived, ideas: s.ideas, tasks: s.tasks, untagged: s.untagged ?? 0, undecided: s.undecided ?? 0, loose: s.loose ?? 0, lines: s.lines ?? 0, modified: s.modified, now });
 	}
 
 	/** Where a note stands, from its text as the editor holds it. */
@@ -703,7 +721,7 @@ export class SessionsRuntime {
 		const summary = summarize(lines, this.isClosing);
 		const last = [...lines].reverse().find((l) => l.trim()) ?? "";
 		const file = this.file(path);
-		return flowOf({ closed: this.isClosing(last), archived: this.settings.archived.includes(path), ...countsOf(summary, bodyLineCount(lines, this.isClosing)), modified: file?.stat.mtime, now });
+		return flowOf({ closed: this.isClosing(last), archived: this.settings.archived.includes(path), ...countsOf(summary, bodyLineCount(lines, this.isClosing), this.looseOf(path, lines)), modified: file?.stat.mtime, now });
 	}
 
 	/** One session's info, or null. */
@@ -863,6 +881,72 @@ export class SessionsRuntime {
 		this.settings.learned = learn(this.settings.learned, title, tag);
 		this.settings.recentTags = remember(this.settings.recentTags, tag);
 		this.saveSoon();
+	}
+
+	/**
+	 * Learns from a sentence made a task (`task` true) or a dotted one kept as an idea or deleted,
+	 * so that the dots follow the user's own verbs.
+	 */
+	learnVerb(sentence: string, task: boolean): void {
+		const next = learnVerb(this.settings.verbs, sentence, task);
+		if (next === this.settings.verbs) return;
+		this.settings.verbs = next;
+		this.saveSoon();
+	}
+
+	/** Takes a lesson back (Undo in the sorting mode), only when nothing was learned since. */
+	restoreVerbs(after: SessionsSettings["verbs"], before: SessionsSettings["verbs"]): void {
+		if (this.settings.verbs !== after) return;
+		this.settings.verbs = before;
+		this.saveSoon();
+	}
+
+	// ----- free sentences kept as ideas -----
+
+	/** The prints of the sentences kept as ideas in a note. */
+	keptOf(path: string): ReadonlySet<string> {
+		const list = this.settings.kept;
+		if (this.keptCache?.from !== list) this.keptCache = { from: list, byPath: new Map() };
+		let set = this.keptCache.byPath.get(path);
+		if (!set) this.keptCache.byPath.set(path, (set = new Set(keptIn(list, path))));
+		return set;
+	}
+
+	/** What the sorting reads besides a note: the user's verbs and the sentences kept as ideas there. */
+	sortOptions(path: string): { verbs: SessionsSettings["verbs"]; kept: ReadonlySet<string> } {
+		return { verbs: this.settings.verbs, kept: this.keptOf(path) };
+	}
+
+	/** Free sentences with a pale dot in a note, still to sort. */
+	looseOf(path: string, lines: readonly string[]): number {
+		return looseCount(lines, this.isClosing, this.sortOptions(path));
+	}
+
+	/** Keeps sentences of a note as ideas (`on`), or takes them back: they leave the sorting, or come back. */
+	keepIdeas(path: string, prints: readonly string[], on: boolean): void {
+		if (!prints.length || !this.settings.sessions.includes(path)) return;
+		this.settings.kept = withKept(this.settings.kept, path, prints, on);
+		this.saveSoon();
+		void this.reread(path);
+		this.refreshViews();
+	}
+
+	/** Forgets the prints of a note whose sentences are gone (`prints`: those still there). */
+	pruneKept(path: string, prints: readonly string[]): void {
+		const old = keptIn(this.settings.kept, path);
+		if (prints.length === old.length) return;
+		this.settings.kept = withKept(withKept(this.settings.kept, path, old, false), path, prints, true);
+		this.saveSoon();
+	}
+
+	private countsKey(): string {
+		return JSON.stringify([this.settings.kept, this.settings.verbs]);
+	}
+
+	/** Reads a session again (what it counts changed without its text changing). */
+	private async reread(path: string): Promise<void> {
+		const text = await this.textOf(path);
+		if (text !== null && !this.stopped && this.settings.sessions.includes(path)) this.read(path, text);
 	}
 
 	// ----- status bar -----

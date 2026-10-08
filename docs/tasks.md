@@ -23,4 +23,7 @@ the two.
 
 - Open the list from the ribbon, the Note menu or Home. Right click a task for every action.
 - Keyboard: `↑` `↓` to move, `X` to check, `T` for today, `N` for a new task.
+- **Today** shows today's tasks first. Those from earlier days wait quietly below, folded, with
+  **All to today**, **All to tomorrow** or **Remove dates** to settle them in one go (one Undo
+  for all). Prefer the overdue ones first? **Show overdue first** in the settings.
 - Nothing is stored apart: everything is plain Markdown in your notes, readable by other tools.

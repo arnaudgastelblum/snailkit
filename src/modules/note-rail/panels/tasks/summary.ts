@@ -22,8 +22,11 @@ export function summaryParts(counts: VaultTaskCounts): Array<{ kind: "overdue" |
 	return parts;
 }
 
-/** The badge of the rail button: overdue and today together, orange when something is overdue. */
-export function dueBadge(counts: VaultTaskCounts): { count: number | null; warn: boolean } {
-	const count = counts.overdue + counts.today;
-	return { count: count || null, warn: counts.overdue > 0 };
+/**
+ * The badge of the rail button: the tasks due today. With `withOverdue` (the "Include overdue in
+ * the badge" setting), the overdue ones too, orange when there are some.
+ */
+export function dueBadge(counts: VaultTaskCounts, withOverdue = false): { count: number | null; warn: boolean } {
+	const count = counts.today + (withOverdue ? counts.overdue : 0);
+	return { count: count || null, warn: withOverdue && counts.overdue > 0 };
 }

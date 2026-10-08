@@ -1,7 +1,7 @@
 // Pure logic of idea sessions: sentences, what looks like a task, how a caught sentence is
 // written back, how tags are suggested and learned, and what the summary counts. No Obsidian here:
 // everything is tested in test/sessions.test.ts.
-import { END_VERBS, FILLERS, START_VERBS, STOP_WORDS } from "./verbs";
+import { ARTICLE_CLITICS, CLITICS, END_VERBS, FILLERS, FINITE, MARKERS, NL_PREFIXES, NOT_VERBS, OIR_VERBS, START_VERBS, STOP_WORDS } from "./verbs";
 
 // ----- sentences -----
 
@@ -67,6 +67,7 @@ export function sentenceAt(text: string, offset: number): Sentence | null {
 // ----- what a sentence looks like -----
 
 const fold = (s: string) => s.toLowerCase().replace(/[’‘`]/g, "'");
+const deburr = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /** The sentence without a leading "don't forget to", "penser à", "niet vergeten"... */
 export function stripFillers(text: string): string {
@@ -89,19 +90,219 @@ export function stripFillers(text: string): string {
 
 const WORD = /[\p{L}\p{N}][\p{L}\p{N}'-]*/gu;
 
-/** A sentence that starts with an action verb (or, in Dutch, ends with an infinitive). */
-export function looksLikeTask(sentence: string): boolean {
+/**
+ * [word, weight]: what the user taught about the first words of sentences, most recent first. A
+ * sentence made a task raises its word, a dotted sentence kept as an idea or deleted lowers it.
+ * Words are folded and without accents. Kept in the settings, never in a note.
+ */
+export type LearnedVerbs = Array<[string, number]>;
+
+/** How much the word itself says: a verb of the lists, a word shaped like an infinitive, or nothing. */
+const KNOWN = 4;
+const SHAPED = 2;
+/** Learned weights stay within [-WEIGHT_MAX, WEIGHT_MAX]: four refusals silence even a known verb. */
+const WEIGHT_MAX = 4;
+
+type Lang = "fr" | "es" | "en" | "nl";
+const LANGS: readonly Lang[] = ["fr", "es", "en", "nl"];
+
+const PLAIN_START: ReadonlySet<string> = new Set([...START_VERBS].map(deburr));
+const PLAIN_END: ReadonlySet<string> = new Set([...END_VERBS].map(deburr));
+const FUNCTION_WORDS: ReadonlySet<string> = new Set([...STOP_WORDS, ...CLITICS, ...ARTICLE_CLITICS, ...FINITE, ...LANGS.flatMap((l) => [...MARKERS[l]].map(deburr))]);
+/** French -aire and -oire words are nouns, but for these verbs. */
+const AIRE_VERBS: ReadonlySet<string> = new Set("faire refaire defaire satisfaire parfaire plaire deplaire complaire taire extraire distraire soustraire traire boire croire".split(" "));
+
+/**
+ * The languages in which a word (folded, without accents) has the shape of an infinitive: French
+ * -er -ir and a few -re endings (-dre, -ttre, -aitre, -ire, -ivre...), Spanish -ar -er -ir with
+ * or without attached pronouns ("llamarle", "inscribirse"), Dutch -eren. Known false friends
+ * (NOT_VERBS) have none.
+ */
+export function infinitiveShape(word: string): Lang[] {
+	if (word.length < 4 || !/^[a-z]+$/.test(word) || NOT_VERBS.has(word)) return [];
+	if (/oir$/.test(word)) return OIR_VERBS.has(word) ? ["fr"] : [];
+	if (/[ae]ir$/.test(word)) return [];
+	if (/[ei]r$/.test(word)) return ["fr", "es"];
+	if (/ar$/.test(word)) return ["es"];
+	if (/eren$/.test(word)) return word.length >= 6 ? ["nl"] : [];
+	if (/[ao]ire$/.test(word)) return AIRE_VERBS.has(word) ? ["fr"] : [];
+	if (/(?:dre|ttre|aitre|oitre|ire|ivre|ompre|aincre|clure|clore)$/.test(word)) return ["fr"];
+	const pronoun = /^(.+)(ar|er|ir)(?:se|me|te|nos|le|les|lo|la|los|las)(?:lo|la|los|las)?$/.exec(word);
+	// "cuadernos", "inviernos": -ernos is a plural far more often than "hacernos".
+	if (pronoun && pronoun[1].length >= 2 && !(pronoun[2] === "er" && /nos$/.test(word))) return ["es"];
+	return [];
+}
+
+/** How many words only one language uses, per language (an elided "l'", "d'" counts for French). */
+function languages(tokens: readonly string[]): Record<Lang, number> {
+	const n: Record<Lang, number> = { fr: 0, es: 0, en: 0, nl: 0 };
+	for (const t of tokens) {
+		if (/^(?:[cdjlmnst]|qu)'./.test(t)) n.fr++;
+		else for (const l of LANGS) if (MARKERS[l].has(t)) n[l]++;
+	}
+	return n;
+}
+
+/** The rest of the sentence does not speak another language more than one of `langs`. */
+function fits(langs: readonly Lang[], n: Record<Lang, number>): boolean {
+	const own = Math.max(...langs.map((l) => n[l]));
+	const other = Math.max(0, ...LANGS.filter((l) => !langs.includes(l)).map((l) => n[l]));
+	return own >= other;
+}
+
+/**
+ * The word that should be a verb at the start: past "s'", "m'", "l'" and pronouns ("lui
+ * envoyer", "s'en occuper"). `weak`: after "le", "la", "les" or "l'", which are articles as often,
+ * only a known or learned verb counts ("le rappeler", not "le dîner"). `next`: index of the word after it.
+ */
+function headOf(found: readonly string[]): { word: string; weak: boolean; next: number } {
+	let i = 0;
+	let weak = false;
+	let w = deburr(found[0]);
+	for (let step = 0; step < 3; step++) {
+		const elided = /^([lmst])'(.+)$/.exec(w);
+		if (elided) {
+			weak = weak || elided[1] === "l";
+			w = elided[2];
+			continue;
+		}
+		if ((CLITICS.has(w) || ARTICLE_CLITICS.has(w)) && i + 1 < found.length) {
+			weak = weak || ARTICLE_CLITICS.has(w);
+			w = deburr(found[++i]);
+			continue;
+		}
+		break;
+	}
+	// "don't" is "don", "follow-up" is "follow".
+	return { word: w.replace(/'.*$/, "").split("-")[0], weak, next: i + 1 };
+}
+
+const weightCache = new WeakMap<LearnedVerbs, Map<string, number>>();
+
+function weightsOf(learned: LearnedVerbs): Map<string, number> {
+	let map = weightCache.get(learned);
+	if (!map) {
+		map = new Map();
+		for (const e of learned) if (Array.isArray(e) && typeof e[0] === "string" && typeof e[1] === "number") map.set(e[0], e[1]);
+		weightCache.set(learned, map);
+	}
+	return map;
+}
+
+/** The words of a sentence once its fillers are gone, or null for a question or nothing. */
+function analyzable(sentence: string): string[] | null {
 	const t = stripFillers(sentence);
-	if (!t || /\?\s*$/.test(t) || t.startsWith("¿")) return false;
+	if (!t || /\?\s*$/.test(t) || t.startsWith("¿")) return null;
 	const found: string[] = fold(t).match(WORD) ?? [];
-	if (!found.length || found.length > 40) return false;
-	const first = found[0].replace(/'.*$/, "");
-	if (START_VERBS.has(first)) return true;
-	return found.length >= 2 && END_VERBS.has(found[found.length - 1]);
+	return found.length && found.length <= 40 ? found : null;
+}
+
+/**
+ * The word that makes a sentence look like a task, or null: an action verb first (a verb of the
+ * lists, or a word shaped like an infinitive in a language the sentence may be written in), or a
+ * Dutch infinitive last. What the user taught (`learned`) adds to or takes from each word. A
+ * question never is a task; "don't forget to", "penser à"... are skipped first.
+ */
+export function actionVerb(sentence: string, learned: LearnedVerbs = []): string | null {
+	const found = analyzable(sentence);
+	if (!found) return null;
+	const weights = weightsOf(Array.isArray(learned) ? learned : []);
+	const head = headOf(found);
+	const after = found[head.next];
+	if (head.word && !(after && FINITE.has(deburr(after)))) {
+		const w = head.word;
+		const known = PLAIN_START.has(w);
+		const shapes = known || head.weak ? [] : infinitiveShape(w);
+		const base = known ? KNOWN : shapes.length && fits(shapes, languages(found.slice(head.next))) ? SHAPED : 0;
+		if (base + (weights.get(w) ?? 0) >= 1) return w;
+	}
+	if (found.length >= 2) {
+		const last = deburr(found[found.length - 1]);
+		if (/en$/.test(last)) {
+			const known = PLAIN_END.has(last) || NL_PREFIXES.some((p) => last.startsWith(p) && PLAIN_END.has(last.slice(p.length)));
+			const base = known ? KNOWN : infinitiveShape(last).includes("nl") && fits(["nl"], languages(found.slice(0, -1))) ? SHAPED : 0;
+			if (base + (weights.get(last) ?? 0) >= 1) return last;
+		}
+	}
+	return null;
+}
+
+/** A sentence that starts with an action verb (or, in Dutch, ends with an infinitive): see `actionVerb`. */
+export function looksLikeTask(sentence: string, learned: LearnedVerbs = []): boolean {
+	return actionVerb(sentence, learned) !== null;
+}
+
+/** A word worth learning as a verb: not an article, a pronoun, a preposition, a number... */
+function learnable(word: string): boolean {
+	return word.length >= 3 && /^[a-z]+$/.test(word) && !FUNCTION_WORDS.has(word);
+}
+
+/**
+ * The word a sentence made a task teaches: the one that already makes it look like a task, or
+ * else its first word, or else (Dutch) its last word in -en. Null for a question.
+ */
+export function verbKey(sentence: string, learned: LearnedVerbs = []): string | null {
+	const found = analyzable(sentence);
+	if (!found) return null;
+	const known = actionVerb(sentence, learned);
+	if (known) return known;
+	const head = headOf(found);
+	if (!head.weak && learnable(head.word)) return head.word;
+	const last = deburr(found[found.length - 1]);
+	return found.length >= 2 && /en$/.test(last) && learnable(last) ? last : null;
+}
+
+/**
+ * Learns from a gesture: `task` true when the sentence was made a task (its verb gains weight),
+ * false when a dotted sentence was kept as an idea or deleted (the word behind the dot loses
+ * weight; a sentence without a dot teaches nothing). Keeps at most `cap` words, the surest
+ * (largest weight either way) and most recent. A word back to weight 0 is forgotten.
+ */
+export function learnVerb(learned: LearnedVerbs, sentence: string, task: boolean, cap = 300): LearnedVerbs {
+	const list = Array.isArray(learned) ? learned : [];
+	const key = task ? verbKey(sentence, list) : actionVerb(sentence, list);
+	if (!key || !learnable(key)) return list;
+	const old = weightsOf(list).get(key) ?? 0;
+	const weight = Math.max(-WEIGHT_MAX, Math.min(WEIGHT_MAX, old + (task ? 1 : -1)));
+	const rest = list.filter(([w]) => w !== key);
+	const all: LearnedVerbs = weight ? [[key, weight], ...rest] : rest;
+	if (all.length <= cap) return all;
+	return all.map((e, i) => ({ e, i })).sort((a, b) => Math.abs(b.e[1]) - Math.abs(a.e[1]) || a.i - b.i).slice(0, cap).sort((a, b) => a.i - b.i).map((x) => x.e);
 }
 
 export function isQuestion(sentence: string): boolean {
 	return /[?¿]/.test(sentence);
+}
+
+/**
+ * A short print of a sentence (spaces folded, case kept): how a sentence kept as an idea is
+ * remembered in the settings without copying the text there. A changed sentence is a new one.
+ */
+export function fingerprint(sentence: string): string {
+	const text = sentence.replace(/\s+/g, " ").trim();
+	let h = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) {
+		h ^= text.charCodeAt(i);
+		h = Math.imul(h, 0x01000193) >>> 0;
+	}
+	return h.toString(36) + text.length.toString(36);
+}
+
+export interface Mark {
+	kind: "task" | "question";
+	sentence: Sentence;
+}
+
+/**
+ * The sentence of a free line that gets a pale dot: the first one that looks like a task, else
+ * the first question; sentences kept as ideas (their print in `kept`) are passed over.
+ */
+export function markOf(body: string, learned: LearnedVerbs = [], kept: ReadonlySet<string> = new Set()): Mark | null {
+	const all = sentences(body).filter((s) => !kept.has(fingerprint(s.text)));
+	const task = all.find((s) => looksLikeTask(s.text, learned));
+	if (task) return { kind: "task", sentence: task };
+	const q = all.find((s) => isQuestion(s.text));
+	return q ? { kind: "question", sentence: q } : null;
 }
 
 /**
@@ -340,8 +541,6 @@ export function candidateRange(lines: readonly string[], task: number, isClosing
 
 /** [word, tag, uses]: words of posed titles and the tag chosen for them. */
 export type Learned = Array<[string, string, number]>;
-
-const deburr = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /** The words of a text that may say what it is about. */
 export function keywords(text: string): string[] {

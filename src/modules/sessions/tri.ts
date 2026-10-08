@@ -6,8 +6,9 @@
 import { Platform, Scope, setIcon } from "obsidian";
 import { TagPicker } from "../../ui/tag-picker";
 import { compareSessions } from "./atelier";
-import { CHOICES, decide, emptyTally, holdsFence, linesOf, mapLine, revertOf, sortItems, type Choice, type LineEdit, type SortItem, type Tally } from "./flow";
+import { CHOICES, decide, emptyTally, holdsFence, keptPrints, leftover, linesOf, mapLine, prunePrints, revertOf, sortItems, type Choice, type LineEdit, type SortItem, type Tally } from "./flow";
 import { suggestion } from "./logic";
+import type { Flow } from "./flow";
 import type { SessionsRuntime } from "./runtime";
 
 const reduced = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -25,7 +26,13 @@ interface Step {
 	/** The change made in the note (null: nothing to write, or the line had changed). */
 	edit: LineEdit | null;
 	counted: boolean;
+	/** Prints of the sentences kept as ideas by this step (taken back by Undo). */
+	kept: string[];
+	/** What this step taught about verbs (taken back by Undo when nothing was learned since). */
+	verbs: { before: SessionsRuntime["settings"]["verbs"]; after: SessionsRuntime["settings"]["verbs"] } | null;
 }
+
+const KIND_LABEL: Record<SortItem["kind"], string> = { task: "tri.untagged", decide: "tri.undecided", likely: "tri.likely", question: "tri.question" };
 
 const ICONS: Record<Choice, string> = { task: "tag", decide: "circle-help", idea: "lightbulb", delete: "trash-2" };
 
@@ -41,6 +48,8 @@ export class Sorter {
 	private readonly el: HTMLElement;
 	private readonly keys: Scope;
 	private closed = false;
+	/** Where the sorted note stands at the closing screen, read from its text as it is now. */
+	private endFlow: Flow | null = null;
 
 	private constructor(private rt: SessionsRuntime, private scopePath: string | null, private queue: Item[], private returnFocus: HTMLElement | null) {
 		const doc = activeDocument;
@@ -78,7 +87,9 @@ export class Sorter {
 			const text = await rt.textOf(s.path);
 			if (text === null) continue;
 			const lines = linesOf(text);
-			for (const item of sortItems(rt.summaryOf(text), lines, rt.isClosing)) queue.push({ ...item, path: s.path, title: s.title, created: s.created });
+			// Sentences kept as ideas that the note no longer holds are forgotten.
+			rt.pruneKept(s.path, prunePrints([...rt.keptOf(s.path)], lines));
+			for (const item of sortItems(rt.summaryOf(text), lines, rt.isClosing, rt.sortOptions(s.path))) queue.push({ ...item, path: s.path, title: s.title, created: s.created });
 		}
 		if (rt.stopped || generation !== rt.sortGeneration) return;
 		rt.sorter?.close("quit", true);
@@ -132,7 +143,7 @@ export class Sorter {
 		origin.createSpan({ text: `${item.title} · ${new Intl.DateTimeFormat(this.rt.ctx.lang, { day: "numeric", month: "short" }).format(item.created)}` });
 		const kind = card.createDiv({ cls: `sk-sessions-tri-kind is-${item.kind}` });
 		kind.createEl("i");
-		kind.createSpan({ text: this.t(item.kind === "decide" ? "tri.undecided" : "tri.untagged") });
+		kind.createSpan({ text: this.t(KIND_LABEL[item.kind]) });
 		card.createEl("p", { cls: "sk-sessions-tri-text", text: item.text });
 		if (item.description.length) card.createEl("p", { cls: "sk-sessions-tri-desc", text: item.description.join("\n") });
 		if (enter && !reduced()) card.animate([{ transform: "translateY(22px) scale(0.97)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 420, easing: "cubic-bezier(0.22, 1.25, 0.36, 1)" });
@@ -229,10 +240,14 @@ export class Sorter {
 		if (t.delete) parts.push(this.tn("tri.end-deleted", t.delete));
 		end.createEl("p", { text: parts.length ? this.t("tri.end-line", { sorted: this.tn("tri.end-sorted", n), parts: parts.join(", ") }) : `${this.tn("tri.end-sorted", n)}.` });
 		const single = this.scopePath ? this.rt.infoOf(this.scopePath) : null;
-		const flow = single ? this.rt.flowOf(single) : null;
+		const flow = this.endFlow ?? (single ? this.rt.flowOf(single) : null);
 		const ready = this.rt.sessionInfos().filter((s) => !s.closed && !s.archived && this.rt.flowOf(s).kind === "ready").length;
 		let sub = "";
-		if (flow) sub = flow.kind === "ready" ? this.t("tri.end-ready") : flow.kind === "sort" ? this.t("tri.end-waiting") : "";
+		// Said only when true: ready, or what still waits (lines to sort, else lines to decide).
+		if (flow) {
+			const left = leftover(flow);
+			sub = flow.kind === "ready" ? this.t("tri.end-ready") : flow.kind !== "sort" ? "" : left.sort ? this.tn("tri.end-left", left.sort) : this.t("tri.end-waiting");
+		}
 		else if (ready) sub = this.tn("tri.end-ready-many", ready);
 		if (sub) end.createEl("p", { cls: "sk-sessions-tri-sub", text: sub });
 		const acts = end.createDiv({ cls: "sk-sessions-tri-acts" });
@@ -273,7 +288,9 @@ export class Sorter {
 		this.busy = true;
 		let edit: LineEdit | null = null;
 		let counted = true;
-		if (!(choice === "decide" && item.kind === "decide")) {
+		const free = item.kind === "likely" || item.kind === "question";
+		// Nothing to write: a line to decide kept to decide, a free sentence kept as an idea.
+		if (!(choice === "decide" && item.kind === "decide") && !(choice === "idea" && free)) {
 			try {
 				edit = await rt.editNote(item.path, (lines) => decide(lines, item, choice, tag, "\t", rt.isClosing));
 			} catch (error) {
@@ -294,16 +311,29 @@ export class Sorter {
 				rt.ctx.toast(this.t("tri.changed"));
 			} else this.shift(item, edit);
 		}
+		// Kept as an idea: never offered again (the note itself is not touched for a free sentence).
+		// Only the prints this step adds: Undo must not take back an identical sentence kept before.
+		const already = rt.keptOf(item.path);
+		const kept = choice === "idea" && counted ? keptPrints(item, edit).filter((p) => !already.has(p)) : [];
+		const verbs = rt.settings.verbs;
+		if (kept.length) rt.keepIdeas(item.path, kept, true);
 		if (edit && choice === "task" && tag) rt.learnTag(item.text, tag);
+		if (edit && choice === "task") rt.learnVerb(item.text, true);
+		else if ((edit || (choice === "idea" && counted && (item.kind === "likely" || item.kind === "question"))) && (choice === "idea" || choice === "delete")) rt.learnVerb(item.text, false);
 		if (counted) this.tally[choice]++;
-		this.hist.push({ choice, item, edit, counted });
+		this.hist.push({ choice, item, edit, counted, kept, verbs: rt.settings.verbs === verbs ? null : { before: verbs, after: rt.settings.verbs } });
 		if (this.phase === "tag") {
 			this.phase = "choose";
 			this.render();
 		}
 		await this.fly(choice);
 		this.i++;
-		if (this.i >= this.queue.length) this.phase = "end";
+		if (this.i >= this.queue.length) {
+			this.phase = "end";
+			// What the closing screen says must be true now, not as last read from the vault.
+			const text = this.scopePath ? await rt.textOf(this.scopePath) : null;
+			this.endFlow = this.scopePath && text !== null ? rt.flowOfText(this.scopePath, text) : null;
+		}
 		this.busy = false;
 		this.render(true);
 		if (this.phase !== "end") this.el.focus({ preventScroll: true });
@@ -327,7 +357,7 @@ export class Sorter {
 		const text = await this.rt.textOf(item.path);
 		if (text === null) return false;
 		const lines = linesOf(text);
-		const fresh = sortItems(this.rt.summaryOf(text), lines, this.rt.isClosing).find((x) => x.line === item.line && x.raw === item.raw);
+		const fresh = sortItems(this.rt.summaryOf(text), lines, this.rt.isClosing, this.rt.sortOptions(item.path)).find((x) => x.line === item.line && x.raw === item.raw);
 		if (!fresh || (fresh.block.length === item.block.length && fresh.block.every((l, i) => l === item.block[i]))) return false;
 		Object.assign(item, fresh);
 		return true;
@@ -391,6 +421,8 @@ export class Sorter {
 			this.shift(step.item, back);
 			step.item.line = edit.at;
 		}
+		if (step.verbs) this.rt.restoreVerbs(step.verbs.after, step.verbs.before);
+		if (step.kept.length) this.rt.keepIdeas(step.item.path, step.kept, false);
 		this.hist.pop();
 		if (step.counted) this.tally[step.choice]--;
 		this.i = Math.max(0, this.i - 1);
