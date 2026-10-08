@@ -1,6 +1,6 @@
 import { buildDemo } from "./demo";
 // Move text: three editor actions and their live module settings.
-import { moment, normalizePath } from "obsidian";
+import { normalizePath } from "obsidian";
 import { defineModule } from "../../core/module";
 import { richText } from "../../ui/settings-page";
 import { MoveTextActions } from "./actions";
@@ -9,6 +9,7 @@ import { en } from "./i18n/en";
 import { fr } from "./i18n/fr";
 import { nl } from "./i18n/nl";
 import { es } from "./i18n/es";
+import { moment } from "../../core/moment";
 
 export const moveText = defineModule<MoveTextSettings>({
 	id: "move-text",

@@ -16,6 +16,7 @@ import {
 	type LinkContext,
 } from "./logic";
 import { PRINT_CSS } from "./print-css";
+import { elementOf } from "../../ui/dom";
 
 // Obsidian's reading view lives deep inside the app containers, and themes select on that
 // chain. The printed page rebuilds a minimal copy of it.
@@ -156,7 +157,7 @@ export function copyLiveState(live: HTMLElement, clone: HTMLElement): void {
 		// A canvas with no surface answers "data:,": nothing to show.
 		if (!data || !data.startsWith("data:image/")) continue;
 		const size = canvasSize(liveCanvas[i]);
-		const img = doc.createElement("img");
+		const img = elementOf(doc, "img");
 		img.className = CLS.canvas;
 		img.setAttribute("src", data);
 		// The CSS size, not the bitmap size: a chart drawn at devicePixelRatio 2 would print
@@ -194,7 +195,7 @@ function linkImages(root: HTMLElement, ctx: SnapshotContext): void {
 		const embed = img.closest(".internal-embed");
 		const href = imageHref(embed?.getAttribute("src") || "", img.getAttribute("src") || "", ctx);
 		if (!href) continue;
-		const a = doc.createElement("a");
+		const a = elementOf(doc, "a");
 		a.className = CLS.imageLink;
 		a.setAttribute("href", href);
 		img.parentNode.insertBefore(a, img);
@@ -224,7 +225,7 @@ function fixEmbeds(root: HTMLElement, ctx: SnapshotContext): void {
 		if (!target.parentNode) continue;
 		const withSrc = el.getAttribute("src") ? el : el.querySelector("[src]");
 		const { label, href } = placeholderFor(embed?.getAttribute("src") || "", withSrc?.getAttribute("src") || "", el.tagName, ctx);
-		const p = doc.createElement("p");
+		const p = elementOf(doc, "p");
 		p.className = CLS.placeholder;
 		if (href) {
 			const a = p.createEl("a");
@@ -272,7 +273,7 @@ function buildHtml(clone: HTMLElement, css: string, ctx: SnapshotContext, doc: D
 	let outer: HTMLElement | null = null;
 	let inner: HTMLElement | null = null;
 	for (const step of WRAP_CHAIN) {
-		const el = clone.ownerDocument.createElement("div");
+		const el = elementOf(clone.ownerDocument, "div");
 		el.className = step.cls + " " + CLS.wrap;
 		for (const [key, value] of Object.entries(step.attrs ?? {})) el.setAttribute(key, value);
 		if (inner) inner.appendChild(el);

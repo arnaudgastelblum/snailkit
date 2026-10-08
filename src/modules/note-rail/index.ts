@@ -1,7 +1,6 @@
 // Note rail: a quiet row of icons on every note, each opening a sliding panel (Contents, Bookmarks,
 // Open tasks, Calendar, and Idea sessions with that module). The rail and panels live in rail/ and panels/, the controller keeps them
 // on every note pane.
-import { moment } from "obsidian";
 import { defineModule } from "../../core/module";
 import { buildDemo } from "./demo";
 import { richText, type SettingsPage } from "../../ui/settings-page";
@@ -13,6 +12,7 @@ import { en } from "./i18n/en";
 import { fr } from "./i18n/fr";
 import { nl } from "./i18n/nl";
 import { es } from "./i18n/es";
+import { moment } from "../../core/moment";
 
 export const noteRail = defineModule<NoteRailSettings>({
 	id: "note-rail",

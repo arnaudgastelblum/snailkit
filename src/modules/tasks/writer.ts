@@ -1,7 +1,7 @@
 // Every change the module makes to notes. An open note is edited through its editor (one small
 // change, Ctrl+Z works there); a closed note through vault.process. A task line is always found
 // again before writing, and nothing is written when it is gone.
-import { MarkdownView, Notice, TFile, moment, normalizePath, type Editor, type WorkspaceLeaf } from "obsidian";
+import { MarkdownView, Notice, TFile, normalizePath, type Editor, type WorkspaceLeaf } from "obsidian";
 import {
 	editLines, insertTaskLine, insertToken, locateLine, removeBlock, removeBlocks, restoreBlock, restoreBlocks, type RemovedBlock, mapTaskText, minimalChange, newTaskPath, retagText, retitleText, revertLines,
 	setDoneLine, setDueLines, setDueText, setMarkerText, setNoteLinkText, setPriorityText, type LineChange,
@@ -10,6 +10,7 @@ import { blockEnd, parseTaskText, scanTasks, scanUntagged, taskKey } from "./par
 import type { TaskIndex } from "./task-index";
 import type { Context, Priority, Task, TaskRef } from "./types";
 import { openNoteAt } from "../../core/workbench/open";
+import { moment } from "../../core/moment";
 
 /** Puts the line back as it was. Resolves to false when the line changed since. */
 export type Undo = () => Promise<boolean>;

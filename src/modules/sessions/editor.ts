@@ -10,6 +10,7 @@ import { undo, undoDepth } from "./history";
 import { bodyStart, fish, groupTag, hiddenLines, indentWidth, lineInfo, markOf, sentenceAt, summarize, withoutTag, type LineInfo, type Sentence } from "./logic";
 import { Saisie } from "./saisie";
 import type { SessionsRuntime } from "./runtime";
+import { elementOf } from "../../ui/dom";
 
 export { ours, refresh };
 
@@ -92,7 +93,7 @@ class TagWidget extends WidgetType {
 	}
 	toDOM(view: EditorView): HTMLElement {
 		const doc = view.dom.ownerDocument;
-		const el = doc.createElement("span");
+		const el = elementOf(doc, "span");
 		el.className = "sk-sessions-tagslot" + (this.preview ? " is-preview" : "");
 		if (this.tag) {
 			const cap = el.createSpan();
@@ -132,7 +133,7 @@ class InviteWidget extends WidgetType {
 		return other.text === this.text;
 	}
 	toDOM(view: EditorView): HTMLElement {
-		const el = view.dom.ownerDocument.createElement("span");
+		const el = elementOf(view.dom.ownerDocument, "span");
 		el.className = "sk-sessions-invite";
 		el.setAttr("aria-hidden", "true");
 		el.textContent = this.text;
@@ -167,7 +168,7 @@ export class SessionView {
 	constructor(readonly view: EditorView, readonly rt: SessionsRuntime) {
 		rt.views.add(this);
 		const doc = view.dom.ownerDocument;
-		this.layer = doc.createElement("div");
+		this.layer = elementOf(doc, "div");
 		this.layer.className = "sk-sessions-layer";
 		this.markersEl = this.layer.createDiv();
 		this.markersEl.className = "sk-sessions-markers";

@@ -5,6 +5,7 @@ import { keyMove } from "./keys";
 import { MapLifetime } from "./motion";
 import { MapScene } from "./scene";
 import { MAP_LIMITS as L, type MapEdit, type MapEvents, type MapHandle, type MapOptions, type MapState } from "./types";
+import { elementOf } from "../dom";
 
 export type { MapEdit, MapEvents, MapHandle, MapNode, MapNodeKind, MapOptions, MapSource, MapState, MapStrings } from "./types";
 export { MAP_LIMITS } from "./types";
@@ -546,7 +547,7 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 	const edit = (id: string, editOptions: MapEdit): boolean => {
 		stopEdit();
 		if (!reveal(id)) return false;
-		const input = doc.createElement("input");
+		const input = elementOf(doc, "input");
 		input.type = "text"; input.className = "sk-map-edit"; input.value = editOptions.value; input.spellcheck = false;
 		input.setAttribute("aria-label", editOptions.label);
 		const current = { id, input, options: editOptions, busy: false };

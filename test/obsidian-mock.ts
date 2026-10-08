@@ -30,6 +30,9 @@ export class FuzzySuggestModal<T> {
 	declare _t: T;
 }
 export class Setting {}
+export function requireApiVersion(_version: string): boolean {
+	return true;
+}
 export class ToggleComponent {}
 export class TFile {}
 export class TFolder {}

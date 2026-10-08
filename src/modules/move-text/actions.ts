@@ -1,9 +1,10 @@
 // Destination writes finish before the origin editor is changed.
-import { MarkdownView, Notice, TFile, moment, normalizePath, type Editor } from "obsidian";
+import { MarkdownView, Notice, TFile, normalizePath, type Editor } from "obsidian";
 import type { Context, Block, Payload, ExtractTarget, AppendTarget } from "./types";
 import { fenceStates, frontmatterEnd, findZone, sectionBounds, FENCE_RE, proposeTitle, sanitizeFilename, leadingHeadingText, prepareSubnoteBody, trimmedBody, isArchiveBasename, formatProvenance } from "./logic";
 import { blockUnchanged, replaceBlock, insertLinkInZone } from "./editor";
 import { ExtractTargetModal, ArchiveTitleModal, AppendTargetModal } from "./modals";
+import { moment } from "../../core/moment";
 
 export class MoveTextActions {
 	constructor(private readonly ctx: Context) {}

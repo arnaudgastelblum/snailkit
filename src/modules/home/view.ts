@@ -24,6 +24,7 @@ import { moveBefore, orderOf, withOrder } from "./logic/order";
 import { mountPinsRow } from "./pins-row";
 import { LENSES, nextZoom, VIEWS, zoomLevel, startLens } from "./settings-logic";
 import type { HomeLens, HomePage, HomeTabState } from "./types";
+import { elementOf } from "../../ui/dom";
 
 /** Families of tags shown before "N more tags", and sub-tags per family. */
 const TAG_FAMILIES = 48;
@@ -85,7 +86,7 @@ const samePage = (a: HomePage | null, b: HomePage | null) => JSON.stringify(a) =
 let nameId = 0;
 /** Names a group by hidden text just before it: an aria-label would show as Obsidian's tooltip over every child. */
 const nameBy = (el: HTMLElement, text: string): void => {
-	const span = el.doc.createElement("span");
+	const span = elementOf(el.doc, "span");
 	span.className = "sk-home-sr";
 	span.textContent = text;
 	span.id = `sk-home-name-${++nameId}`;
@@ -706,7 +707,7 @@ export class HomeView implements WorkbenchTabInstance {
 		if (this.pins && this.pinsRail !== rail) this.destroyPins();
 		const sec = parent ?? this.section(this.body, "pins", this.t("pins.title"));
 		if (!this.pins || !this.pinsBox) {
-			this.pinsBox = this.doc.createElement("div");
+			this.pinsBox = elementOf(this.doc, "div");
 			this.pinsBox.className = "sk-home-pins";
 			this.pinsRail = rail;
 			try {
@@ -2000,7 +2001,7 @@ export class HomeView implements WorkbenchTabInstance {
 			this.catchUp();
 		};
 		this.later(900, landed);
-		const ghost = this.doc.createElement("div");
+		const ghost = elementOf(this.doc, "div");
 		ghost.className = "sk-home-chip sk-home-fly-chip";
 		const hue = this.hueOf(path);
 		if (hue !== null) ghost.setCssProps({ "--sk-hue": String(hue) });

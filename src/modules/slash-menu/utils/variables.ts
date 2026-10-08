@@ -1,5 +1,6 @@
-import { moment, type TFile } from "obsidian";
+import { type TFile } from "obsidian";
 import type { SlashMenuSettings } from "../types/settings";
+import { moment } from "../../../core/moment";
 
 /** What variables can read. Every field is optional so templates also render outside an editor. */
 export interface VariableContext {

@@ -1,12 +1,12 @@
 // Calendar: a month of daily notes, with dots for notes and open tasks, opening or creating the
 // note of a day, keyboard and wheel navigation.
-import { Keymap, MarkdownView, moment, Notice, setIcon } from "obsidian";
+import { Keymap, MarkdownView, Notice, setIcon } from "obsidian";
 import type { HoverParent, TFile } from "obsidian";
-import type { Moment } from "moment";
 import { asElement, dur, reducedMotion, SPRING } from "../../rail/motion";
 import type { PanelContext, PanelDefinition, PanelInstance } from "../../types";
 import { DailyIndex, getDailyConfig, getOrCreateDailyNote, localeData, monthGrid, parseDailyPath, weekStartOf } from "./daily";
 import type { CalendarDay, DailyConfig } from "./daily";
+import { moment, type Moment } from "../../../../core/moment";
 
 const KEY_FORMAT = "YYYY-MM-DD";
 /** Wheel travel (pixels) that turns a month; a pause this long between events ends a gesture. */
@@ -114,7 +114,8 @@ class CalendarPanel implements PanelInstance {
 		this.gridEl = this.viewportEl.createDiv({ cls: "sk-note-rail-cal-grid", attr: { role: "grid" } });
 
 		// The footer: what the hovered day holds, and a small legend.
-		const foot = this.body.doc.createDocumentFragment();
+		const footWindow = this.body.doc.win as unknown as { createFragment: typeof createFragment };
+		const foot = footWindow.createFragment();
 		this.footTextEl = foot.createSpan("sk-note-rail-cal-foot-text");
 		const legend = (this.legendEl = foot.createSpan("sk-note-rail-cal-legend"));
 		legend.createSpan({ cls: "sk-note-rail-cal-legend-item", text: ctx.t("calendar.legend-note") }).createEl("i", { prepend: true });

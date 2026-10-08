@@ -1,8 +1,9 @@
 // Daily notes for every module: where they are (the note rail's Calendar settings when it runs,
 // else Obsidian's Daily notes plugin), today's note, and creating it from its template.
 // Moved from the note rail's Calendar (which re-exports these helpers); behavior unchanged.
-import { moment, TFile, TFolder, type App } from "obsidian";
+import { TFile, TFolder, type App } from "obsidian";
 import type { NoteRailService } from "./services";
+import { moment } from "./moment";
 
 /** Where daily notes live and how they are named. */
 export interface DailyConfig {

@@ -14,6 +14,7 @@ import { en } from "./i18n/en";
 import { fr } from "./i18n/fr";
 import { nl } from "./i18n/nl";
 import { es } from "./i18n/es";
+import { destructive } from "../../ui/dom";
 
 export const home = defineModule<HomeSettings>({
 	id: "home",
@@ -67,11 +68,11 @@ export const home = defineModule<HomeSettings>({
 		domains.add(page.t("settings.arrangement"), { desc: page.t("settings.arrangement-desc") }).addButton((b) => {
 			b.setButtonText(page.t("settings.reset-arrangement")).onClick(async () => {
 				if (!armed) {
-					b.setButtonText(page.t("settings.reset-confirm")).setWarning();
+					destructive(b.setButtonText(page.t("settings.reset-confirm")));
 					armed = window.setTimeout(() => {
 						armed = 0;
 						b.setButtonText(page.t("settings.reset-arrangement"));
-						b.buttonEl.removeClass("mod-warning");
+						b.buttonEl.removeClass("mod-warning", "mod-destructive");
 					}, 3000);
 					return;
 				}

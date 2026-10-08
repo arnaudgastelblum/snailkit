@@ -1,10 +1,10 @@
 // Daily notes engine of the Calendar panel: the month grid and a lazy index of existing daily notes.
 // Where daily notes are, their names, the template and creating them now live in the core
 // (src/core/daily.ts), shared with Home and Search; they are re-exported here unchanged.
-import { moment, TFile } from "obsidian";
+import { TFile } from "obsidian";
 import type { App, EventRef } from "obsidian";
-import type { Locale } from "moment";
 import { parseDailyPath, type DailyConfig } from "../../../../core/daily";
+import { moment, type MomentLocale as Locale } from "../../../../core/moment";
 
 export { applyDailyTemplate, dailyPath, getDailyConfig, getOrCreateDailyNote, parseDailyPath, type DailyConfig } from "../../../../core/daily";
 

@@ -2,6 +2,7 @@ import { branchPath, childRows, columnLayout, nodeKey, pathFrom, type MapMode, t
 import { MapLifetime } from "./motion";
 import { MAP_LIMITS as L, type MapOptions, type MapState } from "./types";
 import { zoomOf } from "../surface";
+import { elementOf } from "../dom";
 
 let sceneId = 0;
 interface Entry { row: MapRow; el: HTMLElement; signature: string }
@@ -25,7 +26,7 @@ export class MapScene {
 		this.svg = box.createSvg("svg");
 		this.svg.classList.add("sk-map-branches");
 		this.svg.setAttribute("aria-hidden", "true");
-		this.canvas = box.ownerDocument.createElement("canvas").getContext("2d");
+		this.canvas = elementOf(box.ownerDocument, "canvas").getContext("2d");
 	}
 
 	private measure = (text: string): number => {

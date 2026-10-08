@@ -7,6 +7,7 @@ import { openTagPicker, tagColorsFrom, type TagPickerHandle } from "../../ui/tag
 import type { TagRuntime } from "./runtime";
 import { frequencies } from "./types";
 import { checkedSourceTaskInsertion, checkedTaskInsertion, hasTaskTag, taskLine, taskLines, taskTagPosition } from "./task-placeholder-logic";
+import { elementOf } from "../../ui/dom";
 
 const refresh = StateEffect.define<null>();
 const isolate = isolateHistory as unknown as AnnotationType<"full">;
@@ -32,7 +33,7 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 		if (picker && !pickerOwner && file.path === pickerPath) close();
 	}));
 	function chip(doc: Document, path: string, choose: (tag: string) => boolean | Promise<boolean>, owner: EditorView | null = null): HTMLButtonElement {
-		const el = doc.createElement("button");
+		const el = elementOf(doc, "button");
 		el.type = "button";
 		el.tabIndex = -1;
 		el.className = "sk-tag-colors-task-placeholder";

@@ -13,6 +13,7 @@ import { leadOf, nextAction, weekRecap, type Flow } from "./flow";
 import { isTagName, type SummaryQuestion } from "./logic";
 import type { SessionsRuntime } from "./runtime";
 import type { ViewTab, ViewTabHost, ViewTabInstance } from "./types";
+import { elementOf } from "../../ui/dom";
 
 const TIMELINE_KEY = "snailkit-sessions-timeline";
 const DONE_KEY = "snailkit-sessions-done-open";
@@ -1230,7 +1231,7 @@ class TabView implements ViewTabInstance {
 		const host = (this.desk && this.selected === path ? this.detail?.querySelector<HTMLElement>(".sk-sessions-det-title") : null) ?? this.rowOf(path)?.querySelector<HTMLElement>(".sk-sessions-row-name");
 		if (!host) return;
 		this.pop?.close();
-		const input = this.doc.createElement("input");
+		const input = elementOf(this.doc, "input");
 		input.type = "text";
 		input.className = "sk-sessions-rename";
 		input.value = s.title;

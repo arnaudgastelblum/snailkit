@@ -9,6 +9,7 @@
 import { setIcon } from "obsidian";
 import type { PanelDefinition, RailEnv } from "../types";
 import { dur, replayClass, stagger } from "./motion";
+import { elementOf } from "../../../ui/dom";
 
 /** Close transition length (matches .sk-note-rail-panel in styles.css). */
 const CLOSE_MS = 320;
@@ -106,7 +107,7 @@ export class PanelShell {
 		this.setProgress(null);
 		this.setFooter("");
 		this.setPinned(pinned);
-		const body = this.el.doc.createElement("div");
+		const body = elementOf(this.el.doc, "div");
 		body.className = "sk-note-rail-body";
 		this.bodyEl.replaceWith(body);
 		this.bodyEl = body;

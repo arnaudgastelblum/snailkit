@@ -14,6 +14,7 @@ import { keyNames, SessionView } from "./editor";
 import { guardField, ours, setGuard, setSpacer } from "./guard";
 import { candidateRange, defaultCount, fish, lineInfo, poseLines, stepAfterTag, suggestion, withoutTag, type LineInfo } from "./logic";
 import { TagPicker } from "../../ui/tag-picker";
+import { elementOf } from "../../ui/dom";
 
 type Step = "title" | "tag" | "desc";
 
@@ -580,7 +581,7 @@ export class Composer {
 
 	private buildPanel(): void {
 		const doc = this.view.dom.ownerDocument;
-		const panel = (this.panel = doc.createElement("div"));
+		const panel = (this.panel = elementOf(doc, "div"));
 		panel.className = "sk-sessions-panel" + (this.phone ? " is-sheet" : "");
 		panel.setAttr("role", "dialog");
 		panel.setAttr("data-sk-own-tab", "");

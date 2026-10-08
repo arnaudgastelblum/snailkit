@@ -1,7 +1,7 @@
 // One rail per Markdown view, mounted in the view's content element (below the view header, so it
 // stays put while the note scrolls and survives switches between Live Preview, Source and Reading).
 // The rail owns the panel card; panels only fill the body and the footer.
-import { Keymap, MarkdownView, Menu, moment, Notice, Platform, setIcon, type TFile } from "obsidian";
+import { Keymap, MarkdownView, Menu, Notice, Platform, setIcon, type TFile } from "obsidian";
 import type { HomeService, SearchService } from "../../../core/services";
 import { hueOf, placeFinder } from "../parents";
 import { getDailyConfig, getOrCreateDailyNote } from "../panels/calendar/daily";
@@ -14,6 +14,7 @@ import { commandHotkeys, hotkeyText, LONG_PRESS_MS, LONG_PRESS_SLOP, pillAction,
 import { asElement, asNode, dur, popIn } from "./motion";
 import { PanelShell } from "./PanelShell";
 import { RoomController } from "./room";
+import { moment } from "../../../core/moment";
 
 /** Without "Open on hover": hover intent before a rail button replaces the open panel. */
 const HOVER_SWITCH_MS = 160;

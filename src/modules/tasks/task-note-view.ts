@@ -3,6 +3,7 @@
 // Without a note, an empty area: the note is created as soon as something is written. Pasting an
 // image saves it as an attachment of the note. Kept across list redraws, owned by one task.
 import { Component, MarkdownRenderer, TFile, setIcon } from "obsidian";
+import { moment } from "../../core/moment";
 import type { TasksHub } from "./hub";
 import type { Task, TaskNotesService } from "./types";
 
@@ -197,7 +198,7 @@ export class TaskNoteView extends Component {
 		const embeds: string[] = [];
 		for (const image of images) {
 			const ext = image.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
-			const stamp = window.moment().format("YYYYMMDDHHmmss");
+			const stamp = moment().format("YYYYMMDDHHmmss");
 			const path = await app.fileManager.getAvailablePathForAttachment(`Pasted image ${stamp}.${ext}`, note.path);
 			const file = await app.vault.createBinary(path, await image.arrayBuffer());
 			embeds.push(`![[${app.metadataCache.fileToLinktext(file, note.path)}]]`);

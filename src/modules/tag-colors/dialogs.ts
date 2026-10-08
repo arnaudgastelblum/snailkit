@@ -2,6 +2,7 @@ import { Modal, Setting } from "obsidian";
 import { assignSlots, capsule, hexToHue, hueClasses, oklchToSrgb, slotHue, tagHues, tagKey } from "./colors";
 import { watchPalette } from "./palette";
 import { frequencies, registry, type ColorHost } from "./types";
+import { destructive } from "../../ui/dom";
 
 export function classes(host: ColorHost, tag: string): string {
 	return hueClasses(tagHues(tag, registry(host.settings, "slots"), registry(host.settings, "overrides")));
@@ -56,7 +57,7 @@ export class ReassignModal extends Modal {
 		this.contentEl.createEl("p", { text: this.host.t("reassign.confirm") });
 		new Setting(this.contentEl)
 			.addButton(button => button.setButtonText(this.host.t("common.cancel")).onClick(() => this.close()))
-			.addButton(button => button.setButtonText(this.host.t("common.confirm")).setWarning().onClick(async () => {
+			.addButton(button => destructive(button.setButtonText(this.host.t("common.confirm"))).onClick(async () => {
 				this.host.settings.slots = Object.entries(assignSlots({}, frequencies(this.host.app)));
 				await this.host.save();
 				this.close();

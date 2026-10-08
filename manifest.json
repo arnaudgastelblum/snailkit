@@ -1,7 +1,7 @@
 {
 	"id": "snailkit",
 	"name": "Snailkit",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"minAppVersion": "1.8.7",
 	"description": "Everything your notes need in one shell. A free suite for capturing ideas, gathering tasks and finding your notes again.",
 	"author": "Arnaud Gastelblum",

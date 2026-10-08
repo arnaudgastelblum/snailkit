@@ -3,13 +3,14 @@
 // as an idea, Delete. Keys 1 to 4, Backspace takes the last decision back (in the note too),
 // Escape leaves. A bar moves on, the card flies to its choice, and a warm screen closes the round.
 // Every change is made on the line found again just before (never on a line that changed).
-import { moment, Platform, Scope, setIcon } from "obsidian";
+import { Platform, Scope, setIcon } from "obsidian";
 import { TagPicker } from "../../ui/tag-picker";
 import { compareSessions } from "./atelier";
 import { choicesFor, decide, emptyTally, holdsFence, keptPrints, leftover, linesOf, mapLine, prunePrints, revertOf, sortItems, type Choice, type LineEdit, type SortItem, type Tally } from "./flow";
 import { suggestion } from "./logic";
 import type { Flow } from "./flow";
 import type { SessionsRuntime } from "./runtime";
+import { moment } from "../../core/moment";
 
 const reduced = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 const ms = (n: number) => (reduced() ? 1 : n);

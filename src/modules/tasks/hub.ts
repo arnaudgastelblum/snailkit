@@ -1,6 +1,6 @@
 // The running module: index, writer, the Tasks tabs shown in the Workbench and the actions they
 // share (with toasts). The Workbench itself belongs to the core (ctx.workbench).
-import { moment, TFile } from "obsidian";
+import { TFile } from "obsidian";
 import { isSideLeaf } from "../../core/workbench/state";
 import { TAB_ORDER, WORKBENCH_VIEW_TYPE, type WorkbenchTab } from "../../core/workbench/types";
 import { addDays, declaredFlags, dueLabel, isParked, parkingOf, sinceDays } from "./group";
@@ -14,6 +14,7 @@ import { TaskWriter, type Undo } from "./writer";
 import { insertToken, mapTaskText, retagText, setDoneLine, setFlagText, setPriorityText } from "./edit";
 import { playDayClearSound, playDoneSound, playLandSound } from "../../ui/sound";
 import { nextRun, reducedMotion, type Run } from "../../ui/playful";
+import { moment } from "../../core/moment";
 
 /** Ids of Snailkit's own tabs: a companion plugin cannot take them (see addViewTab in api.ts). */
 const RESERVED_TABS = ["tasks", "home", "sessions"];

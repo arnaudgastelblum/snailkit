@@ -8,6 +8,7 @@ import { fillCard, stateLabel, type CardAction, type Words } from "./card";
 import { sortItems, type Flow, type SortItem } from "./flow";
 import { summarize } from "./logic";
 import type { SessionView } from "./editor";
+import { elementOf } from "../../ui/dom";
 
 const reduced = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
@@ -34,7 +35,7 @@ export class Saisie {
 
 	constructor(private sv: SessionView) {
 		const doc = sv.view.dom.ownerDocument;
-		this.pill = doc.createElement("button");
+		this.pill = elementOf(doc, "button");
 		this.pill.type = "button";
 		this.pill.className = "sk-sessions-pill is-hidden";
 		this.pill.setAttr("aria-haspopup", "dialog");

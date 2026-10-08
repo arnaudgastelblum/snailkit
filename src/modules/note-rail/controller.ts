@@ -1,6 +1,6 @@
 // Keeps one rail on every Markdown view (every tab, split and popout window) in sync with the
 // layout, the open file, its metadata and the settings, and owns the module's commands.
-import { MarkdownView, moment, Notice, TFile, type TAbstractFile } from "obsidian";
+import { MarkdownView, Notice, TFile, type TAbstractFile } from "obsidian";
 import type { ModuleContext } from "../../core/context";
 import type { NoteRailService } from "../../core/services";
 import type { Vars } from "../../i18n";
@@ -15,6 +15,7 @@ import { Rail } from "./rail/Rail";
 import { cleanVaultPins } from "./settings";
 import { editPinGroups, flattenPinGroups, readPinGroups, remapPinGroups, type PinEdit } from "./vault-pins";
 import type { NoteRailSettings, PanelId, RailEnv, TasksService, VaultTaskCounts, WorkbenchOptions } from "./types";
+import { moment } from "../../core/moment";
 
 type Context = ModuleContext<NoteRailSettings>;
 

@@ -1,3 +1,4 @@
+import { elementOf } from "../../ui/dom";
 export type Registry = Record<string, number>;
 export interface Hues { rootHue: number; leafHue: number }
 
@@ -140,7 +141,7 @@ export function hexToHue(hex: string) {
 export function capsule(doc: Document, tag: string, classes: string) {
 	const { root, parts } = splitTag(tag);
 	const span = (className: string, text?: string) => {
-		const el = doc.createElement("span");
+		const el = elementOf(doc, "span");
 		el.className = className;
 		if (text != null) el.textContent = text;
 		return el;

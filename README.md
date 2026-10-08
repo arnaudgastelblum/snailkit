@@ -74,6 +74,9 @@ English, French, Dutch and Spanish. Desktop and mobile. Snailkit sends nothing a
 notes anywhere. The only network access is PDF export loading the web images your note already
 shows. Two tools write outside your vault, only where you ask: PDF export (the PDF you save, and a
 temporary page in your system's temp folder while it prints) and Slides to PowerPoint (the .pptx you save).
+Tasks, Home and Search read the list of your notes to gather tasks and find notes, inside Obsidian
+only. The clipboard is used only when you ask: Column select copies and pastes columns, Move text
+can copy the link to the moved text, Search copies a link to a note.
 
 ---
 

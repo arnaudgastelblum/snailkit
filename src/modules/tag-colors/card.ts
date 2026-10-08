@@ -2,10 +2,11 @@
 // one a link), its sub-tags, the open tasks that carry it (from the Tasks module, checkable here)
 // and the notes where it appears outside tasks, with the line and the color of the note's area
 // (from Note rail). Opens next to the tag, closes on Escape or a click elsewhere.
-import { getAllTags, Keymap, moment, setIcon, TFile } from "obsidian";
+import { getAllTags, Keymap, setIcon, TFile } from "obsidian";
 import type { App, CachedMetadata } from "obsidian";
 import type { ModuleContext } from "../../core/context";
 import type { TagColorsSettings } from "./types";
+import { moment } from "../../core/moment";
 
 /** What the card uses of the Tasks module (its public API, version 1). */
 interface TaskInfo {

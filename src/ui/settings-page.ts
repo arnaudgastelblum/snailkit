@@ -1,7 +1,7 @@
 // Building blocks for a module's settings page. Every module page looks the same: titled
 // sections of rows, each row bound to one setting, saved at once, with a small reset arrow
 // that appears when the value differs from its default.
-import { Setting, type App } from "obsidian";
+import { requireApiVersion, Setting, type App } from "obsidian";
 import type { Vars } from "../i18n";
 import type { ModuleHandle } from "../core/host";
 
@@ -237,10 +237,11 @@ export class SettingsSection<S extends object> {
 				slider
 					.setLimits(options.min, options.max, options.step ?? 1)
 					.setValue(this.values[key] as number)
-					.setDynamicTooltip()
 					.onChange((value) => {
 						if (!isQuiet()) void commit(value);
 					});
+				// Before Obsidian 1.13 the value showed only in a tooltip while dragging; it is now inline.
+				if (!requireApiVersion("1.13.0")) (slider as unknown as { setDynamicTooltip?(): unknown }).setDynamicTooltip?.();
 				show = (value) => { void slider.setValue(value); };
 			});
 			return show;
