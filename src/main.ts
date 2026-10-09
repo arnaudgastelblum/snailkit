@@ -4,7 +4,7 @@ import type { Extension } from "@codemirror/state";
 import { Notice, Plugin, getLanguage } from "obsidian";
 import { ModuleHost } from "./core/host";
 import { createPlaces, type PlacesCore } from "./core/places";
-import { normalizeData, type SnailkitData } from "./core/settings";
+import { normalizeData, starterData, type SnailkitData } from "./core/settings";
 import { WorkbenchCore } from "./core/workbench";
 import type { AutoOpenMode, StartTab } from "./core/workbench/types";
 import { Translator, resolveLanguage, type Lang, type LanguageSetting, type Vars } from "./i18n";
@@ -43,7 +43,9 @@ export default class SnailkitPlugin extends Plugin {
 	async onload(): Promise<void> {
 		// Loaded while Obsidian starts, or into a running Obsidian (an update, the plugin turned on again).
 		const startup = !this.app.workspace.layoutReady;
-		this.data = normalizeData(await this.loadData());
+		// Nothing stored yet: a first install, which starts with a few tools on (never applied later).
+		const stored: unknown = await this.loadData();
+		this.data = stored == null ? starterData() : normalizeData(stored);
 		this.translator = new Translator(resolveLanguage(this.data.language, this.obsidianLanguage()), [CORE_STRINGS]);
 		registerIcons();
 		this.registerEditorExtension(this.editorExtensions);
@@ -139,7 +141,7 @@ export default class SnailkitPlugin extends Plugin {
 		this.settingTab.show(moduleId);
 	}
 
-	/** First run only: a notice pointing to the settings, since every tool starts off. */
+	/** First run only: a notice saying which tools are on, pointing to the others in the settings. */
 	private async welcome(): Promise<void> {
 		this.data.welcomed = true;
 		await this.saveData(this.data);

@@ -3,8 +3,8 @@ import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
 	"plugin.tagline": "Todo lo que tus notas necesitan, en una sola concha.",
-	"plugin.welcome": "Snailkit está instalado. Elige tus herramientas en sus ajustes.",
-	"plugin.welcome-action": "Elegir herramientas",
+	"plugin.welcome": "Snailkit está listo: Inicio, Tareas, Lluvia de ideas, Search y el Menú de nota están activados. Más herramientas te esperan en sus ajustes.",
+	"plugin.welcome-action": "Ver todas las herramientas",
 	"plugin.start-error": "Snailkit: {name} no pudo iniciarse. Encontrarás los detalles en sus ajustes.",
 
 	"home.count.one": "{count} de {total} herramientas en tu concha",

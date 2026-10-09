@@ -67,7 +67,7 @@ away. [Note menu →](docs/note-rail.md)
 ## Get started
 
 1. In Obsidian: **Settings → Community plugins → Browse**, search **Snailkit**, install and enable it.
-2. Open **Settings → Snailkit** and pick your tools, or **Get them all**. Each one starts off and leaves nothing behind when you turn it off.
+2. Home, Tasks, Brainstorm, Search and the Note menu are on from the start. Open **Settings → Snailkit** for the other tools, or **Get them all**. Each tool leaves nothing behind when you turn it off.
 3. Write a task with a `#tag` in any note. It is already waiting in your Workbench.
 
 English, French, Dutch and Spanish. Desktop and mobile. Snailkit sends nothing about you or your

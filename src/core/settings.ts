@@ -44,6 +44,16 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** The tools on at the very first install (no data.json yet): the Workbench's tools and the Note menu. */
+export const STARTER_TOOLS = ["home", "tasks", "sessions", "search", "note-rail"];
+
+/** What a first install starts with: the defaults, with the starter tools on. */
+export function starterData(): SnailkitData {
+	const data = defaultData();
+	for (const id of STARTER_TOOLS) data.modules[id] = { enabled: true, settings: {} };
+	return data;
+}
+
 /** Reads whatever was stored (possibly nothing, possibly hand-edited) into a valid SnailkitData. */
 export function normalizeData(raw: unknown): SnailkitData {
 	const data = defaultData();

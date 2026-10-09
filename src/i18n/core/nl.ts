@@ -3,8 +3,8 @@ import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
 	"plugin.tagline": "Alles wat je notities nodig hebben, in één huisje.",
-	"plugin.welcome": "Snailkit is geïnstalleerd. Kies je tools in de instellingen.",
-	"plugin.welcome-action": "Tools kiezen",
+	"plugin.welcome": "Snailkit is klaar: Start, Taken, Brainstorm, Search en het Notitiemenu staan aan. Meer tools wachten in de instellingen.",
+	"plugin.welcome-action": "Alle tools bekijken",
 	"plugin.start-error": "Snailkit: {name} kon niet starten. Meer details in de instellingen ervan.",
 
 	"home.count.one": "{count} van de {total} tools in je huisje",

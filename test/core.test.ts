@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { HINT_WORKBENCH_TABS, mergeSettings, normalizeData } from "../src/core/settings";
+import { HINT_WORKBENCH_TABS, STARTER_TOOLS, mergeSettings, normalizeData, starterData } from "../src/core/settings";
 import { Translator, format, resolveLanguage } from "../src/i18n";
 import { CORE_STRINGS } from "../src/i18n/core";
 import { MODULES } from "../src/modules/registry";
@@ -116,4 +116,14 @@ test("Workbench start tabs normalize independently", () => {
 	const mixed = normalizeData({ workbench: { startTab: "sessions", startTabPhone: "missing" } }).workbench;
 	assert.equal(mixed.startTab, "sessions");
 	assert.equal(mixed.startTabPhone, "tasks");
+});
+
+test("a first install starts with the starter tools on, and only they", () => {
+	const data = starterData();
+	assert.deepEqual(Object.keys(data.modules).sort(), [...STARTER_TOOLS].sort());
+	for (const id of STARTER_TOOLS) assert.deepEqual(data.modules[id], { enabled: true, settings: {} });
+	assert.equal(data.welcomed, false);
+	// Stored settings never get them back: a tool turned off stays off.
+	assert.equal(normalizeData({ modules: { tasks: { enabled: false, settings: {} } } }).modules.tasks.enabled, false);
+	assert.deepEqual(normalizeData({}).modules, {});
 });

@@ -3,8 +3,8 @@
 // picker (src/ui/tag-picker).
 export const en = {
 	"plugin.tagline": "Everything your notes need, in one shell.",
-	"plugin.welcome": "Snailkit is installed. Pick the tools you want in its settings.",
-	"plugin.welcome-action": "Choose tools",
+	"plugin.welcome": "Snailkit is ready: Home, Tasks, Brainstorm, Search and the Note menu are on. More tools wait in its settings.",
+	"plugin.welcome-action": "See all tools",
 	"plugin.start-error": "Snailkit: {name} could not start. See its settings for details.",
 
 	"home.count.one": "{count} of {total} tools in your shell",
