@@ -43,6 +43,7 @@ export class WorkbenchView extends ItemView {
 	private observer: ResizeObserver | null = null;
 	private bodyEl: HTMLElement | null = null;
 	private tabsHeader: HTMLElement | null = null;
+	private ownedHeader: HTMLElement | null = null;
 	private tabsEl: HTMLElement | null = null;
 	private tabsThumb: HTMLElement | null = null;
 	private tabsHint: HTMLElement | null = null;
@@ -240,6 +241,11 @@ export class WorkbenchView extends ItemView {
 		};
 		this.registerDomEvent(this.contentEl, "focusout", pending);
 		this.registerDomEvent(this.contentEl, "focusin", pending);
+		this.register(() => {
+			this.closed = true;
+			this.dismissHint();
+			this.clearHeaderClasses();
+		});
 		this.core.attach(this);
 		// setState usually follows at once (saved or requested state): the first build waits for it.
 		this.initTimer = window.setTimeout(() => {
@@ -250,6 +256,7 @@ export class WorkbenchView extends ItemView {
 	async onClose(): Promise<void> {
 		this.commitLive();
 		this.closed = true;
+		this.clearHeaderClasses();
 		window.clearTimeout(this.initTimer);
 		this.core.detach(this);
 		this.dismissHint();
@@ -437,6 +444,21 @@ export class WorkbenchView extends ItemView {
 				if (left.nextElementSibling !== tabs) left.insertAdjacentElement("afterend", tabs);
 			} else if (header.firstElementChild !== tabs) header.prepend(tabs);
 		} else if (this.contentEl.firstElementChild !== tabs) this.contentEl.prepend(tabs);
+		this.syncHeaderClasses();
+	}
+
+	private clearHeaderClasses(): void {
+		this.ownedHeader?.removeClass("sk-wb-has-tabs", "sk-wb-has-hint");
+		this.ownedHeader = null;
+	}
+
+	private syncHeaderClasses(): void {
+		const parent = this.tabsHeader?.parentElement;
+		const header = !this.closed && parent?.hasClass("view-header") ? parent : null;
+		if (this.ownedHeader !== header) this.clearHeaderClasses();
+		this.ownedHeader = header;
+		header?.toggleClass("sk-wb-has-tabs", !!this.tabsHeader?.hasClass("is-in-header") && !this.tabsHeader.hidden);
+		header?.toggleClass("sk-wb-has-hint", !!this.tabsHint && header.contains(this.tabsHint));
 	}
 
 	private renderTabs(): void {
@@ -445,6 +467,7 @@ export class WorkbenchView extends ItemView {
 		if (!bar || !header || this.closed) return;
 		const tabs = this.core.list();
 		header.hidden = tabs.length <= 1;
+		this.syncHeaderClasses();
 		if (header.hidden) {
 			this.dismissHint();
 			return;
@@ -499,6 +522,7 @@ export class WorkbenchView extends ItemView {
 		if (!this.core.hintSeen() && this.contentEl.clientWidth > 0) {
 			this.core.markHintSeen();
 			this.tabsHint = header.createEl("button", { cls: "sk-btn is-s sk-wb-tabs-hint", text: this.core.t("workbench.tabs-hint"), attr: { type: "button" } });
+			this.syncHeaderClasses();
 			this.tabsHint.addEventListener("click", () => this.dismissHint());
 			this.hintTimer = window.setTimeout(() => this.dismissHint(), 8000);
 		}
@@ -509,6 +533,7 @@ export class WorkbenchView extends ItemView {
 		this.hintTimer = 0;
 		this.tabsHint?.remove();
 		this.tabsHint = null;
+		this.syncHeaderClasses();
 	}
 
 	/**

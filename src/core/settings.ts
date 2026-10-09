@@ -1,6 +1,6 @@
 // Shape of data.json and how stored values are merged over defaults. Pure functions, tested in test/.
 import { isLang, type LanguageSetting } from "../i18n";
-import type { AutoOpenMode } from "./workbench/types";
+import type { AutoOpenMode, StartTab } from "./workbench/types";
 
 export interface ModuleRecord {
 	enabled: boolean;
@@ -21,9 +21,14 @@ export interface SnailkitData {
 }
 
 export interface WorkbenchSettings {
-	/** When the Workbench opens by itself, on Home (else its first tab). Phones follow the same setting. */
+	/** When the Workbench opens by itself. Phones follow the same setting. */
 	autoOpen: AutoOpenMode;
+	startTab: StartTab;
+	startTabPhone: StartTab;
 }
+
+export const START_TABS: StartTab[] = ["auto", "home", "tasks", "sessions"];
+const isStartTab = (value: unknown): value is StartTab => START_TABS.includes(value as StartTab);
 
 export const AUTO_OPEN_MODES: AutoOpenMode[] = ["startup-and-new-tabs", "startup", "never"];
 const isAutoOpen = (value: unknown): value is AutoOpenMode => AUTO_OPEN_MODES.includes(value as AutoOpenMode);
@@ -32,7 +37,7 @@ const isAutoOpen = (value: unknown): value is AutoOpenMode => AUTO_OPEN_MODES.in
 export const HINT_WORKBENCH_TABS = "workbench-tabs";
 
 export function defaultData(): SnailkitData {
-	return { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs" }, modules: {} };
+	return { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs", startTab: "auto", startTabPhone: "tasks" }, modules: {} };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -65,6 +70,8 @@ export function normalizeData(raw: unknown): SnailkitData {
 	const formerAutoOpen = data.modules.home?.settings.openWorkbench;
 	if (isAutoOpen(workbench.autoOpen)) data.workbench.autoOpen = workbench.autoOpen;
 	else if (isAutoOpen(formerAutoOpen)) data.workbench.autoOpen = formerAutoOpen;
+	if (isStartTab(workbench.startTab)) data.workbench.startTab = workbench.startTab;
+	if (isStartTab(workbench.startTabPhone)) data.workbench.startTabPhone = workbench.startTabPhone;
 	return data;
 }
 

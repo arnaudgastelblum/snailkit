@@ -27,7 +27,7 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.sk-toast:not(:has(.sk-toast-action)) {
+.sk-toast:not(.has-action) {
 	padding-right: 16px;
 }
 .sk-toast .sk-toast-action {

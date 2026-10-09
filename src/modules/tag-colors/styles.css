@@ -32,7 +32,7 @@
 .sk-tag-colors-tag .sk-tag-colors-mid { opacity: .7; }
 .sk-tag-colors-tag .sk-tag-colors-chev { opacity: .45; padding: 0 .3em; }
 .sk-tag-colors-tag .sk-tag-colors-leaf { font-weight: 600; }
-.markdown-preview-view a.tag:has(> .sk-tag-colors-tag) {
+.markdown-preview-view a.tag.sk-tag-colors-reading {
 	display: inline;
 	font-size: 1em;
 	line-height: inherit;
@@ -43,18 +43,23 @@
 	text-decoration: none;
 }
 
+.sk-tag-colors-raw.sk-tag-colors-raw.sk-tag-colors-raw,
+.sk-tag-colors-property.sk-tag-colors-property.sk-tag-colors-property {
+	background: var(--sk-tag-l-bg);
+	color: var(--sk-tag-l-fg);
+}
+
 .sk-tag-colors-raw,
 .sk-tag-colors-property {
-	background: var(--sk-tag-l-bg) !important;
-	color: var(--sk-tag-l-fg) !important;
 	border-radius: 5px;
 }
 
 .sk-tag-colors-raw { padding: 1px 0; border-radius: 0; }
-.cm-hashtag:has(> .sk-tag-colors-raw) { background: none !important; padding: 0 !important; border: 0 !important; }
+/* CodeMirror owns the outer span; a mark cannot reset its parent padding and border. */
+.cm-hashtag.cm-hashtag:has(> .sk-tag-colors-raw) { background: none; padding: 0; border: 0; }
 .cm-hashtag-begin > .sk-tag-colors-raw { padding-left: .4em; border-radius: 5px 0 0 5px; }
 .cm-hashtag-end > .sk-tag-colors-raw { padding-right: .4em; border-radius: 0 5px 5px 0; }
-.sk-tag-colors-pane { color: var(--sk-tag-l-fg) !important; }
+.sk-tag-colors-pane.sk-tag-colors-pane.sk-tag-colors-pane { color: var(--sk-tag-l-fg); }
 .sk-tag-colors-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .sk-tag-colors-swatches button,
 .sk-tag-colors-tag-button { height: auto; padding: 4px; background: none; box-shadow: none; }
@@ -82,7 +87,34 @@
 	animation: sk-pop 180ms var(--sk-ease, ease);
 }
 .sk-tag-card button {
-	all: unset;
+	display: inline;
+	width: auto;
+	height: auto;
+	min-width: 0;
+	min-height: 0;
+	max-width: none;
+	max-height: none;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	outline: initial;
+	appearance: none;
+	-webkit-app-region: initial;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	text-rendering: inherit;
+	text-align: inherit;
+	text-transform: inherit;
+	text-decoration: none;
+	white-space: inherit;
+	align-items: normal;
+	justify-content: normal;
+	user-select: inherit;
+	transition: initial;
 	box-sizing: border-box;
 	cursor: pointer;
 }

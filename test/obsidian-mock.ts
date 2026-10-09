@@ -44,7 +44,7 @@ export class MarkdownPreviewRenderer {
 	static registerPostProcessor(): void {}
 	static unregisterPostProcessor(): void {}
 }
-export const Platform = { isDesktopApp: true, isMobile: false };
+export const Platform = { isDesktopApp: true, isMobile: false, isPhone: false };
 
 export function normalizePath(path: string): string {
 	return path

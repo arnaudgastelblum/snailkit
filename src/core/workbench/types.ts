@@ -20,6 +20,8 @@ export type WorkbenchLayout = "page" | "side";
 /** When the Workbench opens by itself (its own setting, in data.json under "workbench"). */
 export type AutoOpenMode = "never" | "startup" | "startup-and-new-tabs";
 
+export type StartTab = "auto" | "home" | "tasks" | "sessions";
+
 /** What a tab keeps in the saved workspace: small, JSON only. */
 export type TabState = Record<string, unknown>;
 
@@ -107,7 +109,7 @@ export interface WorkbenchTab {
 }
 
 export interface WorkbenchOpenOptions {
-	/** Tab to show. Missing or not registered: the tab shown last in that Workbench, else the first. */
+	/** Tab to show. Missing: the device's start tab. Unregistered: keep the shown tab, else the first. */
 	tab?: string;
 	/** State for that tab: given to setState() of the shown tab, or as host.state when it mounts. */
 	state?: TabState;

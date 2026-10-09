@@ -1411,10 +1411,15 @@
 /* Earlier tasks next to today's count: small and neutral; orange only when some slipped yesterday. */
 .sk-home-n-extra { color: var(--text-faint); font-size: 11px; font-weight: 400; }
 .sk-home-n-extra.is-warn { color: var(--sk-home-warn); font-weight: 600; }
+.sk-home-nav-news {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0 0 6px;
+}
 .sk-home-nav button.sk-home-nav-new {
 	justify-content: center;
 	gap: 6px;
-	margin: 10px 4px 2px;
 	--icon-size: 15px;
 }
 
@@ -1542,4 +1547,23 @@
 	min-width: 52px;
 	font-variant-numeric: tabular-nums;
 	color: var(--text-muted);
+}
+/* Phone: text the size of the phone's own lists. */
+.sk-home-tab.is-phone :is(.sk-home-ln, .sk-home-rr, .sk-home-tg, .sk-home-br) {
+	font-size: 16px;
+}
+.sk-home-tab.is-phone .sk-home-chip {
+	font-size: 15px;
+}
+.sk-home-tab.is-phone .sk-home-field input {
+	font-size: 16px;
+}
+.sk-home-nav button.sk-home-nav-new.is-soft {
+	border: 1px solid var(--sk-line);
+	background: var(--sk-surface);
+	box-shadow: none;
+	color: var(--text-normal);
+}
+.sk-home-nav button.sk-home-nav-new.is-soft:hover {
+	background: var(--sk-hover);
 }

@@ -1,10 +1,10 @@
-// Opening the Workbench by itself, as its setting asks (data.workbench.autoOpen, on Home, else on
-// the first tab; never while no tool has a tab):
+// Opening the Workbench by itself, as its setting asks (data.workbench.autoOpen, on the device's
+// start tab; never while no tool has a tab):
 // - at Obsidian's startup only (not when the plugin is updated or turned on again): the first tab
 //   of the main area, pinned, on the asked tab, active. Never two: a Workbench restored in the main
 //   area of the main window is reused and moved to the front of its tab group (one in a pop-out
 //   window stays as it is); a lone empty tab too. Restored tabs stay, except transient Workbenches
-//   (new tabs of the last session showing Home, not pinned since): the startup Workbench stands for
+//   (new tabs of the last session, not pinned since): the startup Workbench stands for
 //   them, so they close; with "Never", they go back to being empty tabs.
 // - in new empty tabs ("startup-and-new-tabs"): Ctrl/Cmd+T or closing the last tab leaves an empty
 //   tab; when it is still empty and active a frame later (a tab opened to show a note is not), it
@@ -117,7 +117,7 @@ export class AutoOpener {
 		const main = this.mainLeaves();
 		const benches = this.restored();
 		const plan = startupPlan(benches, true);
-		// New tabs of the last session showing Home: the startup Workbench stands for them.
+		// New tabs of the last session: the startup Workbench stands for them.
 		for (const i of plan.close) benches[i].leaf.detach();
 		let leaf = plan.keep >= 0 ? benches[plan.keep].leaf : null;
 		if (leaf) {

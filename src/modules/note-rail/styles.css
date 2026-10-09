@@ -654,10 +654,10 @@ body.theme-dark {
 	opacity: 1;
 	transform: none;
 }
-.sk-note-rail-bm-items:has(> .sk-note-rail-bm-row:only-child) .sk-note-rail-bm-grip {
+.sk-note-rail-bm-items.is-single-row .sk-note-rail-bm-grip {
 	display: none;
 }
-.sk-note-rail-bm-items:has(> .sk-note-rail-bm-row:only-child) .sk-note-rail-bm-row:hover .sk-note-rail-bm-file {
+.sk-note-rail-bm-items.is-single-row .sk-note-rail-bm-row:hover .sk-note-rail-bm-file {
 	opacity: 1;
 	transform: none;
 }
@@ -1171,8 +1171,8 @@ body.theme-dark .sk-note-rail .sk-note-rail-btn.sk-note-rail-place {
 .sk-note-rail-day.is-today:hover .sk-note-rail-day-bg {
 	background: var(--interactive-accent-hover, var(--sk-accent));
 }
-.sk-note-rail-day.is-today b {
-	color: var(--text-on-accent) !important;
+.sk-note-rail-day.is-today.is-today b {
+	color: var(--text-on-accent);
 	font-weight: 650;
 }
 .sk-note-rail-day.is-today .sk-note-rail-day-dot {

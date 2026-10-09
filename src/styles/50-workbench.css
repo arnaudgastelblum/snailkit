@@ -1,11 +1,11 @@
 /* The Workbench (src/core/workbench): one view, its tabs in Obsidian's view header (or in a slim
    row on top where that header is hidden), and the shown tab filling the rest. */
-.sk-wb-view {
+.view-content.sk-wb-view.sk-wb-view {
 	position: relative;
 	display: flex;
 	flex-direction: column;
-	padding: 0 !important;
-	overflow: hidden !important;
+	padding: 0;
+	overflow: hidden;
 	outline: none;
 }
 .sk-wb-body {
@@ -41,7 +41,7 @@
 	display: none;
 }
 /* The tabs already name the view: the title of the header (shown by the default theme) would repeat it. */
-.view-header:has(> .sk-wb-tabs-header.is-in-header:not([hidden])) > .view-header-title-container {
+.view-header.sk-wb-has-tabs > .view-header-title-container {
 	visibility: hidden;
 }
 .sk-wb-tabs {
@@ -118,7 +118,7 @@
 }
 /* Obsidian's view header is its own layer (z-index 1): lift it while the hint shows, so the hint
    stays above the tab's content (the Home search field has its own layer). */
-.view-header:has(.sk-wb-tabs-hint) {
+.view-header.sk-wb-has-hint {
 	z-index: 40;
 }
 @media (prefers-reduced-motion: reduce) {

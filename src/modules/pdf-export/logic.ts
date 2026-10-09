@@ -341,6 +341,7 @@ export function isDarkScheme(colorScheme: string, bodyIsDark: boolean): boolean 
  */
 export function backgroundCss(pageBackground: string, darkScheme: boolean): string {
 	if (pageBackground !== "white" || darkScheme) return "";
+	// Override the copied body background, including inline styles, for white paper.
 	return "body { background-color: #ffffff !important; }";
 }
 

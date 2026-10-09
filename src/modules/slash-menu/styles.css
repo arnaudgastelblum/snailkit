@@ -384,18 +384,19 @@
 }
 
 /* Animations off (setting or OS preference). */
-.sk-slash-menu-menu.sk-slash-menu-no-anim,
-.sk-slash-menu-menu.sk-slash-menu-no-anim * {
-	animation: none !important;
-	transition: none !important;
+.sk-slash-menu-menu.sk-slash-menu-menu.sk-slash-menu-no-anim,
+.sk-slash-menu-menu.sk-slash-menu-menu.sk-slash-menu-no-anim * {
+	animation: none;
+	transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.sk-slash-menu-menu,
-	.sk-slash-menu-menu *,
-	.sk-slash-menu-flash {
-		animation: none !important;
-		transition: none !important;
+	.sk-slash-menu-menu.sk-slash-menu-menu.sk-slash-menu-menu,
+	.sk-slash-menu-menu.sk-slash-menu-menu.sk-slash-menu-menu *,
+	.sk-slash-menu-flash.sk-slash-menu-flash {
+		--sk-reduced-motion-duration: 0ms;
+		animation: none;
+		transition: none;
 	}
 }
 

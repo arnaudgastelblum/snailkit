@@ -7,6 +7,7 @@ import { CLS } from "./logic";
  * full-height scroll containers) that would clip the PDF to one page, and sets pagination.
  */
 export const PRINT_CSS = `
+/* Override copied Obsidian inline styles and collected app/theme priority rules for print. */
 html, body {
 	height: auto !important;
 	min-height: 0 !important;
@@ -25,6 +26,7 @@ body {
 	-webkit-print-color-adjust: exact;
 	print-color-adjust: exact;
 }
+/* Remove app/theme layout and decoration overrides from the copied view wrappers. */
 .${CLS.wrap} {
 	position: static !important;
 	display: block !important;
@@ -48,10 +50,12 @@ body {
 	outline: 0 !important;
 	background: transparent !important;
 }
+/* Obsidian sets the preview sizer dimensions and bottom padding inline. */
 .markdown-preview-sizer.${CLS.wrap} {
 	width: 100% !important;
 	padding-bottom: 0 !important;
 }
+/* Hide app controls even when collected app/theme rules force their display. */
 .collapse-indicator,
 .heading-collapse-indicator,
 .list-collapse-indicator,

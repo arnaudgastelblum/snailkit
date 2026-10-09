@@ -166,12 +166,14 @@ export class TagRuntime implements ColorHost {
 			saved = { tag: (el.textContent ?? "").replace(/^#/, ""), nodes: Array.from(el.childNodes) };
 			this.reading.set(el, saved);
 		}
+		el.classList.add("sk-tag-colors-reading");
 		el.replaceChildren(capsule(el.ownerDocument, saved.tag, this.classes(saved.tag)));
 	}
 
 	private restoreReading(el: Element): void {
 		const saved = this.reading.get(el);
 		if (saved && el.querySelector(".sk-tag-colors-tag")) el.replaceChildren(...saved.nodes);
+		el.classList.remove("sk-tag-colors-reading");
 		this.reading.delete(el);
 	}
 

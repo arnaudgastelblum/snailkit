@@ -17,3 +17,24 @@ export function destructive<T extends { buttonEl: HTMLElement }>(button: T): T {
 	else button.buttonEl.addClass("mod-warning");
 	return button;
 }
+
+/**
+ * A strip that scrolls sideways and shows no scroll bar: the mouse wheel moves it sideways too
+ * (a trackpad and a finger already do). Ctrl/Cmd + wheel is left alone (zoom), and at either end
+ * the wheel goes back to the page.
+ */
+export function wheelSideways(el: HTMLElement): void {
+	el.addEventListener(
+		"wheel",
+		(e) => {
+			if (e.ctrlKey || e.metaKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+			const max = el.scrollWidth - el.clientWidth;
+			if (max <= 0) return;
+			const next = Math.max(0, Math.min(max, el.scrollLeft + e.deltaY));
+			if (next === el.scrollLeft) return;
+			e.preventDefault();
+			el.scrollLeft = next;
+		},
+		{ passive: false },
+	);
+}

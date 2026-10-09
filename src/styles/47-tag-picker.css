@@ -93,14 +93,14 @@
 	height: 20px;
 	font-size: 11.5px;
 }
-.sk-tag-picker input.sk-tag-picker-input {
+.sk-tag-picker.sk-tag-picker input.sk-tag-picker-input {
 	flex: 1;
 	min-width: 0;
 	height: 100%;
 	padding: 0;
-	border: 0 !important;
+	border: 0;
 	border-radius: 0;
-	background: none !important;
+	background: none;
 	box-shadow: none;
 	font-size: 14px;
 	color: var(--text-normal);
@@ -319,7 +319,7 @@
 	height: 16px;
 }
 .sk-tag-picker.is-touch kbd.sk-tag-picker-it-enter {
-	display: none !important;
+	display: none;
 }
 
 /* On its own (openTagPicker): a popover under its anchor, or a sheet at the bottom on a phone. */

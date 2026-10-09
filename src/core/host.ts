@@ -7,7 +7,7 @@ import type SnailkitPlugin from "../main";
 import { ModuleContext } from "./context";
 import type { AnyModule, ModuleDefinition } from "./module";
 import { mergeSettings, type SnailkitData } from "./settings";
-import type { AutoOpenMode } from "./workbench/types";
+import type { AutoOpenMode, StartTab } from "./workbench/types";
 
 /** How long a change made on this device wins over a file arriving from another one. */
 const LOCAL_WINS_MS = 3000;
@@ -234,6 +234,17 @@ export class ModuleHost {
 	setWorkbenchAutoOpen(mode: AutoOpenMode): Promise<void> {
 		this.plugin.data.workbench.autoOpen = mode;
 		this.plugin.workbench.setAutoOpen(mode);
+		return this.saveWorkbench();
+	}
+
+	setWorkbenchStartTab(key: "startTab" | "startTabPhone", tab: StartTab): Promise<void> {
+		const settings = this.plugin.data.workbench;
+		settings[key] = tab;
+		this.plugin.workbench.setStartTabs(settings.startTab, settings.startTabPhone);
+		return this.saveWorkbench();
+	}
+
+	private saveWorkbench(): Promise<void> {
 		this.workbenchLocalAt = Date.now();
 		return this.run(async () => {
 			await this.plugin.saveData(this.plugin.data);
@@ -263,6 +274,7 @@ export class ModuleHost {
 			const language = fresh.language !== this.plugin.data.language;
 			this.plugin.data = fresh;
 			this.plugin.workbench.setAutoOpen(fresh.workbench.autoOpen);
+			this.plugin.workbench.setStartTabs(fresh.workbench.startTab, fresh.workbench.startTabPhone);
 			for (const handle of this.handles) {
 				if (this.closed) return;
 				const settings = handle.readSettings();

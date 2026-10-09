@@ -3,7 +3,9 @@
 // a note opened from a tab goes.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { TFile, type App, type WorkspaceLeaf } from "obsidian";
+import { Platform, TFile, type App, type WorkspaceLeaf } from "obsidian";
+import type SnailkitPlugin from "../src/main";
+import type { WorkbenchView } from "../src/core/workbench/view";
 import { moduleWorkbench, WorkbenchCore } from "../src/core/workbench";
 import { openNoteAt } from "../src/core/workbench/open";
 import { altDigit, BUILT_IN_TABS, chooseTab, nthTab, readViewState, reshow, sortTabs, startupPlan } from "../src/core/workbench/state";
@@ -13,6 +15,88 @@ import { TAB_ORDER, WORKBENCH_VIEW_TYPE, type WorkbenchTab } from "../src/core/w
 (globalThis as { window?: unknown }).window ??= globalThis;
 
 const tab = (id: string, order?: number): WorkbenchTab => ({ id, order, icon: "x", label: id, mount() {} });
+
+test("start tabs follow the device and fall back when a tool is off", () => {
+	const core = new WorkbenchCore();
+	const device = Platform as { isPhone: boolean };
+	try {
+		core.addTab(tab("tasks", 20));
+		const removeHome = core.addTab(tab("home", 10));
+		const removeSessions = core.addTab(tab("sessions", 30));
+		assert.equal(core.autoOpenTab, "home");
+		device.isPhone = true;
+		assert.equal(core.autoOpenTab, "tasks");
+		core.setStartTabs("tasks", "sessions");
+		assert.equal(core.autoOpenTab, "sessions");
+		removeSessions();
+		assert.equal(core.autoOpenTab, "home", "a missing choice falls back to Home");
+		device.isPhone = false;
+		assert.equal(core.autoOpenTab, "tasks");
+		core.setStartTabs("home", "home");
+		removeHome();
+		assert.equal(core.autoOpenTab, "tasks");
+		device.isPhone = true;
+		assert.equal(core.autoOpenTab, "tasks");
+		core.addTab(tab("home", 10));
+		core.setStartTabs("auto", "auto");
+		assert.equal(core.autoOpenTab, "home");
+	} finally {
+		device.isPhone = false;
+		core.dispose();
+	}
+});
+
+test("generic opens choose the start tab, explicit opens win, and switching leaves keeps state", async () => {
+	const core = new WorkbenchCore();
+	let existing = false;
+	let activeTab = "sessions";
+	const states: unknown[] = [];
+	const events = new Map<string, (leaf: WorkspaceLeaf) => void>();
+	const view = {
+		get activeTab() { return activeTab; },
+		async select(id: string) { activeTab = id; },
+		syncLayout() {}, focusTab() {}, current: {},
+	};
+	const leaf = {
+		view: { getViewType: () => WORKBENCH_VIEW_TYPE },
+		getRoot: () => null,
+		async setViewState(state: { state: { activeTab: string } }) {
+			states.push(state.state);
+			activeTab = state.state.activeTab;
+			existing = true;
+		},
+	} as unknown as WorkspaceLeaf;
+	const plugin = {
+		app: { workspace: {
+			on: (event: string, callback: (leaf: WorkspaceLeaf) => void) => events.set(event, callback),
+			getLeavesOfType: () => existing ? [leaf] : [],
+			getLeaf: () => leaf,
+			async revealLeaf() {}, setActiveLeaf() {},
+		} },
+		registerView() {}, registerEvent() {}, addCommand() {},
+		registerInterval: (id: number) => window.clearInterval(id),
+		t: (key: string) => key,
+	} as unknown as SnailkitPlugin;
+	core.start(plugin, false);
+	core.viewOf = async () => view as unknown as WorkbenchView;
+	try {
+		for (const id of ["home", "tasks", "sessions"]) core.addTab(tab(id));
+		core.setStartTabs("tasks", "tasks");
+		await core.open();
+		assert.deepEqual(states, [{ activeTab: "tasks", tabs: {} }]);
+		await core.open({ tab: "sessions" });
+		assert.equal(activeTab, "sessions");
+		events.get("active-leaf-change")?.(leaf);
+		assert.equal(activeTab, "sessions", "switching back does not select the start tab");
+		await core.open();
+		assert.equal(activeTab, "tasks", "generic opening also selects it in an existing leaf");
+		existing = false;
+		await core.open({ tab: "home" });
+		assert.equal(activeTab, "home", "explicit tab also wins in a new leaf");
+	} finally {
+		core.dispose();
+	}
+});
 
 test("the view type keeps the name saved workspaces know", () => {
 	assert.equal(WORKBENCH_VIEW_TYPE, "snailkit-tasks");

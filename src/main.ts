@@ -6,7 +6,7 @@ import { ModuleHost } from "./core/host";
 import { createPlaces, type PlacesCore } from "./core/places";
 import { normalizeData, type SnailkitData } from "./core/settings";
 import { WorkbenchCore } from "./core/workbench";
-import type { AutoOpenMode } from "./core/workbench/types";
+import type { AutoOpenMode, StartTab } from "./core/workbench/types";
 import { Translator, resolveLanguage, type Lang, type LanguageSetting, type Vars } from "./i18n";
 import { CORE_STRINGS } from "./i18n/core";
 import { MODULES } from "./modules/registry";
@@ -54,6 +54,7 @@ export default class SnailkitPlugin extends Plugin {
 		// The Workbench view exists before the modules start and before the workspace is restored.
 		this.workbench.start(this, startup);
 		this.workbench.setAutoOpen(this.data.workbench.autoOpen);
+		this.workbench.setStartTabs(this.data.workbench.startTab, this.data.workbench.startTabPhone);
 
 		this.host = new ModuleHost(this, MODULES);
 		this.settingTab = new SnailkitSettingTab(this);
@@ -101,6 +102,10 @@ export default class SnailkitPlugin extends Plugin {
 	/** When the Workbench opens by itself (its page in the settings). */
 	setWorkbenchAutoOpen(mode: AutoOpenMode): Promise<void> {
 		return this.host.setWorkbenchAutoOpen(mode);
+	}
+
+	setWorkbenchStartTab(key: "startTab" | "startTabPhone", tab: StartTab): Promise<void> {
+		return this.host.setWorkbenchStartTab(key, tab);
 	}
 
 	/**

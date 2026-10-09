@@ -128,7 +128,7 @@
 .sk-map .sk-map-node.is-folded :is(.sk-map-chevron, .sk-map-action) { display: none; }
 .sk-map-crumbs [data-map-unfold] { font-weight: 600; }
 /* The inline name field of a new note. */
-.sk-map .sk-map-node.is-editing { z-index: 6; max-width: none !important; cursor: text; }
+.sk-map .sk-map-node.is-editing { z-index: 6; max-width: none; cursor: text; }
 .sk-map .sk-map-node.is-editing :is(.sk-map-label, .sk-map-chevron, .sk-map-action) { display: none; }
 .sk-map-edit { width: 132px; height: 24px; padding: 0 6px; border: 1px solid var(--sk-accent-line); border-radius: 6px; background: var(--sk-surface); color: var(--text-normal); font: inherit; font-size: 13px; box-shadow: none; }
 .sk-map-edit:focus { outline: none; border-color: var(--sk-accent); box-shadow: 0 0 0 2px var(--sk-accent-soft, transparent); }
@@ -136,4 +136,12 @@
 @media (prefers-reduced-motion: reduce) {
 	.sk-map-stage:not(.is-tree) .sk-map-node.is-root { transition: opacity 120ms; }
 	.sk-map-stage:not(.is-tree), .sk-map-stage:not(.is-tree) .sk-map-group { transition: none; }
+}
+
+/* No scroll bar under the map: it moves with a trackpad, a finger or the mouse wheel. */
+.sk-map-viewport {
+	scrollbar-width: none;
+}
+.sk-map-viewport::-webkit-scrollbar {
+	display: none;
 }

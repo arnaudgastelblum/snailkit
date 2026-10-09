@@ -11,9 +11,10 @@
 	.sk-settings *,
 	.sk-settings *::before,
 	.sk-settings *::after {
-		animation-duration: 0.001ms !important;
+		/* Override all module animations, including inline animation styles. */
+		animation-duration: var(--sk-reduced-motion-duration, 0.001ms) !important;
 		animation-delay: 0ms !important;
-		transition-duration: 0.001ms !important;
+		transition-duration: var(--sk-reduced-motion-duration, 0.001ms) !important;
 		transition-delay: 0ms !important;
 	}
 }

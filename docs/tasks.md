@@ -21,6 +21,9 @@ the two.
 
 ## Good to know
 
+- On a phone, one line of buttons filters the list (Tag, Priority, Type, search); a tap unfolds
+  its choices, a second tap folds them. The round + button adds a task, and what you add lands
+  right under the field.
 - Open the list from the ribbon, the Note menu or Home. Right click a task for every action.
 - **Flags** say how a task is done: `#quick` and `#deep` become chips over the list (**10 minutes**,
   **Focus**) to pick what fits your time and energy; `#waiting` and `#someday` leave Today and get

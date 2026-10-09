@@ -15,7 +15,7 @@ function fakePlugin() {
 	const plugin = {
 		app: { commands: { addCommand: (c: { id: string }) => commands.set(c.id, c), removeCommand: (id: string) => commands.delete(id) }, workspace: { updateOptions() {}, trigger() {} } },
 		data: defaultData(),
-		workbench: { setAutoOpen() {} },
+		workbench: { setAutoOpen() {}, setStartTabs() {} },
 		saveData: async () => undefined,
 		lang: "en",
 		manifest: { id: "snailkit", name: "Snailkit" },
@@ -202,6 +202,30 @@ test("when the Workbench opens, just chosen on this device, wins over an older f
 	(host as unknown as { workbenchLocalAt: number }).workbenchLocalAt = 0;
 	await host.applyExternal(async () => newer);
 	assert.equal(plugin.data.workbench.autoOpen, "startup", "a change from another device comes in");
+});
+
+test("Workbench start tabs apply immediately, save, and follow external changes", async () => {
+	const { plugin } = fakePlugin();
+	const host = new ModuleHost(plugin, []);
+	const applied: string[][] = [];
+	let saves = 0;
+	plugin.workbench.setStartTabs = (computer, phone) => { applied.push([computer, phone]); };
+	plugin.saveData = async () => { saves++; };
+	const older = host.applyExternal(async () => defaultData());
+	const chosen = host.setWorkbenchStartTab("startTab", "sessions");
+	assert.deepEqual(applied, [["sessions", "tasks"]], "applied before saving");
+	await Promise.all([older, chosen]);
+	assert.equal(plugin.data.workbench.startTab, "sessions", "a recent local change wins");
+	await host.setWorkbenchStartTab("startTabPhone", "home");
+	assert.equal(saves, 2);
+	assert.deepEqual(applied.at(-1), ["sessions", "home"]);
+	const fresh = defaultData();
+	fresh.workbench.startTab = "tasks";
+	fresh.workbench.startTabPhone = "auto";
+	(host as unknown as { workbenchLocalAt: number }).workbenchLocalAt = 0;
+	await host.applyExternal(async () => fresh);
+	assert.deepEqual(applied.at(-1), ["tasks", "auto"]);
+	assert.equal(plugin.data.workbench.startTabPhone, "auto");
 });
 
 test("a language change from another device restarts the running modules", async () => {

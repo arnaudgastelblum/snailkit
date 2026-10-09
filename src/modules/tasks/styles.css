@@ -14,7 +14,7 @@ body.theme-dark {
 }
 
 /* The root of the Tasks tab, inside the Workbench (src/core/workbench): it fills the tab's place. */
-.sk-wb-tab:has(> .sk-tasks-view) {
+.sk-wb-tab.sk-tasks-tab {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -191,17 +191,17 @@ body.theme-dark {
 	border-color: var(--sk-accent-line);
 	box-shadow: 0 0 0 3px var(--sk-accent-wash);
 }
-.sk-tasks-search input,
-.sk-tasks-search input:focus,
-.sk-tasks-search input:hover {
+.sk-tasks-search.sk-tasks-search input,
+.sk-tasks-search.sk-tasks-search input:focus,
+.sk-tasks-search.sk-tasks-search input:hover {
 	flex: 1;
 	min-width: 0;
 	height: auto;
 	padding: 0;
-	border: 0 !important;
+	border: 0;
 	outline: 0;
-	background: none !important;
-	box-shadow: none !important;
+	background: none;
+	box-shadow: none;
 	color: var(--text-normal);
 	font-size: 13.5px;
 }
@@ -426,11 +426,11 @@ body.theme-dark {
 }
 
 /* Level 1: a band tinted with the tag color. Level 2+: a colored bar on a guide line. */
-.sk-tasks-lvl-1 {
-	margin-top: 16px !important;
+.sk-tasks-grp-body > .sk-tasks-grp.is-sub.sk-tasks-lvl-1.sk-tasks-lvl-1 {
+	margin-top: 16px;
 }
-.sk-tasks-grp-body > .sk-tasks-lvl-1:first-child {
-	margin-top: 6px !important;
+.sk-tasks-grp-body > .sk-tasks-grp.is-sub.sk-tasks-lvl-1:first-child {
+	margin-top: 6px;
 }
 .sk-tasks-lvl-1 > .sk-tasks-grp-h {
 	position: relative;
@@ -669,9 +669,9 @@ body.theme-dark {
 	opacity: 1;
 	pointer-events: auto;
 }
-body.sk-tasks-dnd .sk-tasks-row-act,
-body.sk-tasks-dnd .sk-tasks-grip {
-	opacity: 0 !important;
+body.sk-tasks-dnd.sk-tasks-dnd .sk-tasks-row-act,
+body.sk-tasks-dnd.sk-tasks-dnd .sk-tasks-grip {
+	opacity: 0;
 }
 
 /* The checkbox: the priority tints its ring. */
@@ -750,8 +750,10 @@ body.sk-tasks-dnd .sk-tasks-grip {
 		box-shadow: 0 0 0 12px transparent;
 	}
 }
+.sk-tasks-row.sk-tasks-row.is-leaving {
+	min-height: 0;
+}
 .sk-tasks-row.is-leaving {
-	min-height: 0 !important;
 	margin-top: 0;
 	margin-bottom: 0;
 	padding-top: 0;
@@ -853,9 +855,9 @@ body.sk-tasks-dnd .sk-tasks-grip {
 .sk-tasks-row.is-dragging {
 	opacity: 0.35;
 }
-.sk-tasks-nav-item.is-drop-into,
-.sk-tasks-scope.is-drop-into {
-	background: var(--sk-accent-wash) !important;
+.sk-tasks-nav-item.sk-tasks-nav-item.is-drop-into,
+.sk-tasks-scope.sk-tasks-scope.is-drop-into {
+	background: var(--sk-accent-wash);
 	box-shadow: inset 0 0 0 1.5px var(--sk-accent);
 	color: var(--text-normal);
 }
@@ -870,16 +872,16 @@ body.sk-tasks-dnd .sk-tasks-grip {
 	border-style: dashed;
 	cursor: default;
 }
-.sk-tasks-add input,
-.sk-tasks-add input:focus,
-.sk-tasks-add input:hover {
+.sk-tasks-add.sk-tasks-add input,
+.sk-tasks-add.sk-tasks-add input:focus,
+.sk-tasks-add.sk-tasks-add input:hover {
 	width: 100%;
 	height: 20px;
 	padding: 0;
-	border: 0 !important;
+	border: 0;
 	outline: 0;
-	background: none !important;
-	box-shadow: none !important;
+	background: none;
+	box-shadow: none;
 	color: var(--text-normal);
 	font-size: 14.5px;
 	line-height: 20px;
@@ -1245,25 +1247,33 @@ body.sk-tasks-dnd .sk-tasks-grip {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	height: 26px !important;
-	padding: 0 9px !important;
-	border: 0 !important;
-	border-radius: var(--sk-radius-s) !important;
-	background: none !important;
-	box-shadow: none !important;
 	color: var(--text-muted);
-	font-size: 12.5px !important;
 	cursor: pointer;
 }
+button.sk-tasks-scope.sk-tasks-scope {
+	height: 26px;
+	padding: 0 9px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: none;
+	font-size: 12.5px;
+}
+button.sk-tasks-scope.sk-tasks-scope.sk-tasks-scope {
+	box-shadow: none;
+}
 .sk-tasks-scope:hover {
-	background: var(--sk-hover) !important;
 	color: var(--text-normal);
 }
+button.sk-tasks-scope.sk-tasks-scope:hover {
+	background: var(--sk-hover);
+}
 .sk-tasks-scope.is-on {
-	background: var(--sk-surface) !important;
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07) !important;
 	color: var(--text-normal);
 	font-weight: 550;
+}
+button.sk-tasks-scope.sk-tasks-scope.is-on {
+	background: var(--sk-surface);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07);
 }
 .sk-tasks-scope-n {
 	color: var(--text-faint);
@@ -1777,24 +1787,24 @@ body.sk-tasks-dnd .sk-tasks-grip {
 }
 
 /* Inline rename */
-.sk-tasks-rename,
-.sk-tasks-rename:focus {
+.sk-tasks-rename.sk-tasks-rename.sk-tasks-rename,
+.sk-tasks-rename.sk-tasks-rename.sk-tasks-rename:focus {
 	flex: 1;
 	width: 100%;
 	min-width: 120px;
-	height: var(--sk-tasks-rename-h, auto) !important;
+	height: var(--sk-tasks-rename-h, auto);
 	min-height: 26px;
 	margin: -3px 0 -3px -6px;
-	padding: 2px 6px !important;
+	padding: 2px 6px;
 	resize: none;
 	overflow: hidden;
 	line-height: 1.45;
 	font-family: inherit;
 	white-space: pre-wrap;
-	border: 1px solid var(--sk-accent-line) !important;
-	border-radius: 6px !important;
-	background: var(--sk-surface) !important;
-	box-shadow: 0 0 0 3px var(--sk-accent-wash) !important;
+	border: 1px solid var(--sk-accent-line);
+	border-radius: 6px;
+	background: var(--sk-surface);
+	box-shadow: 0 0 0 3px var(--sk-accent-wash);
 	font-size: 14.5px;
 }
 
@@ -2118,4 +2128,420 @@ textarea.sk-tasks-tnote-area {
 }
 .sk-tasks-view.is-phone .sk-tasks-add-hint {
 	display: none;
+}
+
+/* ----- Phone: a calmer head, a floating New task, bigger text ----- */
+.sk-tasks-view.is-phone {
+	position: relative;
+}
+.sk-tasks-view.is-phone .sk-tasks-filter-btn,
+.sk-tasks-view.is-phone .sk-tasks-phone-search {
+	display: none;
+}
+.sk-tasks-view.is-phone.is-searching .sk-tasks-phone-search {
+	display: block;
+}
+/* The filter bar: one line of soft buttons. */
+.sk-tasks-pbar {
+	display: flex;
+	gap: 8px;
+	padding: 2px 0 8px;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+.sk-tasks-view button.sk-tasks-pbtn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	height: 38px;
+	padding: 0 12px 0 11px;
+	border: 1px solid var(--sk-line);
+	border-radius: 19px;
+	background: var(--sk-surface);
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 15px;
+	font-weight: 500;
+	transition: background var(--sk-fast), color var(--sk-fast), border-color var(--sk-fast), transform var(--sk-fast);
+}
+.sk-tasks-view button.sk-tasks-pbtn:active {
+	transform: scale(0.96);
+}
+.sk-tasks-view button.sk-tasks-pbtn.is-icon {
+	width: 38px;
+	padding: 0;
+	justify-content: center;
+}
+.sk-tasks-view button.sk-tasks-pbtn.is-open {
+	border-color: var(--sk-accent);
+	color: var(--text-normal);
+}
+.sk-tasks-view button.sk-tasks-pbtn.is-on {
+	border-color: transparent;
+	background: var(--sk-accent-wash);
+	color: var(--sk-accent-text);
+}
+.sk-tasks-pbtn svg {
+	width: 16px;
+	height: 16px;
+}
+.sk-tasks-pbtn-l {
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-tasks-pbtn-chev {
+	display: inline-flex;
+	opacity: 0.6;
+	transition: transform var(--sk-mid) var(--sk-ease);
+}
+.sk-tasks-pbtn.is-open .sk-tasks-pbtn-chev {
+	transform: rotate(180deg);
+}
+.sk-tasks-pbtn-x {
+	display: inline-flex;
+	margin-right: -4px;
+	padding: 4px;
+}
+/* The panel under the bar: unfolds and folds by its height. */
+.sk-tasks-ppanel {
+	display: grid;
+	grid-template-rows: 0fr;
+	opacity: 0;
+	transition: grid-template-rows var(--sk-mid) var(--sk-ease), opacity var(--sk-mid) var(--sk-ease);
+}
+.sk-tasks-ppanel.is-open {
+	grid-template-rows: 1fr;
+	opacity: 1;
+}
+.sk-tasks-ppanel-in {
+	min-height: 0;
+	overflow: hidden;
+}
+.sk-tasks-ppanel.is-open .sk-tasks-ppanel-in {
+	max-height: 46vh;
+	overflow-y: auto;
+}
+.sk-tasks-pgrid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 4px 0 12px;
+}
+.sk-tasks-pgrid.is-two {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.sk-tasks-view button.sk-tasks-popt {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 44px;
+	padding: 0 14px;
+	border: 1px solid var(--sk-line);
+	border-radius: 12px;
+	background: var(--sk-surface);
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: 15px;
+	transition: background var(--sk-fast), border-color var(--sk-fast), transform var(--sk-fast);
+}
+.sk-tasks-view button.sk-tasks-popt:active {
+	transform: scale(0.97);
+}
+.sk-tasks-view button.sk-tasks-popt.is-on {
+	border-color: var(--sk-accent);
+	background: var(--sk-accent-wash);
+}
+.sk-tasks-view button.sk-tasks-popt.is-sub {
+	min-height: 40px;
+	padding: 0 12px;
+}
+.sk-tasks-popt svg {
+	width: 17px;
+	height: 17px;
+	flex: none;
+}
+.sk-tasks-popt .sk-tasks-cap {
+	font-size: 13px;
+}
+.sk-tasks-popt-n {
+	margin-left: auto;
+	padding-left: 6px;
+	color: var(--text-faint);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+/* New task: a round button floating above Obsidian's toolbar. */
+.sk-tasks-view button.sk-tasks-fab {
+	position: absolute;
+	right: 18px;
+	bottom: calc(92px + env(safe-area-inset-bottom));
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 58px;
+	height: 58px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: var(--sk-accent);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22), 0 2px 4px rgba(0, 0, 0, 0.12);
+	color: var(--text-on-accent);
+	transition: transform var(--sk-fast) var(--sk-ease);
+}
+.sk-tasks-view button.sk-tasks-fab:active {
+	transform: scale(0.92);
+}
+.sk-tasks-fab svg {
+	width: 26px;
+	height: 26px;
+	stroke-width: 2.4;
+}
+/* The + of a group: a soft round button, easy to hit. */
+.sk-tasks-view.is-phone .sk-tasks-grp-add {
+	width: 34px;
+	height: 34px;
+	min-width: 34px;
+	min-height: 34px;
+	border-radius: 50%;
+	background: var(--sk-accent-wash);
+	color: var(--sk-accent-text);
+	transition: transform var(--sk-fast);
+}
+.sk-tasks-view.is-phone .sk-tasks-grp-add:active {
+	transform: scale(0.9);
+}
+.sk-tasks-view.is-phone .sk-tasks-grp-add svg {
+	width: 18px;
+	height: 18px;
+	stroke-width: 2.4;
+}
+/* What was just added, landing under the field. */
+.sk-tasks-landed {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 8px;
+}
+.sk-tasks-landed-it {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--text-muted);
+	font-size: 14px;
+}
+.sk-tasks-landed-it svg {
+	width: 15px;
+	height: 15px;
+	color: var(--sk-success);
+}
+.sk-tasks-landed-it.is-fresh {
+	color: var(--text-normal);
+	animation: sk-tasks-land-in 420ms var(--sk-ease) both;
+}
+@keyframes sk-tasks-land-in {
+	from {
+		opacity: 0;
+		transform: translateY(-10px) scale(0.96);
+	}
+	60% {
+		opacity: 1;
+		transform: translateY(2px);
+	}
+}
+/* Text a phone can read: the size of the phone's own lists. */
+.sk-tasks-view.is-phone .sk-tasks-row-title {
+	font-size: 16.5px;
+	line-height: 23px;
+}
+.sk-tasks-view.is-phone .sk-tasks-row-meta,
+.sk-tasks-view.is-phone .sk-tasks-row-description {
+	font-size: 13.5px;
+	line-height: 20px;
+}
+.sk-tasks-view.is-phone .sk-tasks-scope {
+	font-size: 16px;
+}
+.sk-tasks-view.is-phone .sk-tasks-grp-h {
+	font-size: 14px;
+}
+.sk-tasks-view.is-phone .sk-tasks-search input {
+	font-size: 16px;
+}
+.sk-tasks-view.is-phone .sk-tasks-add input {
+	font-size: 16.5px;
+}
+.sk-tasks-view.is-phone .sk-tasks-list {
+	padding-bottom: calc(170px + env(safe-area-inset-bottom));
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-tasks-ppanel,
+	.sk-tasks-pbtn-chev,
+	.sk-tasks-view button.sk-tasks-pbtn,
+	.sk-tasks-view button.sk-tasks-popt,
+	.sk-tasks-view button.sk-tasks-fab {
+		transition: none;
+	}
+	.sk-tasks-landed-it.is-fresh {
+		animation: none;
+	}
+}
+.sk-tasks-pline {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	width: 100%;
+}
+.sk-tasks-pline + .sk-tasks-pline {
+	padding-top: 8px;
+	border-top: 1px solid var(--sk-line);
+}
+.sk-tasks-pgrid > .sk-tasks-popt:first-child {
+	width: 100%;
+	justify-content: center;
+}
+/* Phone: a long press opens the menu of a task; the row sinks a little while pressed, no text callout. */
+.sk-tasks-view.is-phone .sk-tasks-row {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	user-select: none;
+	transition: transform 160ms var(--sk-ease), background var(--sk-fast);
+}
+.sk-tasks-view.is-phone .sk-tasks-row.is-pressing {
+	background: var(--sk-hover);
+	transform: scale(0.98);
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-tasks-view.is-phone .sk-tasks-row.is-pressing {
+		transform: none;
+	}
+}
+/* New task on top of the navigator (page), like New brainstorm in the Brainstorms tab. */
+.sk-tasks-view button.sk-btn.sk-tasks-nav-new {
+	flex: none;
+	justify-content: center;
+	gap: 6px;
+	margin: 0 0 12px;
+}
+.sk-tasks-nav-new kbd {
+	margin-left: 4px;
+}
+/* The pill of the day opens what was done today. */
+.sk-tasks-done {
+	cursor: var(--cursor);
+}
+.sk-tasks-done:hover {
+	filter: brightness(0.97);
+}
+.sk-tasks-done:focus-visible {
+	box-shadow: 0 0 0 2px var(--sk-accent);
+	outline: none;
+}
+.sk-tasks-donepop {
+	position: fixed;
+	z-index: var(--layer-menu);
+	box-sizing: border-box;
+	max-height: min(420px, 60vh);
+	padding: 12px 12px 8px;
+	overflow-y: auto;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-l);
+	background: var(--sk-surface);
+	box-shadow: var(--sk-shadow-pop);
+	animation: sk-tasks-donepop-in var(--sk-mid) var(--sk-ease) both;
+}
+@keyframes sk-tasks-donepop-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px) scale(0.98);
+	}
+}
+.sk-tasks-donepop-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 4px 8px;
+	color: var(--text-normal);
+	font-size: 13.5px;
+	font-weight: 600;
+}
+.sk-tasks-donepop-head svg {
+	width: 16px;
+	height: 16px;
+	color: var(--sk-success);
+}
+.sk-tasks-donepop-empty {
+	padding: 4px 4px 8px;
+	color: var(--text-muted);
+	font-size: 13.5px;
+}
+.sk-tasks-donepop-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.sk-tasks-donepop button.sk-tasks-donepop-open {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 8px;
+	min-width: 0;
+	height: auto;
+	min-height: 34px;
+	padding: 4px 6px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 13.5px;
+	text-align: left;
+	cursor: var(--cursor);
+}
+.sk-tasks-donepop button.sk-tasks-donepop-open:hover {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+.sk-tasks-donepop-open svg {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	color: var(--sk-success);
+}
+.sk-tasks-donepop-text {
+	min-width: 0;
+	overflow: hidden;
+	text-decoration-line: line-through;
+	text-decoration-color: var(--text-faint);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-tasks-donepop .sk-tasks-cap {
+	flex: none;
+}
+.sk-tasks-donepop button.sk-tasks-donepop-back {
+	flex: none;
+	gap: 4px;
+	color: var(--text-faint);
+}
+.sk-tasks-donepop button.sk-tasks-donepop-back:hover {
+	color: var(--text-normal);
+}
+.sk-tasks-donepop-back svg {
+	width: 13px;
+	height: 13px;
+}
+.sk-tasks-donepop.is-phone button.sk-tasks-donepop-open {
+	min-height: 44px;
+	font-size: 15.5px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-tasks-donepop {
+		animation: none;
+	}
 }

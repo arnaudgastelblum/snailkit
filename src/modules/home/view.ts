@@ -1447,7 +1447,7 @@ export class HomeView implements WorkbenchTabInstance {
 		return el;
 	}
 
-	/** The navigator: Today (what calls for you), a New brainstorm button, then the views. */
+	/** The navigator: New brainstorm and New task, Today (what calls for you), then the views. */
 	private drawNav(): void {
 		const nav = this.nav;
 		if (!nav) return;
@@ -1459,6 +1459,24 @@ export class HomeView implements WorkbenchTabInstance {
 		const brainstorms = rt.brainstorms();
 		const old = tasks ? oldDailyTasks(tasks, (p) => rt.dayOf(p), f.today).reduce((n, g) => n + g.tasks.length, 0) : null;
 		const chips = todayChips({ daily: !!daily, due: tasks ? dueCounts(tasks, f.today) : null, toSort: brainstorms ? toSortCount(brainstorms) : null, toDecide: rt.toDecideCount(), old });
+		// What to create, on top as in the other tabs: New brainstorm, then New task (quieter).
+		const tasksApi = rt.tasks();
+		const canTask = typeof tasksApi?.newTask === "function";
+		if (this.startBrainstorm() || canTask) {
+			const row = nav.createDiv({ cls: "sk-home-nav-news" });
+			if (this.startBrainstorm()) {
+				const add = this.item(row, "button", "sk-btn is-primary sk-home-nav-new", { key: "chip:new-brainstorm", act: "new-brainstorm" });
+				add.setAttr("data-sk-item", "");
+				setIcon(add.createSpan({ cls: "sk-home-nav-ic" }), "zap");
+				add.createSpan({ text: this.t("today.new-brainstorm") });
+			}
+			if (canTask) {
+				const add = this.item(row, "button", "sk-btn sk-home-nav-new is-soft", { key: "chip:new-task", act: "new-task" });
+				add.setAttr("data-sk-item", "");
+				setIcon(add.createSpan({ cls: "sk-home-nav-ic" }), "plus");
+				add.createSpan({ text: this.t("today.new-task") });
+			}
+		}
 		nav.createDiv({ cls: "sk-home-nav-sec", text: this.t("today.title") });
 		for (const chip of chips) {
 			if (chip.kind === "daily") this.navItem(nav, { key: "chip:daily", act: "daily", icon: "sun", label: chip.exists ? todayLabel(rt.ctx.lang, f.now) : this.t("today.create"), kbd: "T", pin: daily?.path ?? null });
@@ -1469,12 +1487,6 @@ export class HomeView implements WorkbenchTabInstance {
 			else if (chip.kind === "brainstorms") this.navItem(nav, { key: "chip:brainstorms", act: "brainstorms", icon: "zap", label: this.t("nav.to-sort"), count: chip.count });
 			else if (chip.kind === "decide") this.navItem(nav, { key: "chip:decide", act: "decide", icon: "circle-help", label: this.t("nav.decide"), count: chip.count });
 			else this.navItem(nav, { key: "chip:old", act: "old", icon: "calendar-clock", label: this.t("nav.old"), count: chip.count, on: this.page?.kind === "old-dailies" });
-		}
-		if (this.startBrainstorm()) {
-			const add = this.item(nav, "button", "sk-btn is-primary sk-home-nav-new", { key: "chip:new-brainstorm", act: "new-brainstorm" });
-			add.setAttr("data-sk-item", "");
-			setIcon(add.createSpan({ cls: "sk-home-nav-ic" }), "plus");
-			add.createSpan({ text: this.t("today.new-brainstorm") });
 		}
 		nav.createDiv({ cls: "sk-home-nav-sec", text: this.t("nav.views") });
 		const icons: Record<HomeLens, string> = { map: "git-fork", domains: "layout-grid", tags: "tags", pins: "pin" };

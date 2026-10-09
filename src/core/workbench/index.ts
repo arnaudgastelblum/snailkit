@@ -1,11 +1,11 @@
 // The Workbench of the core: the tabs modules registered, the open Workbench views, and the entry
 // points modules share (open, refresh, automatic opening). The view itself is in view.ts.
-import type { App, WorkspaceLeaf } from "obsidian";
+import { Platform, type App, type WorkspaceLeaf } from "obsidian";
 import type SnailkitPlugin from "../../main";
 import { HINT_WORKBENCH_TABS } from "../settings";
 import { AutoOpener } from "./auto-open";
 import { BUILT_IN_TABS, isSideLeaf, sortTabs, TAB_ID_RE } from "./state";
-import { WORKBENCH_VIEW_TYPE, type AutoOpenMode, type ModuleWorkbench, type TabState, type WorkbenchOpenOptions, type WorkbenchTab, type WorkbenchTabInstance } from "./types";
+import { WORKBENCH_VIEW_TYPE, type AutoOpenMode, type ModuleWorkbench, type StartTab, type TabState, type WorkbenchOpenOptions, type WorkbenchTab, type WorkbenchTabInstance } from "./types";
 import { WorkbenchView } from "./view";
 
 export { WORKBENCH_VIEW_TYPE, TAB_ORDER } from "./types";
@@ -22,6 +22,8 @@ export class WorkbenchCore {
 	private readonly tabs = new Map<string, { tab: WorkbenchTab; seq: number }>();
 	private seq = 0;
 	private autoOpen: AutoOpenMode = "never";
+	private startTab: StartTab = "auto";
+	private startTabPhone: StartTab = "tasks";
 	private readonly views = new Set<WorkbenchView>();
 	private plugin: SnailkitPlugin | null = null;
 	private refreshTimer = 0;
@@ -158,7 +160,8 @@ export class WorkbenchCore {
 		const workspace = this.app.workspace;
 		const where = options.where ?? "auto";
 		const focus = options.focus !== false;
-		const tab = options.tab && this.get(options.tab) ? options.tab : undefined;
+		const requestedTab = options.tab ?? this.autoOpenTab;
+		const tab = this.get(requestedTab) ? requestedTab : undefined;
 		let leaf = this.find(where);
 		if (leaf) {
 			const view = await this.viewOf(leaf);
@@ -190,13 +193,20 @@ export class WorkbenchCore {
 		this.autoOpen = mode;
 	}
 
+	setStartTabs(computer: StartTab, phone: StartTab): void {
+		this.startTab = computer;
+		this.startTabPhone = phone;
+	}
+
 	/** The setting, or "never" while no tool has a tab: an empty Workbench never opens by itself. */
 	get autoOpenMode(): AutoOpenMode {
 		return this.tabs.size ? this.autoOpen : "never";
 	}
 
-	/** Home when it is on, else the first tab. */
+	/** The device's start tab, falling back to Home when on, else the first tab. */
 	get autoOpenTab(): string {
+		const chosen = Platform.isPhone ? this.startTabPhone : this.startTab;
+		if (chosen !== "auto" && this.tabs.has(chosen)) return chosen;
 		return this.tabs.has("home") ? "home" : (this.ids()[0] ?? "home");
 	}
 

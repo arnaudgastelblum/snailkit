@@ -24,6 +24,7 @@ export function showToast(message: string, options: ToastOptions = {}): void {
 	const el = doc.body.createDiv({ cls: "sk-toast", attr: { role: "status", "aria-live": "polite" } });
 	el.createSpan({ cls: "sk-toast-text", text: message });
 	if (options.action) {
+		el.addClass("has-action");
 		const { label, run } = options.action;
 		const button = el.createEl("button", { cls: "sk-toast-action", text: label });
 		button.addEventListener("click", () => {

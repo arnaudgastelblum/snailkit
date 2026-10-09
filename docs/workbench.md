@@ -19,3 +19,4 @@ Keep Home, Tasks and Brainstorms together in one panel, each in its own tab.
 - Turn on a tool to see its tab.
 - Use the Workbench as a page or in the side panel.
 - It can open at startup and in new tabs: choose when in **Settings → Snailkit → Workbench settings**.
+- Choose its starting tab separately for computer and phone in the same settings. The defaults are Automatic on computer and Tasks on phone. Automatic uses Home when enabled, otherwise the first tool; unavailable choices use Automatic.

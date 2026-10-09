@@ -195,6 +195,7 @@ class BookmarksPanel implements PanelInstance {
 
 	private createRow(list: PinList, file: TFile): HTMLElement {
 		const row = list.itemsEl.createDiv({ cls: "sk-note-rail-row sk-note-rail-bm-row", attr: { tabindex: "0", role: "listitem", "data-path": file.path } });
+		this.syncSingleRow(list);
 		const lead = row.createSpan("sk-note-rail-bm-lead");
 		setIcon(lead.createSpan("sk-note-rail-bm-file"), "file-text");
 		setIcon(lead.createSpan("sk-note-rail-bm-grip"), "grip-vertical");
@@ -299,7 +300,14 @@ class BookmarksPanel implements PanelInstance {
 		const now = this.rows(list);
 		if (ordered.some((row, i) => now[i] !== row)) for (const row of ordered) list.itemsEl.appendChild(row);
 		if (!files.length) this.showEmpty(list);
+		this.syncSingleRow(list);
 		if (hadFocus?.isConnected && doc.activeElement !== hadFocus) hadFocus.focus({ preventScroll: true });
+	}
+
+	/** Count leaving rows until their exit animation removes them. */
+	private syncSingleRow(list: PinList): void {
+		const { itemsEl } = list;
+		itemsEl.toggleClass("is-single-row", itemsEl.children.length === 1 && !!itemsEl.firstElementChild?.hasClass("sk-note-rail-bm-row"));
 	}
 
 	/** An empty list says nothing: the add button below it is enough. */
@@ -357,6 +365,7 @@ class BookmarksPanel implements PanelInstance {
 				this.flip(this.followersAfter(row), () => {
 					row.remove();
 					if (!list.files.length && !list.itemsEl.querySelector(".sk-note-rail-empty")) this.popIn(this.showEmpty(list));
+					this.syncSingleRow(list);
 				});
 			};
 			if (reducedMotion(this.win) || typeof row.animate !== "function") done();

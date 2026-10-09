@@ -8,8 +8,8 @@ import { Platform, PluginSettingTab, Setting, ToggleComponent, setIcon, setToolt
 import { LANGUAGES, LANGUAGE_NAMES, resolveLanguage, type LanguageSetting } from "../i18n";
 import type { ModuleHandle } from "../core/host";
 import { CATEGORY_ORDER, type ModuleCategory } from "../core/module";
-import { AUTO_OPEN_MODES } from "../core/settings";
-import type { AutoOpenMode } from "../core/workbench/types";
+import { AUTO_OPEN_MODES, START_TABS } from "../core/settings";
+import type { AutoOpenMode, StartTab } from "../core/workbench/types";
 import type SnailkitPlugin from "../main";
 import { MASCOT_URL } from "./mascot";
 import { richText, SettingsPage } from "./settings-page";
@@ -491,6 +491,19 @@ export class SnailkitSettingTab extends PluginSettingTab {
 					.setValue(this.snail.data.workbench.autoOpen)
 					.onChange((value) => void this.snail.setWorkbenchAutoOpen(value as AutoOpenMode)),
 			);
+		const tabs: Record<string, string> = {};
+		for (const tab of START_TABS) tabs[tab] = this.t(`workbench.start-tab.${tab}`);
+		for (const key of ["startTab", "startTabPhone"] as const) {
+			new Setting(opening)
+				.setName(this.t(`workbench.${key}`))
+				.setDesc(this.t(`workbench.${key}-desc`))
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOptions(tabs)
+						.setValue(this.snail.data.workbench[key])
+						.onChange((value) => void this.snail.setWorkbenchStartTab(key, value as StartTab)),
+				);
+		}
 		opening.createDiv({ cls: "sk-note" }).append(richText(this.t("workbench.open-warn")));
 
 		// The cards stand on their own, as on the home, not inside a box of rows.

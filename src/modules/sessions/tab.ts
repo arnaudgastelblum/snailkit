@@ -13,7 +13,7 @@ import { leadOf, nextAction, weekRecap, type Flow } from "./flow";
 import { isTagName, type SummaryQuestion } from "./logic";
 import type { SessionsRuntime } from "./runtime";
 import type { ViewTab, ViewTabHost, ViewTabInstance } from "./types";
-import { elementOf } from "../../ui/dom";
+import { elementOf, wheelSideways } from "../../ui/dom";
 
 const TIMELINE_KEY = "snailkit-sessions-timeline";
 const DONE_KEY = "snailkit-sessions-done-open";
@@ -190,6 +190,7 @@ class TabView implements ViewTabInstance {
 
 		this.timeline = top.createDiv({ cls: "sk-sessions-tl", attr: { "data-sk-zone": "timeline", "data-sk-zone-grid": "", role: "group", "aria-label": t("tab.timeline") } });
 		this.track = this.timeline.createDiv({ cls: "sk-sessions-tl-track" });
+		wheelSideways(this.timeline);
 		// What the shapes mean, shown while the pointer is over the timeline: the state never depends on the color alone.
 		this.legend = top.createDiv({ cls: "sk-sessions-tl-legend", attr: { "aria-hidden": "true" } });
 		for (const [state, key] of [["open", "flow.write"], ["triage", "tab.state-triage"], ["closed", "flow.closed"]] as const) {

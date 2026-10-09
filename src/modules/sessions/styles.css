@@ -76,8 +76,8 @@
 .sk-sessions-hl {
 	background: var(--sk-accent-wash);
 	border-radius: 4px;
-	box-decoration-break: clone;
 	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
 	box-shadow: 0 0 0 2px var(--sk-accent-wash);
 	animation: sk-sessions-fade 220ms var(--sk-ease);
 }
@@ -212,12 +212,13 @@
 	background: var(--sk-accent-soft);
 	border-radius: var(--sk-radius-s);
 }
-.sk-sessions-task-line.is-composing .task-list-item-checkbox {
+.sk-sessions-task-line.is-composing .task-list-item-checkbox.task-list-item-checkbox {
 	outline: 1.5px dashed var(--sk-accent);
 	outline-offset: 1px;
 	animation: sk-sessions-in 520ms var(--sk-spring);
 }
 .is-mobile .sk-sessions-composing .cm-content {
+	/* Obsidian sets the editor bottom padding inline. */
 	padding-bottom: 60vh !important;
 }
 .cm-line.sk-sessions-flash {
@@ -272,9 +273,9 @@
 	transform-origin: top left;
 	animation: sk-sessions-pop var(--sk-slow) var(--sk-spring) both;
 }
-.sk-sessions-panel .is-hidden,
-.sk-sessions-layer .is-hidden {
-	display: none !important;
+.sk-sessions-panel.sk-sessions-panel .is-hidden,
+.sk-sessions-layer.sk-sessions-layer .is-hidden {
+	display: none;
 }
 .sk-sessions-panel :is(.sk-sessions-hint, .sk-sessions-help, .sk-sessions-chg) kbd {
 	display: inline-block;
@@ -346,10 +347,10 @@
 	font-weight: 500;
 }
 /* Step 1 lives in the text: the checkbox of the task shows it. */
-.sk-sessions-task-line.is-composing .task-list-item-checkbox {
+.sk-sessions-task-line.is-composing .task-list-item-checkbox.task-list-item-checkbox {
 	position: relative;
-	border: 1.5px dashed var(--sk-accent-line) !important;
-	background: var(--sk-surface) !important;
+	border: 1.5px dashed var(--sk-accent-line);
+	background: var(--sk-surface);
 	outline: none;
 	animation: sk-sessions-in 520ms var(--sk-spring);
 }
@@ -370,10 +371,10 @@
 	opacity: 1;
 	transform: none;
 }
-.sk-sessions-task-line.is-composing.is-step-title .task-list-item-checkbox {
-	border-style: solid !important;
-	border-color: var(--sk-accent) !important;
-	background: var(--sk-accent) !important;
+.sk-sessions-task-line.is-composing.is-step-title .task-list-item-checkbox.task-list-item-checkbox {
+	border-style: solid;
+	border-color: var(--sk-accent);
+	background: var(--sk-accent);
 }
 .sk-sessions-task-line.is-composing.is-step-title .task-list-item-checkbox::after {
 	color: var(--text-on-accent);
@@ -598,7 +599,7 @@
 .sk-sessions-panel.is-sheet .sk-sessions-preview,
 .sk-sessions-panel.is-sheet .sk-sessions-hint,
 .sk-sessions-panel.is-sheet .sk-btn.is-help {
-	display: none !important;
+	display: none;
 }
 .sk-sessions-panel.is-sheet .sk-sessions-step-body.is-desc {
 	justify-content: space-between;
@@ -1133,15 +1134,15 @@
 	width: 14px;
 	height: 14px;
 }
-.sk-sessions-tab-search input[type="search"] {
+.sk-sessions-tab-search.sk-sessions-tab-search input[type="search"] {
 	flex: 1;
 	min-width: 0;
 	height: 100%;
 	padding: 0;
-	border: 0 !important;
+	border: 0;
 	border-radius: 0;
-	background: none !important;
-	box-shadow: none !important;
+	background: none;
+	box-shadow: none;
 	font-size: 13px;
 }
 .sk-sessions-tab button.sk-btn.sk-sessions-tab-new {
@@ -2010,14 +2011,14 @@ body:not(.is-mobile) .sk-sessions-det-foot {
 .sk-sessions-pop-field:focus-within {
 	box-shadow: 0 0 0 1.5px var(--sk-accent), 0 0 0 4px var(--sk-accent-wash);
 }
-.sk-sessions-pop-field input[type="text"] {
+.sk-sessions-pop-field.sk-sessions-pop-field input[type="text"] {
 	flex: 1;
 	min-width: 0;
 	height: 100%;
 	padding: 0;
-	border: 0 !important;
-	background: none !important;
-	box-shadow: none !important;
+	border: 0;
+	background: none;
+	box-shadow: none;
 	font-size: 13px;
 }
 .sk-sessions-pop-list {
@@ -2507,8 +2508,8 @@ button.sk-sessions-pill:hover,
 .sk-sessions-sealed.is-bg-none {
 	background: var(--background-primary);
 }
-.sk-sessions-sealed .cm-content {
-	padding-top: 64px !important;
+.sk-sessions-sealed.sk-sessions-sealed .cm-content {
+	padding-top: 64px;
 }
 .sk-sessions-sealed .cm-line {
 	color: var(--text-muted);
@@ -3387,7 +3388,7 @@ button.sk-sessions-row-invite:hover {
 	border: 1.5px solid var(--text-faint);
 }
 .sk-sessions-tagslot.is-flying { opacity: 0; }
-.sk-sessions-overflow-hidden { display: none !important; }
+.sk-sessions-overflow-hidden.sk-sessions-overflow-hidden.sk-sessions-overflow-hidden { display: none; }
 
 /* Keep keyboard focus visible across Workbench zones. */
 .sk-sessions-tab [data-sk-item]:focus-visible,
@@ -3814,4 +3815,28 @@ button.sk-sessions-row-invite:hover {
 }
 .sk-sessions-tab.is-phone .sk-sessions-tab-list {
 	padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+/* Phone: text the size of the phone's own lists. */
+.sk-sessions-tab.is-phone .sk-sessions-row-title {
+	font-size: 16.5px;
+}
+.sk-sessions-tab.is-phone .sk-sessions-row.is-two .sk-sessions-row-word,
+.sk-sessions-tab.is-phone .sk-sessions-row-tally,
+.sk-sessions-tab.is-phone .sk-sessions-row-date {
+	font-size: 14px;
+}
+.sk-sessions-tab.is-phone .sk-sessions-lead-line p,
+.sk-sessions-tab.is-phone button.sk-sessions-decide-line,
+.sk-sessions-tab.is-phone .sk-sessions-tab-search input {
+	font-size: 16px;
+}
+.sk-sessions-tab.is-phone .sk-sessions-group {
+	font-size: 13px;
+}
+/* No scroll bar under the timeline: it moves with a trackpad, a finger or the mouse wheel. */
+.sk-sessions-tab .sk-sessions-tl {
+	scrollbar-width: none;
+}
+.sk-sessions-tab .sk-sessions-tl::-webkit-scrollbar {
+	display: none;
 }

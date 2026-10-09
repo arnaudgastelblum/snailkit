@@ -5,7 +5,7 @@ import { keyMove } from "./keys";
 import { MapLifetime } from "./motion";
 import { MapScene } from "./scene";
 import { MAP_LIMITS as L, type MapEdit, type MapEvents, type MapHandle, type MapOptions, type MapState } from "./types";
-import { elementOf } from "../dom";
+import { elementOf, wheelSideways } from "../dom";
 
 export type { MapEdit, MapEvents, MapHandle, MapNode, MapNodeKind, MapOptions, MapSource, MapState, MapStrings } from "./types";
 export { MAP_LIMITS } from "./types";
@@ -19,6 +19,7 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 	const shell = el.createDiv(); shell.className = "sk-map";
 	const crumbs = shell.createEl("nav"); crumbs.className = "sk-map-crumbs";
 	const viewport = shell.createDiv(); viewport.className = "sk-map-viewport";
+	wheelSideways(viewport);
 	const box = viewport.createDiv(); box.className = "sk-map-stage"; box.setAttribute("role", "tree");
 	// Named by hidden text, not by aria-label: Obsidian shows an aria-label as a tooltip on hover.
 	const names = shell.createSpan({ prepend: true }); names.className = "sk-map-sr";

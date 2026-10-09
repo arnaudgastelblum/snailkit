@@ -42,7 +42,7 @@ test("format and plurals", () => {
 });
 
 test("stored data is normalized", () => {
-	assert.deepEqual(normalizeData(null), { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs" }, modules: {} });
+	assert.deepEqual(normalizeData(null), { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs", startTab: "auto", startTabPhone: "tasks" }, modules: {} });
 	const data = normalizeData({ language: "xx", welcomed: true, modules: { a: { enabled: true, settings: { x: 1 } }, b: "junk" } });
 	assert.equal(data.language, "auto");
 	assert.equal(data.welcomed, true);
@@ -100,4 +100,20 @@ test("animation names are unique across every stylesheet", async () => {
 			seen.set(name, file);
 		}
 	}
+});
+
+test("Workbench start tabs normalize independently", () => {
+	for (const workbench of [undefined, null, {}, { startTab: "unknown", startTabPhone: 42 }]) {
+		const settings = normalizeData({ workbench }).workbench;
+		assert.equal(settings.startTab, "auto");
+		assert.equal(settings.startTabPhone, "tasks");
+	}
+	for (const tab of ["auto", "home", "tasks", "sessions"]) {
+		const settings = normalizeData({ workbench: { startTab: tab, startTabPhone: tab } }).workbench;
+		assert.equal(settings.startTab, tab);
+		assert.equal(settings.startTabPhone, tab);
+	}
+	const mixed = normalizeData({ workbench: { startTab: "sessions", startTabPhone: "missing" } }).workbench;
+	assert.equal(mixed.startTab, "sessions");
+	assert.equal(mixed.startTabPhone, "tasks");
 });
