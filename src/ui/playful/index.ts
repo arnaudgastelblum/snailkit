@@ -183,6 +183,28 @@ export async function fly(doc: Document, text: string, from: DOMRect, to: DOMRec
 	}
 }
 
+/**
+ * A copy of a typed line gliding from where it was typed (`from`, text starting `inset` px in) to the row
+ * it became (`to`): it lifts a little, travels, and settles; resolves when it is in place.
+ */
+export async function glide(doc: Document, text: string, from: DOMRect, inset: number, to: DOMRect): Promise<void> {
+	const el = doc.body.createDiv({ cls: "sk-fx-glide", text });
+	el.style.paddingLeft = inset + "px";
+	const at = (r: DOMRect, dy = 0) => ({ transform: `translate(${r.left}px, ${r.top + dy}px)`, width: r.width + "px", height: r.height + "px" });
+	try {
+		await el.animate([
+			{ ...at(from), opacity: 1 },
+			{ ...at(from, -3), opacity: 1, offset: 0.18 },
+			{ ...at(to), opacity: 1, offset: 0.85 },
+			{ ...at(to), opacity: 0 },
+		], { duration: 560, easing: "cubic-bezier(0.5, 0, 0.2, 1)", fill: "forwards" }).finished;
+	} catch {
+		// Cancelled (the window closed): nothing to wait for.
+	} finally {
+		el.remove();
+	}
+}
+
 /** A quick squash and rebound (a box that received something, a pill that counts one more). */
 export function pop(el: HTMLElement, amount = 1): void {
 	const up = 1 + 0.1 * amount;

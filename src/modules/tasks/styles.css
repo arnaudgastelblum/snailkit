@@ -271,14 +271,21 @@ body.theme-dark {
 	font-size: 12px;
 	font-variant-numeric: tabular-nums;
 }
-.sk-tasks-grp-add {
-	opacity: 0;
-	transition: opacity var(--sk-fast);
+/* The + of a group: always shown, a soft round button in the group's color, filled on hover. */
+.sk-tasks-view button.sk-btn.sk-tasks-grp-add {
+	--sk-tasks-add-c: var(--sk-tag-l-fg, var(--sk-accent-text));
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--sk-tasks-add-c) 14%, transparent);
+	color: var(--sk-tasks-add-c);
+	transition: background var(--sk-fast), color var(--sk-fast), transform var(--sk-fast);
 }
-.sk-tasks-grp-h:hover .sk-tasks-grp-add,
-.sk-tasks-grp-add:focus-visible,
-.is-mobile .sk-tasks-grp-add {
-	opacity: 1;
+.sk-tasks-view button.sk-btn.sk-tasks-grp-add:hover {
+	background: var(--sk-tasks-add-c);
+	color: var(--background-primary);
+	transform: scale(1.08);
+}
+.sk-tasks-grp-add svg {
+	stroke-width: 2.6;
 }
 .sk-tasks-grp-lbl {
 	color: var(--text-muted);
@@ -452,9 +459,11 @@ body.theme-dark {
 .sk-tasks-lvl-1 > .sk-tasks-grp-h:hover {
 	background: color-mix(in srgb, var(--sk-tag-l-bg, var(--sk-tasks-l-bg)) 85%, var(--sk-tag-l-fg, var(--sk-tasks-l-fg)));
 }
-.sk-tasks-lvl-1 > .sk-tasks-grp-h .sk-tasks-grp-chev,
-.sk-tasks-lvl-1 > .sk-tasks-grp-h .sk-tasks-grp-add {
+.sk-tasks-lvl-1 > .sk-tasks-grp-h .sk-tasks-grp-chev {
 	color: var(--sk-tag-l-fg, var(--sk-tasks-l-fg));
+}
+.sk-tasks-lvl-1 > .sk-tasks-grp-h .sk-tasks-grp-add {
+	--sk-tasks-add-c: var(--sk-tag-l-fg, var(--sk-tasks-l-fg));
 }
 .sk-tasks-lvl-1 > .sk-tasks-grp-h .sk-tasks-dot {
 	display: none;
@@ -825,6 +834,13 @@ body.sk-tasks-dnd.sk-tasks-dnd .sk-tasks-grip {
 /* A new task drops in and glows for a moment. */
 .sk-tasks-row.is-new {
 	animation: sk-tasks-new-in 420ms var(--sk-spring), sk-tasks-new-glow 1800ms ease-out;
+}
+/* Added from the add row: hidden while its line glides in, then the same glow. */
+.sk-tasks-row.is-landing {
+	visibility: hidden;
+}
+.sk-tasks-row.is-landed {
+	animation: sk-tasks-new-glow 1800ms ease-out;
 }
 @keyframes sk-tasks-new-in {
 	from {
@@ -2051,6 +2067,25 @@ textarea.sk-tasks-tnote-area {
 .sk-tasks-view.is-phone .sk-tasks-page-btn,
 .sk-tasks-view.is-phone .sk-tasks-new-btn {
 	display: none;
+}
+/* Computer: New task, a filled button with its words, in the side head. */
+.sk-tasks-side-top .sk-tasks-new-btn {
+	flex: none;
+	margin-left: 4px;
+}
+/* A narrow panel: the + alone, round. */
+.sk-tasks-side-head {
+	container-type: inline-size;
+}
+@container (max-width: 420px) {
+	.sk-tasks-side-top button.sk-tasks-new-btn {
+		width: 26px;
+		padding: 0;
+		border-radius: 50%;
+	}
+	.sk-tasks-side-top .sk-tasks-new-label {
+		display: none;
+	}
 }
 .sk-tasks-view.is-phone .sk-tasks-side-top {
 	justify-content: flex-end;

@@ -7,7 +7,7 @@ import { openTagPicker, type TagPickerHandle } from "../../ui/tag-picker";
 
 /** A tag the task lines read back (the grammar of the Tasks API). */
 const TAG_NAME = /^[\p{L}\p{N}_][\p{L}\p{N}_/-]*$/u;
-import { cssColor, dayClear, dayProgress, dust, fly, odometer, plusOne, pop, spark, wave } from "../../ui/playful";
+import { cssColor, dayClear, dayProgress, dust, fly, glide, odometer, plusOne, pop, spark, wave } from "../../ui/playful";
 import type { TabState, WorkbenchTabHost, WorkbenchTabInstance } from "../../core/workbench/types";
 import { richText } from "../../ui/settings-page";
 import { capsule, checkbox, colorFor, descriptionPreview, icon, kbd, renderInline, tagDot } from "./components";
@@ -86,6 +86,8 @@ export class TasksTab implements WorkbenchTabInstance {
 	private pending = false;
 	private animating = 0;
 	private freshKey: string | null = null;
+	/** The task whose added line just landed on it: it glows a moment (kept through redraws). */
+	private landedKey: string | null = null;
 	private dragKey: string | null = null;
 	private readonly cleanups: Array<() => void> = [];
 	/** F2 is Obsidian's "Rename file": while the list has the focus, it renames the selected task. */
@@ -743,7 +745,13 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.filterBtn.addClass("sk-tasks-filter-btn");
 			this.extEl = top.createDiv({ cls: "sk-tasks-ext" });
 			this.iconButton(top, "maximize-2", this.t("action.page"), () => void this.hub.activate("page", { tasks: true })).addClass("sk-tasks-page-btn");
-			this.iconButton(top, "plus", this.t("action.new-key"), () => this.startAdd(null)).addClass("sk-tasks-new-btn");
+			if (!Platform.isPhone) {
+				// New task: the one filled button of the head, with its words, easy to find.
+				const add = top.createEl("button", { cls: "sk-btn is-primary is-s sk-tasks-new-btn", attr: { type: "button", "aria-label": this.t("action.new-key") } });
+				icon(add, "plus");
+				add.createSpan({ cls: "sk-tasks-new-label", text: this.t("action.new") });
+				add.addEventListener("click", () => this.startAdd(null));
+			}
 			if (Platform.isPhone) {
 				// A round button floats above the list: New task, always at hand, never in the way.
 				const fab = this.rootEl.createEl("button", { cls: "sk-tasks-fab", attr: { type: "button", "aria-label": this.t("action.new") } });
@@ -1511,7 +1519,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	private row(parent: HTMLElement, t: Task, showTag: boolean, since = false): HTMLElement {
 		const today = this.today();
 		const row = parent.createDiv({
-			cls: "sk-tasks-row" + (t.priority ? " p-" + t.priority : "") + (this.st.sel === t.key ? " is-sel" : "") + (this.freshKey === t.key ? " is-new" : ""),
+			cls: "sk-tasks-row" + (t.priority ? " p-" + t.priority : "") + (this.st.sel === t.key ? " is-sel" : "") + (this.freshKey === t.key ? " is-new" : "") + (this.landedKey === t.key ? " is-landed" : ""),
 		});
 		row.dataset.key = t.key;
 		row.tabIndex = this.st.sel === t.key ? 0 : -1;
@@ -2178,12 +2186,19 @@ export class TasksTab implements WorkbenchTabInstance {
 				this.st.draft = "";
 				if (!q.text) return;
 				const text = q.text;
+				// Where the line was typed, for it to glide to its row once written (computer).
+				const box = row.getBoundingClientRect();
+				const field = input.getBoundingClientRect();
+				const from = new DOMRect(box.left, field.top - 8, box.width, field.height + 16);
 				void this.hub.writer
 					.addTask(text, tag ?? "inbox", q.priority, q.due ?? scopeDue)
 					.then((added) => {
-						if (added) this.freshKey = added.key;
+						// The index's key, found by the line: a task of the same name elsewhere gets "#2".
+						const key = added ? (this.hub.index.open().find((t) => t.path === added.path && t.line === added.line)?.key ?? added.key) : null;
+						if (key) this.freshKey = key;
 						if (added && Platform.isPhone) this.st.justAdded = [text, ...(this.st.justAdded ?? [])].slice(0, 3);
 						this.refresh();
+						if (key && !Platform.isPhone) void this.landAdded(key, text, from, field.left - box.left);
 					})
 					.catch((error) => {
 						console.error("[Snailkit] tasks: could not add the task", error);
@@ -2206,6 +2221,56 @@ export class TasksTab implements WorkbenchTabInstance {
 			}, 150);
 		});
 		return row;
+	}
+
+	/**
+	 * A task was just added: the typed line glides from the add row to its row in the list, which then
+	 * glows. The list does not scroll (the add row stays in view for the next one): a row below or above
+	 * what is shown gets the line gliding to that edge and fading there. Not on screen at all (filtered
+	 * out, another view): the count pops.
+	 */
+	private async landAdded(key: string, text: string, from: DOMRect, inset: number): Promise<void> {
+		if (!this.hub.playful(this.rootEl.win)) return;
+		const row = this.rowOf(key);
+		const r = row?.getBoundingClientRect();
+		if (!row || !r || r.height === 0 || !this.listEl) {
+			if (this.countEl?.isConnected) pop(this.countEl);
+			return;
+		}
+		// A row out of sight: the list scrolls to it while the line travels, then comes back to the add row.
+		const listEl = this.listEl;
+		const list = listEl.getBoundingClientRect();
+		const before = listEl.scrollTop;
+		const shown = r.top >= list.top && r.bottom <= list.bottom;
+		const max = listEl.scrollHeight - listEl.clientHeight;
+		const target = shown ? before : Math.max(0, Math.min(max, before + r.top - list.top - (list.height - r.height) / 2));
+		const to = new DOMRect(r.left, r.top - (target - before), r.width, r.height);
+		// No redraw while it travels: the row it aims at stays where it is.
+		this.animating++;
+		row.removeClass("is-new");
+		row.addClass("is-landing");
+		try {
+			if (!shown) listEl.scrollTo({ top: target, behavior: "smooth" });
+			await glide(this.rootEl.doc, text, from, inset, to);
+			row.removeClass("is-landing");
+			row.addClass("is-landed");
+			this.landedKey = key;
+			window.setTimeout(() => {
+				if (this.landedKey === key) this.landedKey = null;
+			}, 1800);
+			if (!shown) {
+				await sleep(900);
+				// Back to the add row, unless the list was scrolled by hand meanwhile.
+				if (Math.abs(listEl.scrollTop - target) < 4) {
+					listEl.scrollTo({ top: before, behavior: "smooth" });
+					await sleep(450);
+				}
+			}
+		} finally {
+			row.removeClass("is-landing");
+			this.animating--;
+		}
+		if (this.pending && !this.animating) this.refresh();
 	}
 
 	/** The cursor of the quick add row, kept when the tab goes away (another tab, a layout change). */
