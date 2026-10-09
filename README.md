@@ -6,6 +6,8 @@
 A free suite for Obsidian, built around one way of working:<br>
 catch your ideas, write tasks anywhere, find everything in one place.</p>
 
+<p align="center"><img src="assets/snailkit.webp" width="960" alt="Snailkit in action: tasks checked off, the Note menu, a brainstorm sorted"></p>
+
 ---
 
 ## 1. Catch your ideas, then sort them
