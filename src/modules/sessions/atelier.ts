@@ -26,6 +26,8 @@ export interface SessionInfo {
 	archived?: boolean;
 	/** The context tag of the note (without "#"), or null. */
 	context?: string | null;
+	/** The color chosen for it, or null. */
+	color?: SessionColor | null;
 	/** Last change of the file (ms). */
 	modified?: number;
 	/** Tasks checked. */
@@ -338,6 +340,38 @@ export function keepIn(list: readonly string[], paths: readonly string[]): strin
 /** Adds the path in front, or removes it when it is there. */
 export function toggleIn(list: readonly string[], path: string): string[] {
 	return list.includes(path) ? list.filter((p) => p !== path) : [path, ...list];
+}
+
+// ----- the color of a session, chosen by the user -----
+
+/** The colors offered, named after Obsidian's color variables (--color-red...), so every theme gives its own shade. */
+export const SESSION_COLORS = ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink"] as const;
+export type SessionColor = (typeof SESSION_COLORS)[number];
+export type ColorList = Array<[string, string]>;
+
+const isColor = (c: unknown): c is SessionColor => typeof c === "string" && (SESSION_COLORS as readonly string[]).includes(c);
+
+/** The color of a session, or null (none, or a name this version does not know). */
+export function colorOf(list: ColorList, path: string): SessionColor | null {
+	const hit = list.find((e) => Array.isArray(e) && e[0] === path);
+	return hit && isColor(hit[1]) ? hit[1] : null;
+}
+
+/** The list with the color of `path` set, or removed (null). */
+export function withColor(list: ColorList, path: string, color: SessionColor | null): ColorList {
+	const rest = list.filter((e) => Array.isArray(e) && e[0] !== path);
+	return color ? [...rest, [path, color]] : rest;
+}
+
+/** The list after a rename: the color follows the note. */
+export function renameColors(list: ColorList, from: string, to: string): ColorList {
+	return list.filter((e) => Array.isArray(e) && e[0] !== to).map(([p, c]) => [p === from ? to : p, c] as [string, string]);
+}
+
+/** Only the sessions still tracked. */
+export function keepColors(list: ColorList, paths: readonly string[]): ColorList {
+	const keep = new Set(paths);
+	return list.filter((e) => Array.isArray(e) && keep.has(e[0]));
 }
 
 // ----- free sentences kept as ideas, by note -----

@@ -31,11 +31,16 @@ moment.
   To decide, Finished, Archived) and the contexts. Each row says where the brainstorm stands and
   what it holds, with its buttons on hover; the panel on the right follows the row under the
   pointer.
+- Each brainstorm can have a **context**, a tag written at the top of the note (`#work`): click
+  it on its row or in the panel on the right to change it. **Pin** the ones you come back to (they
+  stay on top) and give a **color** to those you want to stand out, from the panel on the right or
+  the row's menu. Pins and colors are kept in Snailkit's settings, the note is not touched.
 - Questions kept **to decide** (`- [?]`) never get lost, even once the brainstorm is finished:
   **To decide** in Home and in the Brainstorms tab gathers them all. Sort them one at a time:
   `2` **Decided** checks the line with today's date, `5` leaves it for later.
 - Everything stays in the note, in plain Markdown: `- [ ] Call the insurer #home/car`.
-- On a phone, tap a sentence to make it a task.
+- On a phone, tap a sentence to make it a task. The brainstorm uses the whole width of the
+  screen, whatever the line width of your theme.
 - The dots learn from you. A sentence you make a task teaches its first word as an action verb, a
   dotted sentence you keep as an idea or delete makes that word count less. **Likely tasks** in
   the settings forgets it all.

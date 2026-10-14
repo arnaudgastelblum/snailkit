@@ -23,7 +23,7 @@ import {
 } from "./logic";
 import { TAB_ORDER } from "../../core/workbench/types";
 import type { PlacesService, SessionsService, SessionsSettings, TagColorsService, TasksWorkbench } from "./types";
-import { contextOf, contextsOf, createdAt, keepCreated, keepIn, keepKept, keptIn, renameCreated, renameKept, withKept, renameIn, searchable, serviceList, toggleIn, triageOf, locateRaw, withContext, withCreated, type SessionInfo, type Triage } from "./atelier";
+import { colorOf, contextOf, contextsOf, createdAt, keepColors, keepCreated, keepIn, keepKept, keptIn, renameColors, renameCreated, renameKept, withColor, withKept, renameIn, searchable, serviceList, toggleIn, triageOf, locateRaw, withContext, withCreated, type SessionColor, type SessionInfo, type Triage } from "./atelier";
 import { SessionsTab } from "./tab";
 import { applyEdit, bodyLineCount, countsOf, decideQueue, flowOf, linesOf, looseCount, type DecideEntry, type Flow, type LineEdit } from "./flow";
 import { Sorter } from "./tri";
@@ -140,6 +140,7 @@ export class SessionsRuntime {
 			this.settings.pinned = renameIn(this.settings.pinned, oldPath, file.path);
 			this.settings.archived = renameIn(this.settings.archived, oldPath, file.path);
 			this.settings.kept = renameKept(this.settings.kept, oldPath, file.path);
+			this.settings.colors = renameColors(this.settings.colors, oldPath, file.path);
 			const s = this.state.get(oldPath);
 			this.state.delete(oldPath);
 			if (s) this.state.set(file.path, s);
@@ -157,6 +158,7 @@ export class SessionsRuntime {
 			this.settings.pinned = keepIn(this.settings.pinned, this.settings.sessions);
 			this.settings.archived = keepIn(this.settings.archived, this.settings.sessions);
 			this.settings.kept = keepKept(this.settings.kept, this.settings.sessions);
+			this.settings.colors = keepColors(this.settings.colors, this.settings.sessions);
 			this.state.delete(file.path);
 			this.details.delete(file.path);
 			this.tab.changed();
@@ -291,7 +293,7 @@ export class SessionsRuntime {
 	 */
 	private syncTracked(): void {
 		if (this.stopped) return;
-		const snapshot = JSON.stringify([this.settings.sessions, this.settings.pinned, this.settings.archived]);
+		const snapshot = JSON.stringify([this.settings.sessions, this.settings.pinned, this.settings.archived, this.settings.colors]);
 		if (snapshot === this.trackedSnapshot) return;
 		this.trackedSnapshot = snapshot;
 		const tracked = new Set(this.settings.sessions);
@@ -322,12 +324,14 @@ export class SessionsRuntime {
 		const pinned = keepIn(this.settings.pinned, kept);
 		const archived = keepIn(this.settings.archived, kept);
 		const ideas = keepKept(this.settings.kept, kept);
-		if (kept.length === this.settings.sessions.length && created.length === this.settings.created.length && pinned.length === this.settings.pinned.length && archived.length === this.settings.archived.length && ideas.length === this.settings.kept.length) return;
+		const colors = keepColors(this.settings.colors, kept);
+		if (kept.length === this.settings.sessions.length && created.length === this.settings.created.length && pinned.length === this.settings.pinned.length && archived.length === this.settings.archived.length && ideas.length === this.settings.kept.length && colors.length === this.settings.colors.length) return;
 		this.settings.sessions = kept;
 		this.settings.created = created;
 		this.settings.pinned = pinned;
 		this.settings.archived = archived;
 		this.settings.kept = ideas;
+		this.settings.colors = colors;
 		void this.ctx.saveSettings();
 	}
 
@@ -380,6 +384,7 @@ export class SessionsRuntime {
 				pin: this.settings.pinned.includes(path) ? this.settings.pinned.indexOf(path) : null,
 				archived: this.settings.archived.includes(path),
 				context: d?.context ?? null,
+				color: colorOf(this.settings.colors, path),
 				modified: file.stat.mtime,
 				done: d?.triage.done ?? 0,
 				undecided: d?.triage.undecided ?? 0,
@@ -414,6 +419,14 @@ export class SessionsRuntime {
 		this.saveSoon();
 		this.tab.changed();
 		return this.settings.pinned.includes(path);
+	}
+
+	/** Sets the color of a session, or removes it (null). */
+	setColor(path: string, color: SessionColor | null): void {
+		if (!this.settings.sessions.includes(path)) return;
+		this.settings.colors = withColor(this.settings.colors, path, color);
+		this.saveSoon();
+		this.tab.changed();
 	}
 
 	toggleArchive(path: string): boolean {
@@ -578,6 +591,7 @@ export class SessionsRuntime {
 		this.settings.pinned = keepIn(this.settings.pinned, this.settings.sessions);
 		this.settings.archived = keepIn(this.settings.archived, this.settings.sessions);
 		this.settings.kept = keepKept(this.settings.kept, this.settings.sessions);
+		this.settings.colors = keepColors(this.settings.colors, this.settings.sessions);
 		this.state.delete(file.path);
 		this.details.delete(file.path);
 		await this.ctx.saveSettings();

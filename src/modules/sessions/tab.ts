@@ -2,11 +2,11 @@
 // module): a sorting desk. A timeline, a search, filters and contexts, the list (pinned first,
 // then newest first), and, when the Workbench is a page, the detail of the selected brainstorm on
 // the right: where it stands, its tasks, what is left to decide, the ideas without follow-up, and
-// the actions (open, pin, context, archive, delete). In the side panel and on phones, the list
+// the actions (open, pin, context, color, archive, delete). In the side panel and on phones, the list
 // alone, the actions in a menu.
 // The data comes from the runtime; the logic lives in atelier.ts.
 import { MarkdownView, Menu, Platform, Scope, setIcon, TFile } from "obsidian";
-import { ago, contextsOf, filterSessions, layoutTimeline, searchable, stateOf, tabCount, tabTone, viewCounts, viewSessions, type SessionInfo } from "./atelier";
+import { ago, contextsOf, filterSessions, layoutTimeline, searchable, SESSION_COLORS, stateOf, tabCount, tabTone, viewCounts, viewSessions, type SessionColor, type SessionInfo } from "./atelier";
 import { capsule } from "./capsule";
 import { actionLabel, fillCard, ICONS, leftoverText, miniFrieze, stateLabel, type CardAction, type Words } from "./card";
 import { leadOf, nextAction, weekRecap, type Flow } from "./flow";
@@ -846,14 +846,34 @@ class TabView implements ViewTabInstance {
 		});
 		if (tabbable) row.setAttr("data-sk-zone-focus", "");
 		row.addClass("is-two");
+		if (s.color) {
+			row.addClass("has-color");
+			row.dataset.color = s.color;
+		}
+		const pinned = s.pin !== null && s.pin !== undefined;
 		const titleLine = row.createDiv({ cls: "sk-sessions-row-title" });
-		if (s.pin !== null && s.pin !== undefined) {
+		if (pinned) {
 			const pin = titleLine.createSpan({ cls: "sk-sessions-row-pin" });
 			setIcon(pin, "pin");
 			pin.createSpan({ cls: "sk-sessions-sr", text: this.t("tab.pinned") });
 		}
 		titleLine.createSpan({ cls: "sk-sessions-row-name", text: s.title });
-		if (s.context) titleLine.createSpan({ cls: "sk-sessions-row-hash", text: `#${s.context}` });
+		// The context as the tag it is (colors of the Tags module), a click changes it; without one, a place to add it (shown on the pointed row).
+		const tag = titleLine.createEl("button", { cls: "sk-sessions-row-ctx" + (s.context ? "" : " is-empty"), attr: { type: "button", tabindex: "-1", "aria-label": this.t("desk.context-key"), "data-focus-key": `ctx:${s.path}` } });
+		// Without a context, only "#" (named by its tooltip): the words would push the title aside.
+		if (s.context) tag.appendChild(capsule(this.doc, s.context, this.rt.tagClasses(s.context)));
+		else setIcon(tag.createSpan({ cls: "sk-sessions-row-ctx-icon" }), "hash");
+		tag.addEventListener("click", (e) => {
+			e.stopPropagation();
+			this.openContext(s.path, tag);
+		});
+		// Pin or unpin, on the title line where there is room (shown on the pointed row, like the place for the context).
+		const pinBtn = titleLine.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-sessions-row-pinbtn", attr: { type: "button", tabindex: "-1", "aria-label": this.t(pinned ? "desk.unpin-key" : "desk.pin-key"), "data-focus-key": `pin:${s.path}` } });
+		setIcon(pinBtn, pinned ? "pin-off" : "pin");
+		pinBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			this.pin(s.path);
+		});
 		row.createSpan({ cls: "sk-sessions-row-date", text: date.format(s.closed ? s.modified ?? s.created : s.modified ?? s.created) });
 		// What the card over the row used to say, on the row itself: the steps, where it stands, what it holds.
 		const meta = row.createDiv({ cls: "sk-sessions-row-meta" });
@@ -915,7 +935,10 @@ class TabView implements ViewTabInstance {
 			if (this.desk && !(e.ctrlKey || e.metaKey)) this.select(s.path, true);
 			else this.host.open(s.path, null, e);
 		});
-		if (this.desk) row.addEventListener("dblclick", (e) => this.host.open(s.path, null, e));
+		if (this.desk) row.addEventListener("dblclick", (e) => {
+			// A double click on a button of the row (the context, the pin, an action) is not a double click on the row.
+			if (!(e.target as HTMLElement).closest("button")) this.host.open(s.path, null, e);
+		});
 		row.addEventListener("focus", () => {
 			if (this.desk && this.selected !== s.path) this.select(s.path, false);
 		});
@@ -925,7 +948,7 @@ class TabView implements ViewTabInstance {
 		});
 		// A long press opens the menu on touch screens (a click does not follow).
 		row.addEventListener("pointerdown", (e) => {
-			if (e.pointerType !== "touch") return;
+			if (e.pointerType !== "touch" || (e.target as HTMLElement).closest("button")) return;
 			const x = e.clientX;
 			const y = e.clientY;
 			window.clearTimeout(this.longPress);
@@ -1117,6 +1140,7 @@ class TabView implements ViewTabInstance {
 		const pinned = s.pin !== null && s.pin !== undefined;
 		menu.addItem((i) => i.setTitle(this.t(pinned ? "desk.unpin" : "desk.pin")).setIcon(pinned ? "pin-off" : "pin").onClick(() => this.pin(path)));
 		menu.addItem((i) => i.setTitle(this.t("desk.context")).setIcon("hash").onClick(() => this.openContext(path, this.rowOf(path) ?? this.root)));
+		menu.addItem((i) => i.setTitle(this.t("desk.color")).setIcon("palette").onClick(() => this.openColor(path, this.rowOf(path) ?? this.root)));
 		menu.addItem((i) => i.setTitle(this.t("desk.rename")).setIcon("pencil").onClick(() => this.startRename(path)));
 		menu.addItem((i) => i.setTitle(this.t(s.archived ? "desk.unarchive" : "desk.archive")).setIcon(s.archived ? "archive-restore" : "archive").onClick(() => this.archive(path)));
 		menu.addSeparator();
@@ -1315,7 +1339,7 @@ class TabView implements ViewTabInstance {
 			pop.remove();
 			this.editing = false;
 			if (this.pending) this.render();
-			if (refocus) this.focusRow(this.selectedIndex());
+			if (refocus) this.refocusFrom(anchor, path);
 		};
 		const apply = async (c: Choice) => {
 			close();
@@ -1351,7 +1375,19 @@ class TabView implements ViewTabInstance {
 		this.pop = { el: pop, close: () => close(false) };
 		this.editing = true;
 		this.doc.addEventListener("pointerdown", outside, true);
-		// Under the anchor, kept inside the tab.
+		this.placePop(pop, anchor);
+		input.focus();
+	}
+
+	/** A window closed: the focus goes back to what opened it, else to its row (redrawn), else to the selected row. */
+	private refocusFrom(anchor: HTMLElement, path: string): void {
+		const target = anchor.isConnected && anchor !== this.root ? anchor : this.rowOf(path);
+		if (target) target.focus({ preventScroll: true });
+		else this.focusRow(this.selectedIndex());
+	}
+
+	/** Under the anchor (above it when there is no room below), kept inside the tab. */
+	private placePop(pop: HTMLElement, anchor: HTMLElement): void {
 		const box = this.root.getBoundingClientRect();
 		const r = anchor.getBoundingClientRect();
 		const w = pop.offsetWidth;
@@ -1359,7 +1395,66 @@ class TabView implements ViewTabInstance {
 		const below = r.bottom - box.top + 6;
 		const h = pop.offsetHeight;
 		pop.style.top = `${below + h > this.root.clientHeight && r.top - box.top - h - 6 > 0 ? r.top - box.top - h - 6 : below}px`;
-		input.focus();
+	}
+
+	/** The color window: the colors and "none", the current one checked; arrows move, Enter or a click chooses. */
+	private openColor(path: string, anchor: HTMLElement): void {
+		const s = this.info(path);
+		if (!s) return;
+		this.pop?.close();
+		const current = s.color ?? null;
+		const options: Array<SessionColor | null> = [...SESSION_COLORS, null];
+		// Named by its visible title: an aria-label would show as Obsidian's tooltip over the whole window.
+		const titleId = `sk-sessions-color-${Math.random().toString(36).slice(2, 8)}`;
+		const pop = this.root.createDiv({ cls: "sk-sessions-pop is-colors", attr: { "data-sk-own-tab": "", role: "dialog", "aria-labelledby": titleId } });
+		pop.createDiv({ cls: "sk-sessions-pop-title", text: this.t("desk.color"), attr: { id: titleId } });
+		const grid = pop.createDiv({ cls: "sk-sessions-colors", attr: { role: "radiogroup", "aria-labelledby": titleId } });
+		const swatches = options.map((c) => {
+			const on = c === current;
+			const b = grid.createEl("button", { cls: "sk-sessions-swatch" + (c ? "" : " is-none") + (on ? " is-on" : ""), attr: { type: "button", role: "radio", "aria-checked": String(on), tabindex: on ? "0" : "-1", "aria-label": this.t(c ? `desk.color-${c}` : "desk.color-none") } });
+			if (c) b.dataset.color = c;
+			else setIcon(b, "ban");
+			b.addEventListener("click", () => apply(c));
+			return b;
+		});
+		const close = (refocus = true) => {
+			if (this.pop?.el !== pop) return;
+			this.pop = null;
+			this.doc.removeEventListener("pointerdown", outside, true);
+			pop.remove();
+			this.editing = false;
+			if (this.pending) this.render();
+			if (refocus) this.refocusFrom(anchor, path);
+		};
+		const apply = (c: SessionColor | null) => {
+			close();
+			if (c !== current) this.rt.setColor(path, c);
+		};
+		const outside = (e: PointerEvent) => {
+			if (!pop.contains(e.target as Node)) close(false);
+		};
+		pop.addEventListener("keydown", (e) => {
+			e.stopPropagation();
+			const i = swatches.indexOf(this.doc.activeElement as HTMLButtonElement);
+			const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+			if (step) {
+				e.preventDefault();
+				const next = swatches[((i < 0 ? 0 : i) + step + swatches.length) % swatches.length];
+				for (const b of swatches) b.tabIndex = b === next ? 0 : -1;
+				next.focus();
+			} else if (e.key === "Escape") {
+				e.preventDefault();
+				close();
+			} else if (e.key === "Tab") {
+				// One stop: the window keeps the focus until a choice or Escape.
+				e.preventDefault();
+			}
+		});
+		this.pop = { el: pop, close: () => close(false) };
+		this.editing = true;
+		this.doc.addEventListener("pointerdown", outside, true);
+		this.placePop(pop, anchor);
+		(swatches[options.indexOf(current)] ?? swatches[0]).focus();
 	}
 
 	/** Opens the note at a line kept to decide and catches it as a task; when the line moved, only opens the note there. */
@@ -1419,6 +1514,16 @@ class TabView implements ViewTabInstance {
 			ctxBtn.createSpan({ text: this.t("desk.context-add") });
 		}
 		ctxBtn.addEventListener("click", () => this.openContext(s.path, ctxBtn));
+		const colorBtn = meta.createEl("button", { cls: "sk-sessions-det-color" + (s.color ? "" : " is-empty"), attr: { type: "button", "data-focus-key": "det:color" } });
+		if (s.color) {
+			colorBtn.dataset.color = s.color;
+			colorBtn.createSpan({ cls: "sk-sessions-det-color-dot" });
+			colorBtn.createSpan({ text: this.t(`desk.color-${s.color}`) });
+		} else {
+			setIcon(colorBtn.createSpan({ cls: "sk-sessions-det-ctx-icon" }), "palette");
+			colorBtn.createSpan({ text: this.t("desk.color-add") });
+		}
+		colorBtn.addEventListener("click", () => this.openColor(s.path, colorBtn));
 		const rtf = new Intl.RelativeTimeFormat(ctx.lang, { numeric: "auto" });
 		body.createDiv({ cls: "sk-sessions-det-age", text: this.t("desk.age", { started: rtf.format(...ago(s.created, Date.now())), edited: rtf.format(...ago(s.modified ?? s.created, Date.now())) }) });
 
@@ -1493,6 +1598,7 @@ class TabView implements ViewTabInstance {
 		};
 		tool("pin", this.t(pinned ? "desk.unpin-key" : "desk.pin-key"), () => this.pin(s.path), pinned ? "is-on" : "");
 		const hash = tool("hash", this.t("desk.context-key"), () => this.openContext(s.path, hash));
+		const palette = tool("palette", this.t("desk.color"), () => this.openColor(s.path, palette));
 		tool(s.archived ? "archive-restore" : "archive", this.t(s.archived ? "desk.unarchive-key" : "desk.archive-key"), () => this.archive(s.path));
 		foot.createDiv({ cls: "sk-sessions-det-foot-gap" });
 		tool("trash-2", this.t("desk.delete-key"), () => this.askDelete(s.path), "sk-sessions-det-delete");

@@ -1048,3 +1048,30 @@ test("navigator views: in progress, to sort, finished, archived, one context", (
 	assert.deepEqual(viewSessions(list, "all", "").map((s) => s.path), ["B.md", "A.md", "C.md"]);
 	assert.deepEqual(viewCounts(list), { all: 3, live: 2, sort: 1, done: 1, archived: 1, contexts: [["work", 2], ["perso", 1]] });
 });
+
+import { colorOf, keepColors, renameColors, SESSION_COLORS, withColor } from "../src/modules/sessions/atelier";
+
+test("the color of a brainstorm is kept in the settings and follows the note", () => {
+	let colors = withColor([], "Ideas.md", "blue");
+	colors = withColor(colors, "Other.md", "orange");
+	assert.equal(colorOf(colors, "Ideas.md"), "blue");
+	assert.equal(colorOf(colors, "None.md"), null);
+	// A new color replaces the old one, null removes it.
+	colors = withColor(colors, "Ideas.md", "green");
+	assert.deepEqual(colors.filter(([p]) => p === "Ideas.md"), [["Ideas.md", "green"]]);
+	assert.deepEqual(withColor(colors, "Ideas.md", null), [["Other.md", "orange"]]);
+	// Saved in data.json and read back; older settings get an empty list.
+	const merged = mergeSettings(DEFAULTS, JSON.parse(JSON.stringify({ sessions: ["Ideas.md"], colors })));
+	assert.equal(colorOf(merged.colors, "Ideas.md"), "green");
+	assert.deepEqual(mergeSettings(DEFAULTS, { sessions: ["Old.md"] }).colors, []);
+	// A name this version does not know (or a broken entry) is no color.
+	assert.equal(colorOf([["Odd.md", "teal"]], "Odd.md"), null);
+	assert.equal(colorOf([null as unknown as [string, string]], "Odd.md"), null);
+	// The color follows a rename (replacing what the new path had) and leaves with the note.
+	colors = renameColors(colors, "Ideas.md", "Folder/Ideas.md");
+	assert.equal(colorOf(colors, "Folder/Ideas.md"), "green");
+	assert.equal(colorOf(renameColors([["A.md", "red"], ["B.md", "blue"]], "A.md", "B.md"), "B.md"), "red");
+	assert.deepEqual(keepColors(colors, ["Other.md"]), [["Other.md", "orange"]]);
+	// Every color offered has its name in the four languages.
+	for (const table of [en, fr, nl, es]) for (const c of SESSION_COLORS) assert.ok((table as Record<string, string>)[`desk.color-${c}`], c);
+});

@@ -72,6 +72,39 @@
 	margin: -12px 0 0 -12px;
 }
 
+/* ----- on a phone: the width of the screen ----- */
+/* A line width made for a computer (Minimal's is a percentage) leaves empty margins around a narrow
+   column. In a brainstorm the text takes the screen: a thin margin for the dots, and on the side of
+   the Note menu, its room. The themes' own variables are reset rather than their rules overridden
+   (Minimal sets its margins with !important). */
+.is-phone .markdown-source-view.mod-cm6 .cm-scroller.sk-sessions-on {
+	--sk-sessions-phone-start: 16px;
+	--sk-sessions-phone-end: 16px;
+	/* Obsidian */
+	--file-line-width: 100%;
+	/* Minimal */
+	--max-width: 100%;
+	--line-width: 100%;
+	--content-line-width: 100%;
+	--content-margin: 0;
+	--content-margin-start: 0;
+	padding-left: var(--sk-sessions-phone-start);
+	padding-right: var(--sk-sessions-phone-end);
+}
+.is-phone .markdown-source-view.mod-cm6 .cm-scroller.sk-sessions-dots {
+	/* The dots sit 22px left of the text, their touch target must not cover it. */
+	--sk-sessions-phone-start: 28px;
+}
+.is-phone .sk-note-rail-right .markdown-source-view.mod-cm6 .cm-scroller.sk-sessions-on {
+	--sk-sessions-phone-end: calc(var(--sk-note-rail-inset, 10px) + var(--sk-note-rail-w, 38px) + 4px);
+}
+.is-phone .sk-note-rail-host:not(.sk-note-rail-right) .markdown-source-view.mod-cm6 .cm-scroller.sk-sessions-on {
+	--sk-sessions-phone-start: calc(var(--sk-note-rail-inset, 10px) + var(--sk-note-rail-w, 38px) + 8px);
+}
+.is-phone .sk-note-rail-host:not(.sk-note-rail-right) .markdown-source-view.mod-cm6 .cm-scroller.sk-sessions-dots {
+	--sk-sessions-phone-start: calc(var(--sk-note-rail-inset, 10px) + var(--sk-note-rail-w, 38px) + 28px);
+}
+
 /* ----- the sentence under the pointer ----- */
 .sk-sessions-hl {
 	background: var(--sk-accent-wash);
@@ -3193,12 +3226,6 @@ button.sk-sessions-tri-choice.is-press {
 	font-size: 14px;
 	font-weight: 500;
 }
-.sk-sessions-row-hash {
-	flex: none;
-	color: var(--text-faint);
-	font-size: 12px;
-	font-weight: 400;
-}
 .sk-sessions-row-word {
 	flex: none;
 	width: 210px;
@@ -3839,4 +3866,210 @@ button.sk-sessions-row-invite:hover {
 }
 .sk-sessions-tab .sk-sessions-tl::-webkit-scrollbar {
 	display: none;
+}
+
+/* ----- the color, the context and the pin of a brainstorm (Brainstorms tab) ----- */
+/* The colors are Obsidian's, so every theme gives its own shade, in light and dark. */
+.sk-sessions-tab [data-color="red"] { --sk-sessions-color: var(--color-red); }
+.sk-sessions-tab [data-color="orange"] { --sk-sessions-color: var(--color-orange); }
+.sk-sessions-tab [data-color="yellow"] { --sk-sessions-color: var(--color-yellow); }
+.sk-sessions-tab [data-color="green"] { --sk-sessions-color: var(--color-green); }
+.sk-sessions-tab [data-color="cyan"] { --sk-sessions-color: var(--color-cyan); }
+.sk-sessions-tab [data-color="blue"] { --sk-sessions-color: var(--color-blue); }
+.sk-sessions-tab [data-color="purple"] { --sk-sessions-color: var(--color-purple); }
+.sk-sessions-tab [data-color="pink"] { --sk-sessions-color: var(--color-pink); }
+
+/* A colored row: a bar on its edge and a light wash, a little stronger when pointed or selected. */
+.sk-sessions-tab .sk-sessions-row.has-color {
+	background: color-mix(in srgb, var(--sk-sessions-color) 7%, transparent);
+}
+.sk-sessions-tab .sk-sessions-row.has-color:hover {
+	background: color-mix(in srgb, var(--sk-sessions-color) 11%, transparent);
+}
+.sk-sessions-tab .sk-sessions-row.has-color.is-selected {
+	background: color-mix(in srgb, var(--sk-sessions-color) 15%, transparent);
+}
+.sk-sessions-tab .sk-sessions-row.has-color::before {
+	content: "";
+	position: absolute;
+	top: 8px;
+	bottom: 8px;
+	left: 0;
+	width: 3px;
+	border-radius: 3px;
+	background: var(--sk-sessions-color);
+}
+
+/* The context on the row: the tag's capsule, or a place to add one on the pointed or selected row. */
+.sk-sessions-tab button.sk-sessions-row-ctx {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: auto;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: none;
+	box-shadow: none;
+	color: var(--text-faint);
+	font-size: 12px;
+	font-weight: 400;
+	cursor: var(--cursor);
+}
+.sk-sessions-tab button.sk-sessions-row-ctx:hover {
+	background: none;
+}
+.sk-sessions-tab button.sk-sessions-row-ctx:hover .sk-tag-capsule {
+	filter: brightness(0.96);
+}
+.sk-sessions-tab button.sk-sessions-row-ctx.is-empty {
+	display: none;
+	justify-content: center;
+	width: 22px;
+	height: 20px;
+	padding: 0;
+	border: 1px dashed var(--sk-line);
+}
+.sk-sessions-tab button.sk-sessions-row-ctx.is-empty:hover {
+	border-color: var(--sk-accent-line);
+	color: var(--sk-accent-text);
+}
+.sk-sessions-tab button.sk-sessions-row-ctx:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--sk-accent);
+}
+.sk-sessions-row-ctx-icon {
+	display: inline-flex;
+}
+.sk-sessions-row-ctx-icon svg {
+	width: 11px;
+	height: 11px;
+}
+/* Pin or unpin, after the context. */
+.sk-sessions-tab button.sk-btn.sk-sessions-row-pinbtn {
+	display: none;
+	flex: none;
+	width: 22px;
+	height: 22px;
+	color: var(--text-faint);
+}
+.sk-sessions-tab button.sk-btn.sk-sessions-row-pinbtn:hover {
+	color: var(--sk-accent-text);
+}
+.sk-sessions-tab button.sk-btn.sk-sessions-row-pinbtn svg {
+	width: 13px;
+	height: 13px;
+}
+.sk-sessions-tab .sk-sessions-row.is-two:hover button.sk-sessions-row-ctx.is-empty,
+.sk-sessions-tab .sk-sessions-row.is-two:focus-within button.sk-sessions-row-ctx.is-empty,
+.sk-sessions-tab .sk-sessions-row.is-two.is-selected button.sk-sessions-row-ctx.is-empty,
+.sk-sessions-tab .sk-sessions-row.is-two:hover button.sk-btn.sk-sessions-row-pinbtn,
+.sk-sessions-tab .sk-sessions-row.is-two:focus-within button.sk-btn.sk-sessions-row-pinbtn,
+.sk-sessions-tab .sk-sessions-row.is-two.is-selected button.sk-btn.sk-sessions-row-pinbtn {
+	display: inline-flex;
+}
+/* Page: like the buttons, only on the selected row (the selection follows the pointer). Phone: in the long-press menu. */
+.sk-sessions-tab.is-desk .sk-sessions-row.is-two:hover:not(.is-selected):not(:focus-within) button.sk-sessions-row-ctx.is-empty,
+.sk-sessions-tab.is-desk .sk-sessions-row.is-two:hover:not(.is-selected):not(:focus-within) button.sk-btn.sk-sessions-row-pinbtn,
+.sk-sessions-tab.is-phone .sk-sessions-row.is-two button.sk-sessions-row-ctx.is-empty,
+.sk-sessions-tab.is-phone .sk-sessions-row.is-two button.sk-btn.sk-sessions-row-pinbtn {
+	display: none;
+}
+
+/* The color in the detail, next to the context. */
+.sk-sessions-detail button.sk-sessions-det-color {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 22px;
+	padding: 0 9px;
+	border: 0;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--sk-sessions-color) 16%, transparent);
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: 12px;
+	cursor: var(--cursor);
+}
+.sk-sessions-detail button.sk-sessions-det-color.is-empty {
+	padding: 0 8px;
+	border: 1px dashed var(--sk-line);
+	background: none;
+	color: var(--text-muted);
+}
+.sk-sessions-detail button.sk-sessions-det-color.is-empty:hover {
+	border-color: var(--sk-accent-line);
+	color: var(--sk-accent-text);
+}
+.sk-sessions-detail button.sk-sessions-det-color:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--sk-accent);
+}
+.sk-sessions-det-color-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--sk-sessions-color);
+}
+
+/* The color window: one line of swatches, "none" last. */
+.sk-sessions-pop.is-colors {
+	width: auto;
+	max-width: calc(100% - 16px);
+	padding: 8px 10px 10px;
+}
+.sk-sessions-pop-title {
+	padding: 0 2px 8px;
+	color: var(--text-muted);
+	font-size: 12px;
+	font-weight: 600;
+}
+.sk-sessions-colors {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.sk-sessions-tab button.sk-sessions-swatch {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: var(--sk-sessions-color);
+	box-shadow: inset 0 0 0 1px var(--sk-line);
+	color: var(--text-faint);
+	cursor: var(--cursor);
+	transition: transform var(--sk-fast) var(--sk-ease);
+}
+.sk-sessions-tab button.sk-sessions-swatch:hover {
+	transform: scale(1.12);
+}
+.sk-sessions-tab button.sk-sessions-swatch.is-none {
+	border: 1px dashed var(--sk-line);
+	background: none;
+	box-shadow: none;
+}
+.sk-sessions-tab button.sk-sessions-swatch svg {
+	width: 14px;
+	height: 14px;
+}
+.sk-sessions-tab button.sk-sessions-swatch.is-on {
+	box-shadow: 0 0 0 2px var(--sk-surface), 0 0 0 4px var(--sk-sessions-color, var(--text-muted));
+}
+.sk-sessions-tab button.sk-sessions-swatch:focus-visible {
+	outline: 2px solid var(--sk-accent);
+	outline-offset: 3px;
+}
+.sk-sessions-tab.is-phone button.sk-sessions-swatch {
+	width: 30px;
+	height: 30px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-sessions-tab button.sk-sessions-swatch {
+		transition: none;
+	}
 }

@@ -32,6 +32,8 @@ export interface SessionsSettings {
 	archived: string[];
 	/** Free sentences kept as ideas while sorting, by note: [path, prints] (see `fingerprint`), never sorted again. */
 	kept: Array<[string, string[]]>;
+	/** The color chosen for a session: [path, one of SESSION_COLORS] (followed through renames). */
+	colors: Array<[string, string]>;
 }
 
 export const DEFAULTS: SessionsSettings = {
@@ -49,6 +51,7 @@ export const DEFAULTS: SessionsSettings = {
 	pinned: [],
 	archived: [],
 	kept: [],
+	colors: [],
 };
 
 /** Published as the "sessions" service while the module is on (the rail's lightning button uses it). */

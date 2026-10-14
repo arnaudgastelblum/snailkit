@@ -17,7 +17,7 @@ export const sessions = defineModule<SessionsSettings>({
 	strings: { en, fr, nl, es },
 	demo: (el, t) => buildDemo(el, t),
 	defaults: DEFAULTS,
-	keepOnReset: ["sessions", "created", "learned", "verbs", "recentTags", "pinned", "archived", "kept"],
+	keepOnReset: ["sessions", "created", "learned", "verbs", "recentTags", "pinned", "archived", "kept", "colors"],
 	activate(ctx) {
 		new SessionsRuntime(ctx).start();
 	},
