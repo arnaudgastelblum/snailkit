@@ -20,6 +20,8 @@ export interface TasksSettings {
 	sortMode: string;
 	priorityFilter: string[];
 	collapsed: string[];
+	/** Tasks whose steps (the checkboxes of their task note) are folded in the list, by key. */
+	foldedSteps: string[];
 	/** Tags placed by the user in the navigator, siblings in this order (the others follow, by name). */
 	tagOrder: string[];
 	/** Open tasks placed by the user within their tag (task keys), for the "My order" sort. */
@@ -104,4 +106,6 @@ export interface TaskNotesService {
 	read(task: Task): Promise<string | null>;
 	/** Writes the body of the task's note, creating the note and the 📝 link in the line when missing. */
 	write(task: Task, body: string): Promise<void>;
+	/** Creates the note (even empty) and its 📝 link; null when it could not. */
+	create?(task: Task, body: string): Promise<import("obsidian").TFile | null>;
 }

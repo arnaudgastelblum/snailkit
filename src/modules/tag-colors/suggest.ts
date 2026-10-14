@@ -8,6 +8,7 @@ import { EditorSuggest, getAllTags, Platform, setIcon, TFile } from "obsidian";
 import type { App, Editor, EditorPosition, EditorSuggestContext, EditorSuggestTriggerInfo } from "obsidian";
 import type { ModuleContext } from "../../core/context";
 import { capsule } from "./colors";
+import { parentSuggestion, type TasksApi } from "./task-parent";
 import type { TagColorsSettings } from "./types";
 
 /** What the suggestions use of Note rail's "places" service. */
@@ -60,9 +61,16 @@ export function tagQuery(lineBefore: string): string | null {
 /**
  * Ranked suggestions for `query`. Empty query: this note, then the area, then the vault, each by
  * use. Otherwise: tags starting with the query, then tags with a part starting with it, then tags
- * containing it; within each, this note, the area, then the vault.
+ * containing it; within each, this note, the area, then the vault. A matching parent task tag
+ * comes before all of these, including when it is not indexed yet.
  */
-export function rankTags(query: string, stats: TagStats, limit = LIMIT): TagItem[] {
+export function rankTags(query: string, stats: TagStats, limit = LIMIT, preferred: string | null = null): TagItem[] {
+	if (preferred) {
+		preferred = preferred.toLowerCase();
+		const all = new Map(stats.all);
+		if (!all.has(preferred)) all.set(preferred, { tag: preferred, count: 0 });
+		stats = { ...stats, all };
+	}
 	const q = query.toLowerCase();
 	const keys = [...stats.all.keys()];
 	const parentOf = new Set<string>();
@@ -78,7 +86,7 @@ export function rankTags(query: string, stats: TagStats, limit = LIMIT): TagItem
 	};
 	const tier = (key: string) => (key.startsWith(q) ? 0 : key.split("/").some((p) => p.startsWith(q)) ? 1 : key.includes(q) ? 2 : 3);
 	const matches = keys.filter((key) => !q || tier(key) < 3);
-	matches.sort((a, b) => (q ? tier(a) - tier(b) : 0) || weight(b) - weight(a) || a.localeCompare(b));
+	matches.sort((a, b) => Number(b === preferred) - Number(a === preferred) || (q ? tier(a) - tier(b) : 0) || weight(b) - weight(a) || a.localeCompare(b));
 	const items: TagItem[] = matches.slice(0, limit).map((key) => ({
 		tag: stats.all.get(key)!.tag,
 		count: stats.all.get(key)!.count,
@@ -171,7 +179,8 @@ export class TagSuggest extends EditorSuggest<TagItem> {
 
 	getSuggestions(context: EditorSuggestContext): TagItem[] {
 		const stats = this.stats(context.file);
-		return rankTags(context.query, this.typedIsIndexed(context) ? withoutTyped(stats, context.query) : stats);
+		const parent = parentSuggestion(context.file ? this.ctx.service<TasksApi>("tasks")?.parentOf?.(context.file.path) : null);
+		return rankTags(context.query, this.typedIsIndexed(context) ? withoutTyped(stats, context.query) : stats, LIMIT, parent?.tag);
 	}
 
 	/** The note's cache already holds the tag being typed, at this very place (it lags behind typing). */

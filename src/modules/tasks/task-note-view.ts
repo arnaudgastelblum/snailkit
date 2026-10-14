@@ -2,7 +2,7 @@
 // right there with a click, opened as a real note with the arrow (for long texts and images).
 // Without a note, an empty area: the note is created as soon as something is written. Pasting an
 // image saves it as an attachment of the note. Kept across list redraws, owned by one task.
-import { Component, MarkdownRenderer, TFile, setIcon } from "obsidian";
+import { Component, MarkdownRenderer, TFile, setIcon, type Editor } from "obsidian";
 import { moment } from "../../core/moment";
 import type { TasksHub } from "./hub";
 import type { Task, TaskNotesService } from "./types";
@@ -76,7 +76,6 @@ export class TaskNoteView extends Component {
 		if (this.stopped || this.area) return;
 		const generation = ++this.generation;
 		const file = this.notes.file(this.task);
-		this.openBtn.toggleClass("is-hidden", !file);
 		const body = file ? await this.notes.read(this.task) : null;
 		if (this.stopped || generation !== this.generation || this.area) return;
 		if (!file || !body?.trim()) {
@@ -218,10 +217,23 @@ export class TaskNoteView extends Component {
 		}
 	}
 
+	/** Opens the note as a real note (created first when the task has none), the cursor at its end. */
 	private async openNote(event: MouseEvent): Promise<void> {
+		const split = event.ctrlKey || event.metaKey;
+		await this.flush?.();
 		await this.saving;
-		const file = this.notes.file(this.task);
-		if (file instanceof TFile) await this.hub.ctx.app.workspace.getLeaf(event.ctrlKey || event.metaKey ? "split" : "tab").openFile(file);
+		const task = this.hub.index.get(this.task.key) ?? this.task;
+		let file = this.notes.file(task);
+		if (!file && this.notes.create) file = await this.notes.create(task, "");
+		if (!(file instanceof TFile) || this.stopped) return;
+		const leaf = this.hub.ctx.app.workspace.getLeaf(split ? "split" : "tab");
+		await leaf.openFile(file);
+		const editor = (leaf.view as { editor?: Editor }).editor;
+		if (editor) {
+			const last = editor.lastLine();
+			editor.setCursor({ line: last, ch: editor.getLine(last).length });
+			editor.focus();
+		}
 	}
 
 	onunload(): void {

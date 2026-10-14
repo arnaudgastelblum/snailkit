@@ -160,7 +160,13 @@ export function untaggedInScope(mtime: number, now: number, days: number): boole
  * subtask, a checklist under a task), nor in code or the properties. `primary` is "".
  */
 export function scanUntagged(lines: readonly string[], path: string, flags: ReadonlySet<string>): Task[] {
+	return scanLoose(lines, path, flags).open;
+}
+
+/** The open untagged checkboxes (see scanUntagged), and how many done ones stand the same way (done steps of a task note). */
+export function scanLoose(lines: readonly string[], path: string, flags: ReadonlySet<string>): { open: Task[]; done: number } {
 	const tasks: Task[] = [];
+	let done = 0;
 	const fence = fenceLines(lines);
 	const start = frontmatterEnd(lines) + 1;
 	for (let i = start; i < lines.length; i++) {
@@ -172,11 +178,11 @@ export function scanUntagged(lines: readonly string[], path: string, flags: Read
 		if (m[3] === " " && !fields.primary && fields.title.trim()) {
 			const baseKey = taskKey("", fields.title);
 			tasks.push({ ...fields, primary: "", path, line: i, raw: lines[i], indent: m[1], text: m[4], done: false, baseKey, key: baseKey, subtasks: [], description: "" });
-		}
+		} else if ("xX".includes(m[3]) && !fields.primary && fields.title.trim()) done++;
 		// What stands under a checkbox belongs to it.
 		i = end;
 	}
-	return tasks;
+	return { open: tasks, done };
 }
 
 /**

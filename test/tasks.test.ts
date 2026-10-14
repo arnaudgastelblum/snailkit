@@ -1023,3 +1023,56 @@ test("a flag on or off in the line: whole tag only, never twice, the date kept",
 	assert.equal(setFlagText("Plan #quicker #home", "quick", false), "Plan #quicker #home");
 	assert.equal(setFlagText("Plan #quicker #home", "quick", true), "Plan #quicker #home #quick");
 });
+
+// ----- steps: the checkboxes of a task note -----
+
+test("the checkboxes of a task note are the steps of its task, old notes included", async () => {
+	const old = Date.now() - 90 * 86_400_000;
+	const { index, api } = fakeVault({
+		"Projects.md": "- [ ] Fix the footer [[Tasks/Task - Fix the footer|📝]] #project/website\n- [ ] Plain #home",
+		"Tasks/Task - Fix the footer.md": "\n[[Projects]]\n\n- [ ] Check the links\n- [x] Pick the colors\n- [ ] Ask for the logo #project/website\n- [ ] Book the room #home\n- [x] Old one #project/website",
+		"Daily.md": "- [ ] Loose line",
+	}, { untaggedDays: 30 }, { "Tasks/Task - Fix the footer.md": old, "Daily.md": old });
+	await index.build();
+	const parent = index.list.find((t) => t.title === "Fix the footer")!;
+	const steps = index.stepsOf(parent);
+	assert.deepEqual(steps.open.map((t) => t.title), ["Check the links", "Ask for the logo"]);
+	assert.equal(steps.done, 2);
+	// An old task note keeps its untagged steps; an old daily note does not.
+	assert.deepEqual(index.untagged.map((t) => t.title), ["Check the links"]);
+	assert.equal(index.parentOf(steps.open[0])?.key, parent.key);
+	// Another tag on purpose: a task of its own.
+	assert.equal(index.parentOf(index.list.find((t) => t.title === "Book the room")!), null);
+	assert.deepEqual(api.parentOf!("Tasks/Task - Fix the footer.md"), { key: parent.key, tag: "project/website", title: "Fix the footer", plainTitle: "Fix the footer" });
+	assert.equal(api.parentOf!("Projects.md"), null);
+	assert.deepEqual(index.stepsOf(index.list.find((t) => t.title === "Plain")!), { open: [], done: 0 });
+});
+
+test("a task note linked by its bare name, and a done task has no steps", async () => {
+	const { index } = fakeVault({
+		"A.md": "- [x] Done one [[Notes/Done one|📝]] #work\n- [ ] Live [[Task - Live|📝]] #work",
+		"Notes/Done one.md": "- [ ] Leftover",
+		"Tasks/Task - Live.md": "- [ ] First",
+	});
+	await index.build();
+	const live = index.list.find((t) => t.title === "Live")!;
+	assert.deepEqual(index.stepsOf(live).open.map((t) => t.title), ["First"]);
+	assert.equal(index.ownerOf("Notes/Done one.md"), null);
+});
+
+test("a bare task-note name matching two notes follows Obsidian's link, and hidden untagged lines are not found", async () => {
+	const old = Date.now() - 90 * 86_400_000;
+	const { index } = fakeVault({
+		"A.md": "- [ ] Read [[Read|📝]] #books",
+		"Read.md": "- [ ] Real step",
+		"Other/Read.md": "- [ ] Not a step",
+		"Old.md": "- [ ] Same",
+	}, {}, { "Read.md": old, "Other/Read.md": old, "Old.md": old });
+	(index as unknown as { ctx: Context }).ctx.app.metadataCache.getFirstLinkpathDest = (link: string) => Object.assign(new TFile(), { path: link + ".md" });
+	await index.build();
+	const read = index.list.find((t) => t.title === "Read")!;
+	assert.deepEqual(index.stepsOf(read).open.map((t) => t.title), ["Real step"]);
+	assert.equal(index.ownerOf("Other/Read.md"), null);
+	assert.equal(index.find({ path: "Old.md", line: 0, raw: "- [ ] Same" }), null);
+	assert.equal(index.at("Old.md", 0), null);
+});

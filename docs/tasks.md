@@ -18,6 +18,9 @@ the two.
 - **Develop them.** Each task can have its own note: write in the **Note** area of its details
   and the note is created, linked from the task line with a small 📝. Long texts, images, links:
   open it as a normal note with the arrow.
+- **Break them into steps.** The checkboxes you write in a task's note are its steps: in the list
+  they show right under the task (click its `1/4` count to fold them), and a new one is offered the
+  task's tag in one click.
 
 ## Good to know
 

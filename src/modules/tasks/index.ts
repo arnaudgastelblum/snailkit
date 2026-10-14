@@ -29,6 +29,7 @@ export const tasks = defineModule<TasksSettings>({
 		sortMode: "notes",
 		priorityFilter: [],
 		collapsed: [],
+		foldedSteps: [],
 		tagOrder: [],
 		taskOrder: [],
 		taskNotesFolder: "",

@@ -21,6 +21,7 @@ Listen to the workspace event `snailkit:services-changed` to know when the API a
 | `getTasks({ includeDone? })` | `TaskInfo[]` | Tagged tasks, in note order; open ones only unless `includeDone`. |
 | `find(location)` | `TaskInfo \| null` | The task at that place now (same line, else the only identical line of the note). |
 | `getTags()` | `string[]` | Group tags of the tasks and the other tags of the vault (not the flags). |
+| `parentOf?(path)` | `{ key, tag, title, plainTitle } \| null` | The open task whose 📝 note is `path` (the checkboxes of that note are its steps), or null. Optional addition to version 1. |
 | `on("change", callback)` | unsubscribe function | Called after any change of the tasks. |
 | `setDone(location, done)` | `Promise<TaskInfo \| null>` | Checks or unchecks (with the completion stamp of the settings). |
 | `setDue(location, "YYYY-MM-DD" \| null)` | same | Sets or removes the due date. |

@@ -6,7 +6,49 @@ import { entries, migrate, registry, type ColorHost, type TagColorsSettings } fr
 import { classes, setOverride } from "../src/modules/tag-colors/dialogs";
 import { asTask, nextPart, rankTags, tagQuery, withoutTyped } from "../src/modules/tag-colors/suggest";
 import { mergeSettings } from "../src/core/settings";
-import { checkedSourceTaskInsertion, checkedTaskInsertion, hasTaskTag, taskLines, taskTagPosition, untaggedTasks } from "../src/modules/tag-colors/task-placeholder-logic";
+import { parentFirst, parentSuggestion } from "../src/modules/tag-colors/task-parent";
+import { checkedSourceTaskInsertion, checkedTaskInsertion, checkedTaskTagChange, hasTaskTag, taskBodyStart, taskLines, taskTagPosition, untaggedTasks } from "../src/modules/tag-colors/task-placeholder-logic";
+
+test("task parent: optional defaults, safe tags and a bounded plain title", () => {
+	assert.equal(parentSuggestion(undefined), null);
+	assert.equal(parentSuggestion(null), null);
+	for (const tag of ["", "high", "MEDIUM", "low", "123", "bad tag", "bad\nline"]) assert.equal(parentSuggestion({ tag, plainTitle: "Fix the footer" }), null);
+	assert.deepEqual(parentSuggestion({ tag: "project/website", plainTitle: "Fix the footer" }), { tag: "project/website", task: "Fix the footer" });
+	const long = parentSuggestion({ tag: "project/website", plainTitle: "🌱".repeat(100) })!;
+	assert.equal(Array.from(long.task).length, 80);
+	assert.ok(long.task.endsWith("…"));
+	assert.equal(long.tag, "project/website");
+});
+
+test("task parent: picker defaults precede note tags without duplicate spellings", () => {
+	const near = ["reading", "Project/Website", "project/website", "project/docs"];
+	const parent = parentSuggestion({ tag: "project/website", plainTitle: "Fix the footer" });
+	assert.deepEqual(parentFirst(near, parent), ["project/website", "reading", "project/docs"]);
+	assert.deepEqual(parentFirst([], parent), ["project/website"]);
+	assert.equal(parentFirst(near, null), near);
+	assert.equal(near.length, 4);
+});
+
+test("task parent: suggestions rank a matching parent before every query tier and respect limits", () => {
+	const stats = {
+		all: new Map([["website", { tag: "website", count: 20 }], ["project/website", { tag: "Project/Website", count: 1 }], ["reading", { tag: "reading", count: 10 }]]),
+		note: new Map([["website", 5]]), area: new Map([["reading", 3]]),
+	};
+	for (const query of ["", "web", "site", "PROJECT/"]) {
+		const items = rankTags(query, stats, 1, "project/website");
+		assert.equal(items[0].tag, "Project/Website");
+		assert.equal(items.filter(item => item.origin !== "new").length, 1);
+	}
+	assert.deepEqual(rankTags("read", stats, 14, "project/website"), rankTags("read", stats));
+	assert.deepEqual(rankTags("", stats, 14, null), rankTags("", stats));
+	const unindexed = rankTags("", stats, 14, "project/docs");
+	assert.equal(unindexed[0].tag, "project/docs");
+	assert.equal(unindexed[0].count, 0);
+	assert.ok(!stats.all.has("project/docs"));
+	assert.equal(rankTags("project/docs", stats, 14, "project/docs").filter(item => item.tag === "project/docs").length, 1);
+	const typed = { all: new Map([["project/website", { tag: "project/website", count: 1 }]]), note: new Map([["project/website", 1]]), area: new Map<string, number>() };
+	assert.equal(rankTags("project/website", withoutTyped(typed, "project/website"), 14, "project/website")[0].origin, "vault");
+});
 
 test("task placeholder: reading writes the exact line, preserves CRLF and checks the current context", () => {
 	const snapshot = "- [ ] Read";
@@ -229,4 +271,22 @@ test("the chosen colors follow a tag renamed in the vault, sub-tags included", (
 	assert.deepEqual(renameKeys(pairs, "#Project", "client"), [["home", 5], ["work", 9], ["client", 3], ["client/web", 210]]);
 	assert.deepEqual(renameKeys(pairs, "project", "work"), [["home", 5], ["work", 9], ["work/web", 210]], "a merged tag keeps its own color");
 	assert.deepEqual(renameKeys(pairs, "projectx", "client"), pairs, "a lookalike tag is not touched");
+});
+
+test("task placeholder sits right after the checkbox", () => {
+	assert.equal(taskBodyStart("- [ ] Call the plumber"), 6);
+	assert.equal(taskBodyStart("\t> - [ ]"), 8);
+	assert.equal(taskBodyStart("plain text"), 0);
+});
+
+test("changing the tag of an open task", () => {
+	const text = "- [ ] Call #home/repairs 📅 2026-10-13";
+	assert.deepEqual(checkedTaskTagChange(text, text, 11, "home/repairs", "work"), { from: 11, to: 24, insert: "#work" });
+	// Line changed, wrong place, a longer tag, a done task, a bad name: nothing.
+	assert.equal(checkedTaskTagChange(text + " x", text, 11, "home/repairs", "work"), null);
+	assert.equal(checkedTaskTagChange(text, text, 10, "home/repairs", "work"), null);
+	assert.equal(checkedTaskTagChange(text, text, 11, "home", "work"), null);
+	const done = "- [x] Call #home";
+	assert.equal(checkedTaskTagChange(done, done, 11, "home", "work"), null);
+	assert.equal(checkedTaskTagChange(text, text, 11, "home/repairs", "123"), null);
 });

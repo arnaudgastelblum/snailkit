@@ -21,7 +21,7 @@ import { TaskNoteView } from "./task-note-view";
 import { RenameTagModal } from "./rename-tag";
 import { TAG_RENAMED_EVENT } from "../../core/services";
 import type { TagRenameResult } from "../../core/tags/rename";
-import { PRIORITIES } from "./parse";
+import { PRIORITIES, plainTitle } from "./parse";
 import { parseQuickAdd } from "./quick-add";
 import type { Priority, Task } from "./types";
 
@@ -319,6 +319,9 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	/** A long press just opened a menu: the tap that follows does nothing. */
 	private suppressClick = 0;
+	/** In this drawing of the list: the steps drawn under each task (by its key), and the keys of those steps. */
+	private under = new Map<string, Task[]>();
+	private nested = new Set<string>();
 		/** Phone: the filter bar (Tag, Priority, Type, search) and the panel it opens. */
 	private phoneBar: HTMLElement | null = null;
 	private phonePanel: HTMLElement | null = null;
@@ -609,6 +612,46 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	private sorted(tasks: readonly Task[]): Task[] {
 		return sortTasks(tasks, this.settings.sortMode, this.settings.taskOrder);
+	}
+
+	/**
+	 * Steps (the checkboxes of a task note) are drawn under their task when it is among `shown`, the
+	 * tasks this view draws: they leave their own place (`nested`). A step whose task is not drawn
+	 * here stays on its own, with the task's name.
+	 */
+	private nest(shown: readonly Task[]): void {
+		const keys = new Set(shown.map((t) => t.key));
+		const index = this.hub.index;
+		// Tasks whose notes hold each other (A in B's note, B in A's): each stays on its own.
+		const looped = (t: Task) => {
+			const seen = new Set<string>();
+			for (let p = index.parentOf(t); p; p = index.parentOf(p)) {
+				if (p.key === t.key) return true;
+				if (seen.has(p.key)) return false;
+				seen.add(p.key);
+			}
+			return false;
+		};
+		// Drawn under another task of the view.
+		const below = (t: Task) => {
+			if (looped(t)) return false;
+			const seen = new Set<string>();
+			for (let p = index.parentOf(t); p && !seen.has(p.key); p = index.parentOf(p)) {
+				if (keys.has(p.key)) return true;
+				seen.add(p.key);
+			}
+			return false;
+		};
+		const visited = new Set<string>();
+		const visit = (t: Task) => {
+			if (visited.has(t.key)) return;
+			visited.add(t.key);
+			const steps = index.stepsOf(t).open.filter((s) => s.key !== t.key && !visited.has(s.key) && !this.nested.has(s.key) && !looped(s));
+			if (steps.length) this.under.set(t.key, steps);
+			for (const s of steps) this.nested.add(s.key);
+			for (const s of steps) visit(s);
+		};
+		for (const t of shown) if (!below(t)) visit(t);
 	}
 
 	private visibleKeys(): string[] {
@@ -1012,6 +1055,8 @@ export class TasksTab implements WorkbenchTabInstance {
 	}
 
 	setScope(scope: string): void {
+		// The task selected in the former list leaves the details with it.
+		if (scope !== this.st.scope) this.st.sel = this.st.open = null;
 		this.st.scope = scope;
 		this.host.saveState();
 		this.st.adding = null;
@@ -1261,29 +1306,41 @@ export class TasksTab implements WorkbenchTabInstance {
 		// Waiting on someone or kept for some day: not in the day (their own entry shows them).
 		const tasks = scope === "today" || scope === "upcoming" ? all.filter((t) => !isParked(t, parking)) : all;
 		const today = this.today();
+		this.under.clear();
+		this.nested.clear();
+		const own = (ts: Task[]) => ts.filter((t) => !this.nested.has(t.key));
 		if (this.st.adding === "" && !scope.startsWith("tag:") && !scope.startsWith("flag:")) this.addRow(list, null);
 		if (scope === "today") {
 			const first = this.settings.overdueFirst;
 			const groups = todayGroups(tasks, today, first);
+			this.nest([...groups.today, ...(first || this.settings.earlierOpen || this.st.query ? groups.overdue : [])]);
+			groups.today = own(groups.today);
+			// The block's actions move all its tasks, the steps drawn under their task too.
+			const overdue = groups.overdue;
+			groups.overdue = own(groups.overdue);
 			if (first) {
 				if (groups.overdue.length) this.smartGroup(list, "overdue", this.t("group.overdue"), "alert-circle", groups.overdue);
 				if (groups.today.length || !groups.overdue.length) this.smartGroup(list, "today", this.t("group.today"), "sun", groups.today);
 			} else {
 				if (groups.today.length) this.smartGroup(list, "today", this.t("group.today"), "sun", groups.today);
 				else if (groups.overdue.length) this.empty(list, "sun", "empty.today-clear");
-				if (groups.overdue.length) this.earlierGroup(list, groups.overdue);
+				if (groups.overdue.length) this.earlierGroup(list, groups.overdue, overdue);
 			}
 			if (!groups.overdue.length && !groups.today.length) this.empty(list, "sun", "empty.today");
 			return;
 		}
 		if (scope === "upcoming") {
-			const days = upcomingGroups(tasks, today);
+			const all = upcomingGroups(tasks, today);
+			this.nest(all.flatMap((day) => day.tasks));
+			const days = all.map((day) => ({ ...day, tasks: own(day.tasks) })).filter((day) => day.tasks.length);
 			for (const day of days) this.smartGroup(list, "day", this.hub.formatDate(day.date, "format.day"), "calendar", day.tasks, this.hub.dueText(day.date));
 			if (!days.length) this.empty(list, "calendar", "empty.upcoming");
 			return;
 		}
 		if (scope === "untagged") {
-			const loose = this.untaggedShown();
+			const shown = this.untaggedShown();
+			this.nest(shown);
+			const loose = own(shown);
 			if (loose.length && !Platform.isPhone) this.untaggedGroup(list, loose);
 			else this.empty(list, "check-circle-2", "empty.untagged");
 			return;
@@ -1291,6 +1348,10 @@ export class TasksTab implements WorkbenchTabInstance {
 		let pool = tasks;
 		if (scope.startsWith("tag:")) pool = tasks.filter((t) => inScope(t.primary, scope.slice(4)));
 		if (scope.startsWith("flag:")) pool = tasks.filter((t) => hasFlag(t, scope.slice(5)));
+		// Steps go under their task (untagged ones too), wherever their task is drawn.
+		const untagged = this.untaggedShown();
+		this.nest([...pool, ...(scope === "all" ? untagged : [])]);
+		pool = own(pool);
 		const tree = this.tagTree(pool);
 		if (scope.startsWith("tag:")) {
 			const root = scope.slice(4);
@@ -1298,7 +1359,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			if (node) this.tagGroup(list, node, 0, this.layout === "page");
 			else if (this.st.adding !== null) this.addRow(list, this.st.adding || root);
 		} else tree.forEach((node) => this.tagGroup(list, node, 0));
-		const loose = scope === "all" ? this.untaggedShown() : [];
+		const loose = scope === "all" ? own(untagged) : [];
 		if (loose.length && !Platform.isPhone) this.untaggedGroup(list, loose);
 		if (!pool.length && scope.startsWith("flag:") && !this.st.query && !this.settings.priorityFilter.length) {
 			this.empty(list, this.flagIcon(scope.slice(5)), "empty.flag");
@@ -1394,9 +1455,10 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.tagPop = handle;
 	}
 
-	/** The tags of the task's note, offered first. */
+	/** The tags of the task's note, offered first; in a task note, the tag of its task before them. */
 	private nearTags(path: string): string[] {
-		return [...new Set(this.hub.index.list.filter((x) => x.path === path).map((x) => x.primary).filter(Boolean))];
+		const owner = this.hub.index.ownerOf(path)?.primary;
+		return [...new Set([owner, ...this.hub.index.list.filter((x) => x.path === path).map((x) => x.primary)].filter((x): x is string => !!x))];
 	}
 
 	/** The shared tag picker under `anchor`: the chosen tag is written in the task's line. */
@@ -1408,7 +1470,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	 * What waits since earlier, below today: folded by default (remembered), neutral colors, and
 	 * three actions that move every task of the block at once (one Undo for all).
 	 */
-	private earlierGroup(parent: HTMLElement, tasks: Task[]): void {
+	private earlierGroup(parent: HTMLElement, tasks: Task[], all: Task[] = tasks): void {
 		const open = this.settings.earlierOpen || !!this.st.query;
 		const group = parent.createDiv({ cls: "sk-tasks-grp sk-tasks-grp-earlier" + (open ? "" : " is-collapsed") });
 		const head = group.createDiv({ cls: "sk-tasks-grp-h" });
@@ -1436,7 +1498,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			const b = acts.createEl("button", { cls: "sk-btn is-ghost is-s", text: this.t(key), attr: { type: "button" } });
 			b.addEventListener("click", (e) => {
 				e.stopPropagation();
-				void this.hub.setDueAll(tasks, due);
+				void this.hub.setDueAll(all, due);
 			});
 		};
 		act("earlier.today", today);
@@ -1448,7 +1510,8 @@ export class TasksTab implements WorkbenchTabInstance {
 	}
 
 	private tagGroup(parent: HTMLElement, node: TagNode, depth: number, headless = false): void {
-		const collapsed = this.settings.collapsed.includes(node.tag) && !this.st.query;
+		// The page of a tag has no head for its root: folded, nothing would show and nothing could unfold it.
+		const collapsed = !headless && this.settings.collapsed.includes(node.tag) && !this.st.query;
 		const group = parent.createDiv({
 			cls: "sk-tasks-grp sk-tasks-lvl-" + Math.min(depth, 2) + (depth ? " is-sub sk-tasks-sec" : "") + (collapsed ? " is-collapsed" : ""),
 		});
@@ -1515,11 +1578,14 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	// ----- rows -----
 
-	/** A task row. `since`: in the block of what waits since earlier, its date says how long, without warning colors. */
-	private row(parent: HTMLElement, t: Task, showTag: boolean, since = false): HTMLElement {
+	/**
+	 * A task row, then its steps under it. `since`: in the block of what waits since earlier, its date
+	 * says how long, without warning colors. `step`: drawn under its task (no note, no tag).
+	 */
+	private row(parent: HTMLElement, t: Task, showTag: boolean, since = false, step = false): HTMLElement {
 		const today = this.today();
 		const row = parent.createDiv({
-			cls: "sk-tasks-row" + (t.priority ? " p-" + t.priority : "") + (this.st.sel === t.key ? " is-sel" : "") + (this.freshKey === t.key ? " is-new" : "") + (this.landedKey === t.key ? " is-landed" : ""),
+			cls: "sk-tasks-row" + (step ? " is-step" : "") + (t.priority ? " p-" + t.priority : "") + (this.st.sel === t.key ? " is-sel" : "") + (this.freshKey === t.key ? " is-new" : "") + (this.landedKey === t.key ? " is-landed" : ""),
 		});
 		row.dataset.key = t.key;
 		row.tabIndex = this.st.sel === t.key ? 0 : -1;
@@ -1548,10 +1614,19 @@ export class TasksTab implements WorkbenchTabInstance {
 		const title = main.createDiv({ cls: "sk-tasks-row-title" });
 		renderInline(title.createSpan({ cls: "sk-tasks-txt" }), t.title);
 		if (!t.primary) {
-			const tagBtn = title.createEl("button", { cls: "sk-tasks-notag", attr: { type: "button", "aria-label": this.t("row.tag") } });
+			// A step without a tag: its task's tag in one click (right click: another tag).
+			const owner = this.hub.index.parentOf(t);
+			const tagBtn = title.createEl("button", { cls: "sk-tasks-notag" + (owner ? " is-suggested" : ""), attr: { type: "button", "aria-label": owner ? this.t("row.tag-of", { tag: owner.primary, task: plainTitle(owner.title) }) : this.t("row.tag") } });
 			icon(tagBtn, "tag");
-			tagBtn.appendText(this.t("row.tag-short"));
+			if (owner) tagBtn.addClasses(this.hub.tagClasses(owner.primary).split(" ").filter(Boolean));
+			tagBtn.appendText(owner ? owner.primary : this.t("row.tag-short"));
 			tagBtn.addEventListener("click", (e) => {
+				e.stopPropagation();
+				if (owner) void this.hub.retag(t, owner.primary);
+				else this.tagUntagged(t, tagBtn);
+			});
+			if (owner) tagBtn.addEventListener("contextmenu", (e) => {
+				e.preventDefault();
 				e.stopPropagation();
 				this.tagUntagged(t, tagBtn);
 			});
@@ -1561,15 +1636,12 @@ export class TasksTab implements WorkbenchTabInstance {
 		const state = since ? "since" : dueState(t.due, today);
 		const dueWords = (due: string) => (since ? this.hub.sinceText(due) : this.hub.dueText(due));
 		if (this.layout === "page") {
-			if (showTag && t.primary) capsule(title, t.primary, this.hub, "sk-tasks-cap-sm");
+			if (showTag && t.primary && !step) capsule(title, t.primary, this.hub, "sk-tasks-cap-sm");
 			const icons = meta.createSpan({ cls: "sk-tasks-m-icons" });
 			this.subtaskCount(icons, t);
 			this.flagMarks(icons, t);
 			this.taskNoteMarker(icons, t);
-			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
-			icon(note, "file-text");
-			this.sessionMarker(note, t.path);
-			note.createEl("b", { text: noteName(t.path) });
+			this.notePlace(meta, t, step);
 			const due = meta.createSpan({ cls: "sk-tasks-m-due" + (state ? " is-" + state : "") });
 			if (t.due) due.appendText(dueWords(t.due));
 		} else {
@@ -1578,14 +1650,11 @@ export class TasksTab implements WorkbenchTabInstance {
 				icon(due, state === "overdue" ? "alert-circle" : since ? "clock" : "calendar");
 				due.appendText(dueWords(t.due));
 			}
-			if (showTag && t.primary) capsule(meta, t.primary, this.hub, "sk-tasks-cap-xs");
+			if (showTag && t.primary && !step) capsule(meta, t.primary, this.hub, "sk-tasks-cap-xs");
 			this.subtaskCount(meta, t);
 			this.flagMarks(meta, t);
 			this.taskNoteMarker(meta, t);
-			const note = meta.createSpan({ cls: "sk-tasks-m-note" });
-			icon(note, "file-text");
-			this.sessionMarker(note, t.path);
-			note.createEl("b", { text: noteName(t.path) });
+			this.notePlace(meta, t, step);
 		}
 		const actions = row.createDiv({ cls: "sk-tasks-row-act" });
 		this.iconButton(actions, "arrow-up-right", this.t("row.open"), (e) => {
@@ -1621,7 +1690,33 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.dragSource(row, t);
 		this.taskDrop(row, t);
 		if (this.layout === "side" && this.st.open === t.key) this.inlineDetail(parent, t);
+		const steps = this.under.get(t.key);
+		if (steps && !this.settings.foldedSteps.includes(t.key)) {
+			const box = parent.createDiv({ cls: "sk-tasks-steps" });
+			for (const s of steps) this.row(box, s, false, false, true);
+		}
 		return row;
+	}
+
+	/**
+	 * Where the task is written. A step drawn under its task says nothing (its task tells); a step
+	 * drawn on its own says whose step it is; any other task, its note.
+	 */
+	private notePlace(meta: HTMLElement, t: Task, step: boolean): void {
+		if (step) return;
+		const owner = this.hub.index.parentOf(t);
+		const note = meta.createSpan({ cls: "sk-tasks-m-note" });
+		if (owner) {
+			const name = plainTitle(owner.title);
+			note.addClass("is-step-of");
+			note.setAttr("aria-label", this.t("row.step-of", { task: name }));
+			icon(note, "corner-down-right");
+			note.createEl("b", { text: name });
+			return;
+		}
+		icon(note, "file-text");
+		this.sessionMarker(note, t.path);
+		note.createEl("b", { text: noteName(t.path) });
 	}
 
 	/**
@@ -1672,11 +1767,39 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 	}
 
+	/** Subtasks and steps done, out of all of them. With steps under the row, a click folds or unfolds them. */
 	private subtaskCount(parent: HTMLElement, t: Task): void {
-		if (!t.subtasks.length) return;
-		const span = parent.createSpan({ attr: { "aria-label": this.t("detail.subtasks") } });
-		icon(span, "list-checks");
-		span.appendText(`${t.subtasks.filter((s) => s.done).length}/${t.subtasks.length}`);
+		const steps = this.hub.index.stepsOf(t);
+		const done = t.subtasks.filter((s) => s.done).length + steps.done;
+		const total = t.subtasks.length + steps.done + steps.open.length;
+		if (!total) return;
+		const text = `${done}/${total}`;
+		if (!this.under.has(t.key)) {
+			const span = parent.createSpan({ attr: { "aria-label": this.t("detail.subtasks") } });
+			icon(span, "list-checks");
+			span.appendText(text);
+			return;
+		}
+		const folded = this.settings.foldedSteps.includes(t.key);
+		const button = parent.createEl("button", {
+			cls: "sk-tasks-stepcount" + (folded ? " is-folded" : ""),
+			attr: { type: "button", "aria-expanded": String(!folded), "aria-label": this.t("row.steps", { done, total }) },
+		});
+		icon(button, "chevron-down", "sk-tasks-stepcount-chev");
+		button.appendText(text);
+		button.addEventListener("click", (e) => {
+			e.stopPropagation();
+			void this.toggleSteps(t.key);
+		});
+		button.addEventListener("dblclick", (e) => e.stopPropagation());
+	}
+
+	private async toggleSteps(key: string): Promise<void> {
+		const folded = this.settings.foldedSteps;
+		// Only the tasks still open are remembered.
+		const open = new Set(this.hub.index.open().map((t) => t.key));
+		this.settings.foldedSteps = folded.includes(key) ? folded.filter((k) => k !== key && open.has(k)) : [...folded.filter((k) => open.has(k)), key];
+		await this.hub.ctx.saveSettings();
 	}
 
 	// ----- several tasks at once -----
@@ -1918,9 +2041,10 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (sel) this.st.sel = expected;
 		if (open) this.st.open = expected;
 		const key = (await this.hub.rename(t, title)) ?? t.key;
-		// The task keeps its place in "My order" under its new key.
-		if (key !== t.key && this.settings.taskOrder.includes(t.key)) {
+		// The task keeps its place in "My order" and its folded steps under its new key.
+		if (key !== t.key && (this.settings.taskOrder.includes(t.key) || this.settings.foldedSteps.includes(t.key))) {
 			this.settings.taskOrder = this.settings.taskOrder.map((k) => (k === t.key ? key : k));
+			this.settings.foldedSteps = this.settings.foldedSteps.map((k) => (k === t.key ? key : k));
 			await this.hub.ctx.saveSettings();
 		}
 		if (sel) this.st.sel = key;

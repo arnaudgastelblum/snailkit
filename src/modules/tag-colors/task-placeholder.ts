@@ -6,14 +6,15 @@ import { Decoration, ViewPlugin, WidgetType, type DecorationSet, type EditorView
 import { openTagPicker, tagColorsFrom, type TagPickerHandle } from "../../ui/tag-picker";
 import type { TagRuntime } from "./runtime";
 import { frequencies } from "./types";
-import { checkedSourceTaskInsertion, checkedTaskInsertion, hasTaskTag, taskLine, taskLines, taskTagPosition } from "./task-placeholder-logic";
+import { checkedSourceTaskInsertion, checkedTaskInsertion, checkedTaskTagChange, hasTaskTag, taskBodyStart, taskLine, taskLines } from "./task-placeholder-logic";
 import { elementOf } from "../../ui/dom";
+import { parentFirst, parentSuggestion, type ParentSuggestion, type TasksApi } from "./task-parent";
 
 const refresh = StateEffect.define<null>();
 const isolate = isolateHistory as unknown as AnnotationType<"full">;
 
 /** Owns picker lifetimes and reading sections as well as the visible editor decorations. */
-export function registerTaskPlaceholders(runtime: TagRuntime): void {
+export function registerTaskPlaceholders(runtime: TagRuntime): { changeTag(view: EditorView, anchor: HTMLElement, pos: number, old: string): void } {
 	const { ctx } = runtime;
 	let stopped = false;
 	let picker: TagPickerHandle | undefined;
@@ -23,69 +24,114 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 	const editors = new Set<EditorView>();
 	const sections = new Set<() => void>();
 	const enabled = () => !stopped && ctx.settings.taskPlaceholder;
+	const parentAt = (path: string) => parentSuggestion(ctx.service<TasksApi>("tasks")?.parentOf?.(path));
 	const close = () => { picker?.close(); picker = undefined; pickerOwner = null; pickerPath = null; };
 	const remember = (tag: string) => {
 		ctx.settings.placeholderRecent = [tag, ...ctx.settings.placeholderRecent.filter(t => t.toLowerCase() !== tag.toLowerCase())].slice(0, 12);
 		void ctx.saveSettings();
 	};
+	const apply = (choose: (tag: string) => boolean | Promise<boolean>, tag: string) => {
+		void Promise.resolve().then(() => !stopped && choose(tag)).then(ok => { if (ok && !stopped) remember(tag); }).catch(error => {
+			console.error("[Snailkit] task tag insertion failed", error);
+			ctx.toast(ctx.t("placeholder.failed"));
+		});
+	};
 	// In reading view the picker writes into the file: the file changing elsewhere closes it.
 	ctx.registerEvent(ctx.app.vault.on("modify", (file) => {
 		if (picker && !pickerOwner && file.path === pickerPath) close();
 	}));
+	/**
+	 * Opens the tag picker under `anchor`; `choose` writes the tag. `chosen` is the tag being changed,
+	 * if any: changing a tag works even with the placeholder setting off.
+	 */
+	function openPicker(anchor: HTMLElement, path: string, owner: EditorView | null, choose: (tag: string) => boolean | Promise<boolean>, chosen: string | null = null): void {
+		const allowed = () => !stopped && (chosen !== null || ctx.settings.taskPlaceholder);
+		if (!allowed()) return;
+		close();
+		// Snapshot metadata only on opening, never while typing in the editor or picker.
+		// Priorities (#high, #medium, #low) mark a task, they are never offered as its tag.
+		const notPriority = (tag: string) => !/^(?:high|medium|low)$/i.test(tag);
+		const all = Object.entries(frequencies(ctx.app)).sort((a, b) => b[1] - a[1]).map(([tag]) => tag.replace(/^#/, "")).filter(notPriority);
+		const cache = ctx.app.metadataCache.getCache(path);
+		const near = parentFirst(cache ? (getAllTags(cache) ?? []).map(tag => tag.replace(/^#/, "")).filter(notPriority) : [], parentAt(path));
+		pickerOwner = owner;
+		pickerPath = path;
+		picker = openTagPicker(anchor, {
+			t: (key, vars) => ctx.t(key, vars), colors: tagColorsFrom(ctx),
+			sources: { all: () => all, near: () => near, recent: () => ctx.settings.placeholderRecent.filter(notPriority), chosen: () => chosen },
+			onCancel: () => { picker = undefined; pickerOwner = null; pickerPath = null; },
+			onChoose: (tag) => {
+				picker = undefined;
+				pickerOwner = null;
+				pickerPath = null;
+				if (allowed() && tag !== chosen) apply(choose, tag);
+			},
+		});
+	}
 	function chip(doc: Document, path: string, choose: (tag: string) => boolean | Promise<boolean>, owner: EditorView | null = null): HTMLButtonElement {
 		const el = elementOf(doc, "button");
 		el.type = "button";
 		el.tabIndex = -1;
 		el.className = "sk-tag-colors-task-placeholder";
-		el.setAttribute("aria-label", ctx.t("placeholder.add"));
-		const icon = el.createSpan();
-		setIcon(icon, "tag");
-		el.appendText("tag");
+		const parent = parentAt(path);
+		el.setAttribute("aria-label", parent ? ctx.t("placeholder.parent", { tag: parent.tag, task: parent.task }) : ctx.t("placeholder.add"));
+		if (parent) {
+			el.classList.add("sk-tag-colors-task-suggestion", ...runtime.classes(parent.tag).split(" "));
+			el.appendText("#" + parent.tag);
+		} else {
+			const icon = el.createSpan();
+			setIcon(icon, "tag");
+			el.appendText("tag");
+		}
 		el.addEventListener("mousedown", e => e.preventDefault());
 		el.addEventListener("click", e => {
 			e.preventDefault(); e.stopPropagation();
 			if (!enabled()) return;
-			close();
-			// Snapshot metadata only on opening, never while typing in the editor or picker.
-			// Priorities (#high, #medium, #low) mark a task, they are never offered as its tag.
-			const notPriority = (tag: string) => !/^(?:high|medium|low)$/i.test(tag);
-			const all = Object.entries(frequencies(ctx.app)).sort((a, b) => b[1] - a[1]).map(([tag]) => tag.replace(/^#/, "")).filter(notPriority);
-			const cache = ctx.app.metadataCache.getCache(path);
-			const near = cache ? (getAllTags(cache) ?? []).map(tag => tag.replace(/^#/, "")).filter(notPriority) : [];
-			pickerOwner = owner;
-			pickerPath = path;
-			picker = openTagPicker(el, {
-				t: (key, vars) => ctx.t(key, vars), colors: tagColorsFrom(ctx),
-				sources: { all: () => all, near: () => near, recent: () => ctx.settings.placeholderRecent.filter(notPriority) },
-				onCancel: () => { picker = undefined; pickerOwner = null; pickerPath = null; },
-				onChoose: (tag) => {
-					picker = undefined;
-					pickerOwner = null;
-					pickerPath = null;
-					if (enabled()) void Promise.resolve(choose(tag)).then(ok => { if (ok && !stopped) remember(tag); }).catch(error => {
-						console.error("[Snailkit] task tag insertion failed", error);
-						ctx.toast(ctx.t("placeholder.failed"));
-					});
-				},
-			});
+			if (parent && parentAt(path)?.tag === parent.tag) { close(); apply(choose, parent.tag); }
+			else openPicker(el, path, owner, choose);
+		});
+		if (parent) el.addEventListener("contextmenu", e => {
+			e.preventDefault(); e.stopPropagation();
+			openPicker(el, path, owner, choose);
 		});
 		return el;
 	}
+	/**
+	 * Equal for every task of the note, so typing never rebuilds the chip (it would blink): its line
+	 * is read where it stands when a tag is chosen (any edit before that closes the picker).
+	 */
 	class TaskWidget extends WidgetType {
-		constructor(readonly line: number, readonly text: string, readonly path: string) { super(); }
-		eq(other: TaskWidget): boolean { return this.line === other.line && this.text === other.text && this.path === other.path; }
+		constructor(readonly path: string, readonly parent: ParentSuggestion | null) { super(); }
+		eq(other: TaskWidget): boolean { return this.path === other.path && this.parent?.tag === other.parent?.tag && this.parent?.task === other.parent?.task; }
 		toDOM(view: EditorView): HTMLElement {
-			return chip(view.dom.ownerDocument, this.path, tag => {
-				if (!editors.has(view) || view.scrollDOM.classList.contains("sk-sessions-composing") || view.state.field(editorInfoField, false)?.file?.path !== this.path || this.line > view.state.doc.lines) return false;
-				const line = view.state.doc.line(this.line);
-				const change = checkedTaskInsertion(line.text, this.text, tag);
+			const el: HTMLElement = chip(view.dom.ownerDocument, this.path, tag => {
+				if (!editors.has(view) || !el.isConnected || view.scrollDOM.classList.contains("sk-sessions-composing") || view.state.field(editorInfoField, false)?.file?.path !== this.path) return false;
+				const line = view.state.doc.lineAt(view.posAtDOM(el));
+				const change = checkedTaskInsertion(line.text, line.text, tag);
 				if (!change || excluded(view, line.from)) return false;
 				view.dispatch({ changes: { from: line.from + change.at, insert: change.insert }, annotations: isolate.of("full"), userEvent: "input.tag" });
 				view.focus();
 				return true;
 			}, view);
+			return el;
 		}
 		ignoreEvent(): boolean { return true; }
+	}
+	/** Changes the tag `old` of the open task shown by `anchor` (a tag capsule of the editor), at `pos`. */
+	function changeTag(view: EditorView, anchor: HTMLElement, pos: number, old: string): void {
+		const path = view.state.field(editorInfoField, false)?.file?.path;
+		if (!path || pos > view.state.doc.length) return;
+		const line = view.state.doc.lineAt(pos), snapshot = line.text, at = pos - line.from;
+		if (!checkedTaskTagChange(snapshot, snapshot, at, old, old)) return;
+		openPicker(anchor, path, view, tag => {
+			if (!editors.has(view) || view.state.field(editorInfoField, false)?.file?.path !== path || pos > view.state.doc.length) return false;
+			const now = view.state.doc.lineAt(pos);
+			const change = now.from === line.from ? checkedTaskTagChange(now.text, snapshot, at, old, tag) : null;
+			if (!change) return false;
+			view.dispatch({ changes: { from: now.from + change.from, to: now.from + change.to, insert: change.insert }, annotations: isolate.of("full"), userEvent: "input.tag" });
+			view.focus();
+			return true;
+		}, old);
 	}
 	function excluded(view: EditorView, pos: number): boolean {
 		for (let node = syntaxTree(view.state).resolveInner(pos, 1); node; node = node.parent!) {
@@ -97,6 +143,7 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 		if (!enabled() || view.scrollDOM.classList.contains("sk-sessions-composing")) return Decoration.none;
 		const path = view.state.field(editorInfoField, false)?.file?.path;
 		if (!path) return Decoration.none;
+		const parent = parentAt(path);
 		const ranges: Range<Decoration>[] = [], seen = new Set<number>();
 		for (const visible of view.visibleRanges) {
 			for (let n = view.state.doc.lineAt(visible.from).number; n <= view.state.doc.lineAt(visible.to).number; n++) {
@@ -104,8 +151,9 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 				seen.add(n);
 				const line = view.state.doc.line(n), task = taskLine(line.text);
 				if (!task?.open || hasTaskTag(line.text) || excluded(view, line.from + line.text.search(/\S/))) continue;
-				const at = line.from + taskTagPosition(line.text);
-				ranges.push(Decoration.widget({ widget: new TaskWidget(n, line.text, path), side: 1 }).range(at));
+				// Right after the checkbox, before the cursor: typing the task never pushes it along.
+				const at = line.from + taskBodyStart(line.text);
+				ranges.push(Decoration.widget({ widget: new TaskWidget(path, parent), side: -1 }).range(at));
 			}
 		}
 		return Decoration.set(ranges, true);
@@ -129,8 +177,9 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 			if (update.docChanged && picker && pickerOwner === this.view) close();
 			if (update.transactions.some(tr => tr.effects.some(e => e.is(refresh)))) this.decorations = decorate(this.view);
 			else if (update.docChanged || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
-				// Do not leave a clickable snapshot at a stale position while the debounce runs.
-				this.decorations = Decoration.none;
+				// Rebuilt at once (equal widgets keep their DOM: no blink while typing), then once more
+				// when the parser has caught up (code blocks, properties).
+				this.decorations = decorate(this.view);
 				this.schedule();
 			}
 		}
@@ -170,19 +219,9 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 				});
 				const paragraph = Array.from(item.children).find(child => child.tagName === "P");
 				const host = paragraph ?? item;
-				const marker = /(?:📅|✅|🛫|⏳|➕|❌|🔺|⏫|🔼|🔽|⏬)/u.exec(task.text.slice(taskTagPosition(task.text)))?.[0];
-				const walker = el.ownerDocument.createTreeWalker(host, 4 /* SHOW_TEXT */);
-				let placed = false;
-				if (marker) for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-					if (node.parentElement?.closest("li") !== item) continue;
-					const at = (node.textContent ?? "").indexOf(marker);
-					if (at < 0) continue;
-					const tail = at === 0 ? node : (node as Text).splitText(at);
-					tail.parentNode!.insertBefore(button, tail);
-					placed = true;
-					break;
-				}
-				if (!placed) host.insertBefore(button, Array.from(host.children).find(child => /^(UL|OL)$/.test(child.tagName)) ?? null);
+				// Right after the checkbox, as in the editor.
+				const box = Array.from(host.children).find(child => child.matches("input.task-list-item-checkbox"));
+				host.insertBefore(button, box ? box.nextSibling : host.firstChild);
 				chips.push(button);
 			});
 		};
@@ -192,10 +231,26 @@ export function registerTaskPlaceholders(runtime: TagRuntime): void {
 			onunload(): void { active = false; clear(); sections.delete(render); }
 		}(el));
 	});
-	ctx.onSettingsChange(() => {
+	const refreshAll = () => {
+		if (stopped) return;
 		if (!enabled()) close();
 		for (const view of editors) view.dispatch({ effects: refresh.of(null) });
 		for (const render of sections) render();
-	});
-	ctx.register(() => { stopped = true; close(); for (const render of sections) render(); sections.clear(); });
+	};
+	let tasks: TasksApi | undefined;
+	let unsubscribe: (() => void) | undefined;
+	const servicesChanged = () => {
+		const next = ctx.service<TasksApi>("tasks");
+		if (next === tasks) return;
+		unsubscribe?.();
+		tasks = next;
+		unsubscribe = tasks?.on("change", () => { close(); refreshAll(); });
+		close();
+		refreshAll();
+	};
+	ctx.onSettingsChange(refreshAll);
+	ctx.onServicesChange(servicesChanged);
+	servicesChanged();
+	ctx.register(() => { stopped = true; unsubscribe?.(); close(); for (const render of sections) render(); sections.clear(); });
+	return { changeTag };
 }

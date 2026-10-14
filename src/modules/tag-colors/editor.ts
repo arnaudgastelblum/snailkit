@@ -4,6 +4,7 @@ import { Decoration, WidgetType, ViewPlugin, type EditorView, type ViewUpdate, t
 import { syntaxTree } from "@codemirror/language";
 import { capsule } from "./colors";
 import type { TagRuntime } from "./runtime";
+import { taskLine } from "./task-placeholder-logic";
 
 const BEGIN_RE = /hashtag-begin/;
 const END_RE = /hashtag-end/;
@@ -27,16 +28,21 @@ export class TagWidget extends WidgetType {
 		el.addEventListener("mousedown", event => {
 			if (ours(event)) event.preventDefault();
 		});
+		// The tag of an open task can be changed (from its card and its menu).
+		const change = () => {
+			const pos = view.posAtDOM(el), line = view.state.doc.lineAt(pos);
+			return taskLine(line.text)?.open ? () => this.plugin.changeTaskTag(view, el, pos, this.tag) : undefined;
+		};
 		el.addEventListener("click", event => {
 			if (!ours(event)) return;
 			event.preventDefault();
 			event.stopPropagation();
-			this.plugin.openTag(this.tag, el, event);
+			this.plugin.openTag(this.tag, el, event, change());
 		});
 		el.addEventListener("keydown", event => {
-			if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.plugin.openTag(this.tag, el, event); }
+			if (event.key === "Enter" || event.key === " ") { event.preventDefault(); this.plugin.openTag(this.tag, el, event, change()); }
 		});
-		el.addEventListener("contextmenu", event => this.plugin.showMenu(event, this.tag));
+		el.addEventListener("contextmenu", event => this.plugin.showMenu(event, this.tag, change()));
 		return el;
 	}
 	ignoreEvent() { return true; }

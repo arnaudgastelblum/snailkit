@@ -1,9 +1,16 @@
 /** Line numbers are zero-based; snapshots deliberately include all original whitespace. */
 export interface TaskLine { line: number; text: string; open: boolean }
 
+const TASK_RE = /^(?:\s*> ?)*[ \t]*(?:[-+*]|\d+[.)])\s+\[([^\]])\](?:[ \t]+|$)/;
+
 export function taskLine(text: string, line = 0): TaskLine | null {
-	const match = /^(?:\s*> ?)*[ \t]*(?:[-+*]|\d+[.)])\s+\[([^\]])\](?:[ \t]+|$)/.exec(text);
+	const match = TASK_RE.exec(text);
 	return match ? { line, text, open: match[1] === " " } : null;
+}
+
+/** Where the words of a task start, right after its checkbox (the placeholder sits there). */
+export function taskBodyStart(text: string): number {
+	return TASK_RE.exec(text)?.[0].length ?? 0;
 }
 
 export function hasTaskTag(text: string): boolean {
@@ -55,6 +62,15 @@ export function checkedTaskInsertion(current: string, snapshot: string, tag: str
 	const name = tag.replace(/^#/, "");
 	if (!/^[\p{L}\p{N}_/-]+$/u.test(name) || !/[\p{L}_/-]/u.test(name)) return null;
 	return { at: taskTagPosition(current), insert: " #" + name };
+}
+
+/** Replaces the tag `old` written at `at` (offset in the line) of an open task by `tag`, if the line is still the same. */
+export function checkedTaskTagChange(current: string, snapshot: string, at: number, old: string, tag: string): { from: number; to: number; insert: string } | null {
+	if (current !== snapshot || !taskLine(current)?.open) return null;
+	const name = tag.replace(/^#/, ""), was = "#" + old.replace(/^#/, "");
+	if (!/^[\p{L}\p{N}_/-]+$/u.test(name) || !/[\p{L}_/-]/u.test(name)) return null;
+	if (current.slice(at, at + was.length) !== was || /[\p{L}\p{N}_/-]/u.test(current.charAt(at + was.length))) return null;
+	return { from: at, to: at + was.length, insert: "#" + name };
 }
 
 export function checkedSourceTaskInsertion(source: string, line: number, snapshot: string, tag: string): string | null {

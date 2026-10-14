@@ -25,6 +25,7 @@ export class TagRuntime implements ColorHost {
 	private saveTimer: number | undefined;
 	private stopped = false;
 	private card: TagCard;
+	private tasks: ReturnType<typeof registerTaskPlaceholders> | undefined;
 	constructor(readonly ctx: ModuleContext<TagColorsSettings>) {
 		this.card = new TagCard(ctx, (tag) => this.classes(tag));
 	}
@@ -41,7 +42,7 @@ export class TagRuntime implements ColorHost {
 		this.refresh();
 		ctx.registerEditorExtension(editorExtension(this));
 		this.registerSuggest();
-		registerTaskPlaceholders(this);
+		this.tasks = registerTaskPlaceholders(this);
 		ctx.registerMarkdownPostProcessor((el, context) => {
 			const render = () => {
 				if (this.stopped || !el.closest(".markdown-preview-view") || el.closest(".popover, .canvas-node, .search-result")) return;
@@ -227,10 +228,10 @@ export class TagRuntime implements ColorHost {
 	}
 
 	/** A click on a tag: the tag card when it is on (Ctrl or Cmd click keeps the search), else the search. */
-	openTag(tag: string, anchor: HTMLElement, event?: MouseEvent | KeyboardEvent): void {
+	openTag(tag: string, anchor: HTMLElement, event?: MouseEvent | KeyboardEvent, change?: () => void): void {
 		if (this.stopped) return;
 		const mod = !!event && (event.ctrlKey || event.metaKey);
-		if (this.settings.tagCard && !mod) this.card.open(tag, anchor);
+		if (this.settings.tagCard && !mod) this.card.open(tag, anchor, change);
 		else this.openSearch(tag);
 	}
 
@@ -249,12 +250,23 @@ export class TagRuntime implements ColorHost {
 		modal.open();
 	}
 
-	showMenu(event: MouseEvent, tag: string): void {
+	/** Opens the tag picker to replace the tag `old` of the open task at `pos` (the capsule `anchor`). */
+	changeTaskTag(view: EditorView, anchor: HTMLElement, pos: number, old: string): void {
+		if (this.stopped) return;
+		this.card.close();
+		this.tasks?.changeTag(view, anchor, pos, old);
+	}
+
+	showMenu(event: MouseEvent, tag: string, change?: () => void): void {
 		if (this.stopped) return;
 		event.preventDefault();
 		event.stopPropagation();
 		this.menu?.hide();
 		const menu = this.menu = new Menu();
+		if (change) {
+			menu.addItem(item => item.setTitle(this.t("tag.change")).setIcon("replace").onClick(change));
+			menu.addSeparator();
+		}
 		menu.addItem(item => item.setTitle(this.t("color.tag")).setIcon("palette").onClick(() => this.openModal(new ColorModal(this, tag))));
 		if (tagKey(tag).includes("/")) menu.addItem(item => item.setTitle(this.t("color.family")).setIcon("palette")
 			.onClick(() => this.openModal(new ColorModal(this, tagKey(tag).split("/")[0]))));

@@ -123,6 +123,8 @@ export interface TasksApi {
 	find(location: TaskLocation): TaskInfo | null;
 	/** Group tags of the tasks and the other tags of the vault (not the flags), sorted. */
 	getTags(): string[];
+	/** The open task whose 📝 note is `path` (the checkboxes of that note are its steps), or null. */
+	parentOf?(path: string): { key: string; tag: string; title: string; plainTitle: string } | null;
 	/** Called after any change of the tasks (a note edited, the vault read). Returns an unsubscribe function. */
 	on(event: "change", callback: () => void): () => void;
 
@@ -246,6 +248,10 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 			return task ? taskInfo(task) : null;
 		},
 		getTags: () => (alive() ? index.allTags() : []),
+		parentOf: (path) => {
+			const owner = alive() && typeof path === "string" ? index.ownerOf(path) : null;
+			return owner ? { key: owner.key, tag: owner.primary, title: owner.title, plainTitle: plainTitle(owner.title) } : null;
+		},
 		on: (event, callback) => {
 			if (event !== "change" || typeof callback !== "function" || !alive()) return () => undefined;
 			return index.onChange(callback);

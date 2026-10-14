@@ -75,6 +75,8 @@ export function lineOutsideTasks(cache: CachedMetadata, tag: string): number | n
 export class TagCard {
 	private el: HTMLElement | null = null;
 	private cleanup: (() => void)[] = [];
+	/** Set when the card was opened from the tag of an open task: a button changes that tag. */
+	private change: { tag: string; run: () => void } | null = null;
 
 	constructor(private ctx: ModuleContext<TagColorsSettings>, private classes: (tag: string) => string) {}
 
@@ -93,9 +95,10 @@ export class TagCard {
 	}
 
 	/** Shows the card of `tag` next to `anchor` (the clicked tag). */
-	open(tag: string, anchor: HTMLElement): void {
+	open(tag: string, anchor: HTMLElement, change?: () => void): void {
 		this.close();
 		const scope = lower(tag);
+		this.change = change ? { tag: scope, run: change } : null;
 		const doc = anchor.ownerDocument;
 		const win = doc.defaultView ?? window;
 		const card = (this.el = doc.body.createDiv({ cls: "sk-tag-card", attr: { role: "dialog", "aria-label": "#" + scope } }));
@@ -172,6 +175,11 @@ export class TagCard {
 			if (i < parts.length - 1) crumb.addEventListener("click", () => this.render(card, path));
 			else crumb.disabled = true;
 		});
+		if (this.change?.tag === tag) {
+			const change = this.change.run;
+			const btn = head.createEl("button", { cls: "sk-btn is-ghost is-s sk-tag-card-change", text: this.t("tag.change-short"), attr: { type: "button" } });
+			btn.addEventListener("click", () => change());
+		}
 		const close = head.createEl("button", { cls: "sk-tag-card-close clickable-icon", attr: { type: "button", "aria-label": this.t("card.close") } });
 		setIcon(close, "x");
 		close.addEventListener("click", () => this.close());

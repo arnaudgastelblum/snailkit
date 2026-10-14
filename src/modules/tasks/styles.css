@@ -338,6 +338,17 @@ body.theme-dark {
 	border-color: var(--sk-accent);
 	color: var(--text-normal);
 }
+/* The tag of the step's task, offered: in its colors, still dashed. */
+.sk-tasks-notag.is-suggested {
+	border-color: var(--sk-tag-r-fg, var(--sk-accent));
+	background: var(--sk-tag-l-bg, transparent);
+	color: var(--sk-tag-l-fg, var(--text-muted));
+	opacity: 0.8;
+}
+.sk-tasks-notag.is-suggested:hover,
+.sk-tasks-notag.is-suggested:focus-visible {
+	opacity: 1;
+}
 .sk-tasks-notag svg {
 	width: 12px;
 	height: 12px;
@@ -648,6 +659,50 @@ body.theme-dark {
 	overflow: hidden;
 	font-weight: 400;
 	text-overflow: ellipsis;
+}
+/* Steps: the checkboxes of a task note, under their task, behind a thin line. */
+.sk-tasks-steps {
+	position: relative;
+	margin-left: 30px;
+}
+.sk-tasks-steps::before {
+	position: absolute;
+	top: 2px;
+	bottom: 6px;
+	left: 3px;
+	border-left: 1px solid var(--background-modifier-border);
+	content: "";
+}
+.sk-tasks-row.is-step {
+	padding-top: 4px;
+	padding-bottom: 4px;
+	font-size: 0.95em;
+}
+.sk-tasks-stepcount {
+	height: auto;
+	margin: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	font: inherit;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 4px;
+	border-radius: var(--sk-radius-s);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.sk-tasks-stepcount:hover,
+.sk-tasks-stepcount:focus-visible {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.sk-tasks-stepcount-chev {
+	transition: transform var(--sk-fast);
+}
+.sk-tasks-stepcount.is-folded .sk-tasks-stepcount-chev {
+	transform: rotate(-90deg);
 }
 .sk-tasks-m-due.is-overdue {
 	color: var(--sk-danger);
@@ -2041,8 +2096,9 @@ textarea.sk-tasks-tnote-area {
 	padding: 8px 12px;
 	resize: none;
 	border-radius: var(--sk-radius-s);
-	font-family: var(--font-text);
-	font-size: var(--font-text-size, 15px);
+	/* The interface's font, as the rest of the details (the note's font can be much larger). */
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-small);
 	line-height: 1.55;
 }
 .is-side textarea.sk-tasks-tnote-area,
