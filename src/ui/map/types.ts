@@ -76,6 +76,13 @@ export interface MapOptions {
 	icon(el: HTMLElement, name: string): void;
 	/** "auto" (default): columns when the container is at least 600 px wide on a computer, else the tree. */
 	mode?: "auto" | "columns" | "tree";
+	/**
+	 * A Map that picks a note (the New note window): the node chosen now, lit and checked
+	 * (aria-selected), or null for none yet. Left out: the Map does not pick.
+	 */
+	picked?: string | null;
+	/** Phones: the icon of the button at the end of a row that has children ("arrow-up-right" by default). */
+	openIcon?: string;
 }
 
 export interface MapEvents {
@@ -114,6 +121,8 @@ export interface MapHandle {
 	/** The container's size changed (columns or tree, column widths). */
 	layout(): void;
 	getState(): MapState;
+	/** The node shown as chosen, on a Map that picks (options.picked). */
+	pick(id: string | null): void;
 	/**
 	 * Unfolds the branch that shows this node (recentering when it is deeper than the columns).
 	 * False when the node is not under the root or not among the shown children.

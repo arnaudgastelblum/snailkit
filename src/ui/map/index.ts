@@ -627,6 +627,7 @@ export function mountMap(el: HTMLElement, options: MapOptions, events: MapEvents
 	return {
 		update: () => { if (!dead) { cancelHold(); stopHover(); life.cancel("click"); draw(false); changed(); } },
 		recenter, focus: () => { if (!dead) focusKey(activeKey); }, layout, getState, reveal, edit,
+		pick: (id) => { if (!dead && scene.picked !== id) { scene.picked = id; draw(false); } },
 		destroy: () => { if (!dead) { dead = true; editing = null; drag?.ghost?.remove(); drag = null; life.destroy(); scene.destroy(); shell.remove(); } },
 	};
 }

@@ -1,6 +1,7 @@
 // The Home module while it runs: its tab in the Workbench, the automatic opening, the places
 // options, recent notes, the arrangement followed through renames, the services it reads (tasks,
-// brainstorms, pins, search, tag colors) and the "home" service it publishes.
+// brainstorms, pins, search, tag colors), the "home" service it publishes, and the New note
+// window (its command, and Ctrl+N when the user asks for it).
 import { Platform, TFile, type TAbstractFile } from "obsidian";
 import type { ModuleContext } from "../../core/context";
 import { dailyConfig, getOrCreateDaily, todayKey, todayNote, parseDailyPath, type DailyConfig } from "../../core/daily";
@@ -14,6 +15,7 @@ import { cleanOrder, dropFromOrder, orderMentions, orderOf, renameInOrder, type 
 import { cleanRecents, dropRecent, pushRecent, renameRecent, seedRecents, type Recent } from "./logic/recents";
 import type { World } from "./logic/world";
 import { arrangementOf, cleanSettings, splitFolders, writeArrangement } from "./settings-logic";
+import { NewNoteModal, type NewNoteRequest } from "./new-note";
 import { HomeView } from "./view";
 import type { HomeLens, HomeSettings, HomeTabState } from "./types";
 
@@ -22,6 +24,10 @@ const RECENTS_KEY = "snailkit-home-recents";
 const CHANGE_MS = 150;
 /** Typing in a note changes its time and maybe its tags: the Home follows, without hurry. */
 const MODIFY_MS = 1200;
+/** Obsidian's "Create new note" (Ctrl+N), which the New note window can take over. */
+const CREATE_NOTE = "file-explorer:new-file";
+
+type CommandCallback = () => unknown;
 
 export type HomeContext = ModuleContext<HomeSettings>;
 
@@ -34,6 +40,8 @@ export class HomeRuntime {
 	private modifyTimer = 0;
 	private subscriptions: Array<() => void> = [];
 	private layoutCache: { key: string; layout: Layout } | null = null;
+	/** Obsidian's "Create new note" while it opens the New note window: how to put it back. */
+	private ctrlN: { command: { callback?: CommandCallback }; original: CommandCallback; patched: CommandCallback; live: { on: boolean } } | null = null;
 	/** Latest activity below each note, kept until the vault changes. */
 	activityMemo = new Map<string, number>();
 	stopped = false;
@@ -65,8 +73,12 @@ export class HomeRuntime {
 		this.applySettings();
 		ctx.onSettingsChange(() => {
 			this.applySettings();
+			this.applyCtrlN();
 			this.changed();
 		});
+		// Core plugins register their commands before community plugins load; once the layout is
+		// ready, "Create new note" is there to take over (when the user asked for it).
+		this.app.workspace.onLayoutReady(() => this.applyCtrlN());
 
 		ctx.workbench.addTab({
 			id: "home",
@@ -81,6 +93,7 @@ export class HomeRuntime {
 		});
 		ctx.addRibbonIcon("house", ctx.t("ribbon"), () => void this.open());
 		ctx.addCommand({ id: "open", name: ctx.t("command.open"), icon: "house", callback: () => void this.open() });
+		ctx.addCommand({ id: "new-note", name: ctx.t("command.new-note"), icon: "file-plus", callback: () => this.newNote({ from: "command" }) });
 		ctx.provide<HomeService>("home", this.service());
 
 		this.loadRecents();
@@ -107,6 +120,8 @@ export class HomeRuntime {
 
 	private stop(): void {
 		this.stopped = true;
+		this.applyCtrlN();
+		if (NewNoteModal.current?.owner === this) NewNoteModal.current.close();
 		window.clearTimeout(this.changeTimer);
 		window.clearTimeout(this.modifyTimer);
 		for (const off of this.subscriptions.splice(0)) off();
@@ -118,6 +133,39 @@ export class HomeRuntime {
 	private applySettings(): void {
 		const settings = cleanSettings(this.settings);
 		this.ctx.configurePlaces({ home: settings.homePage, ignoredFolders: splitFolders(settings.ignoredFolders) });
+	}
+
+	/**
+	 * Ctrl+N opens the New note window, when the user turned it on: Obsidian's "Create new note"
+	 * runs the window instead, whatever key it has. Nothing is written in the hotkeys: off, or
+	 * Snailkit off, the command is put back as it was.
+	 */
+	private applyCtrlN(): void {
+		const want = !this.stopped && this.settings.newNoteCtrlN === true;
+		if (want && !this.ctrlN) {
+			const commands = (this.app as unknown as { commands?: { commands?: Record<string, { callback?: CommandCallback }> } }).commands?.commands;
+			const command = commands?.[CREATE_NOTE];
+			if (!command || typeof command.callback !== "function") return;
+			const original = command.callback;
+			// Switched off, it hands over to Obsidian's own: even when another plugin wrapped it
+			// since and still calls it.
+			const live = { on: true };
+			const patched = () => (live.on ? this.newNote({ from: "command" }) : original.call(command));
+			command.callback = patched;
+			this.ctrlN = { command, original, patched, live };
+		} else if (!want && this.ctrlN) {
+			const { command, original, patched, live } = this.ctrlN;
+			live.on = false;
+			// Put back only our own change (another plugin may have wrapped it since).
+			if (command.callback === patched) command.callback = original;
+			this.ctrlN = null;
+		}
+	}
+
+	/** The New note window. */
+	newNote(request: NewNoteRequest): void {
+		if (this.stopped) return;
+		new NewNoteModal(this, request).open();
 	}
 
 	/** Listens to the services that are on now (they come and go with their modules). */
@@ -355,6 +403,12 @@ export class HomeRuntime {
 			this.settings.homePage = file.path;
 			void this.ctx.saveSettings();
 		}
+		// The New note window's last parent and template follow their notes.
+		if (this.settings.newNoteParent === old || this.settings.newNoteTemplate === old) {
+			if (this.settings.newNoteParent === old) this.settings.newNoteParent = file.path;
+			if (this.settings.newNoteTemplate === old) this.settings.newNoteTemplate = file.path;
+			void this.ctx.saveSettings();
+		}
 		for (const view of this.views) view.renamed(old, file.path);
 		this.changed();
 	}
@@ -369,6 +423,11 @@ export class HomeRuntime {
 		if (mentions(arr, file.path)) void this.setArrangement(dropPath(arr, file.path));
 		const order = this.noteOrder();
 		if (orderMentions(order, file.path)) void this.setNoteOrder(dropFromOrder(order, file.path));
+		if (this.settings.newNoteParent === file.path || this.settings.newNoteTemplate === file.path) {
+			if (this.settings.newNoteParent === file.path) this.settings.newNoteParent = "";
+			if (this.settings.newNoteTemplate === file.path) this.settings.newNoteTemplate = "";
+			void this.ctx.saveSettings();
+		}
 		this.changed();
 	}
 

@@ -89,6 +89,17 @@
 .sk-map-node .sk-map-action.sk-btn { position: absolute; right: 1px; width: 22px; height: 22px; opacity: 0; pointer-events: none; transition: opacity var(--sk-fast); }
 .sk-map-node:is(:hover, :focus-within) .sk-map-action { opacity: 1; pointer-events: auto; }
 .sk-map-node:is(:hover, :focus-within) .sk-map-chevron { opacity: 0; }
+/* A Map that picks a note (the New note window): the chosen one, lit in its hue, with a check. */
+.sk-map .sk-map-node.is-picked { background: hsl(var(--sk-hue) var(--sk-pill-s) var(--sk-pill-l)); color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l)); font-weight: 600; }
+.sk-map .sk-map-node.is-picked.is-gray { background: var(--sk-hover); color: var(--text-normal); }
+.sk-map-check { display: inline-flex; flex: none; margin-left: auto; color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l)); }
+.sk-map-node.is-gray .sk-map-check { color: var(--sk-accent); }
+.sk-map-check svg { width: 14px; height: 14px; stroke-width: 2.25px; }
+.sk-map-stage:not(.is-tree) .sk-map-node.is-picked .sk-map-chevron { display: none; }
+/* The tree: a row with children already has its ✓ button (choose); chosen, that button is the check. */
+.sk-map-stage.is-tree .sk-map-node.is-picked:has(.sk-map-action) .sk-map-check { display: none; }
+.sk-map-stage.is-tree .sk-map-node.is-picked .sk-map-action { color: hsl(var(--sk-hue) var(--sk-ink-s) var(--sk-ink-l)); }
+.sk-map-stage.is-tree .sk-map-node.is-picked.is-gray .sk-map-action { color: var(--sk-accent); }
 .sk-map-tooltip { position: fixed; z-index: 1000; max-width: min(340px, calc(100vw - 12px)); padding: 6px 9px; border: 1px solid var(--sk-line); border-radius: var(--sk-radius-s); background: var(--sk-surface); box-shadow: var(--sk-shadow-pop); color: var(--text-normal); font-size: 12px; pointer-events: none; overflow-wrap: anywhere; }
 .sk-map .is-leaving { pointer-events: none; }
 .sk-map-stage.is-tree { height: auto; min-height: 44px; }

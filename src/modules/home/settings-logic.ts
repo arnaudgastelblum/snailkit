@@ -57,6 +57,11 @@ export function cleanSettings(settings: HomeSettings): HomeSettings {
 		mapZoom: zoomLevel(settings.mapZoom),
 		lensChosen: settings.lensChosen === true,
 		noteOrder: cleanOrder(settings.noteOrder),
+		newNoteCtrlN: settings.newNoteCtrlN === true,
+		newNoteLink: settings.newNoteLink === true,
+		newNoteTemplate: typeof settings.newNoteTemplate === "string" ? settings.newNoteTemplate : "",
+		newNoteThen: settings.newNoteThen === "stay" ? "stay" : "open",
+		newNoteParent: typeof settings.newNoteParent === "string" ? settings.newNoteParent : "",
 	};
 }
 

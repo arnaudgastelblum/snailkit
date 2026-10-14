@@ -18,13 +18,14 @@ import { groupRecents } from "./logic/recents";
 import { familyTags, foldTag, hasTag, leafOf, tagFamilies } from "./logic/tags";
 import { dueCounts, dueEntry, oldDailyTasks, todayChips, toSortCount } from "./logic/today";
 import type { HomeRuntime } from "./runtime";
-import { moveUnder, parentLink } from "../../core/places/move";
-import { cleanNoteName, dropRefusal, freeNotePath } from "./logic/moves";
+import { moveUnder } from "../../core/places/move";
+import { dropRefusal } from "./logic/moves";
 import { moveBefore, orderOf, withOrder } from "./logic/order";
 import { mountPinsRow } from "./pins-row";
 import { LENSES, nextZoom, VIEWS, zoomLevel, startLens } from "./settings-logic";
 import type { HomeLens, HomePage, HomeTabState } from "./types";
 import { elementOf } from "../../ui/dom";
+import { glide } from "../../ui/playful";
 
 /** Families of tags shown before "N more tags", and sub-tags per family. */
 const TAG_FAMILIES = 48;
@@ -32,19 +33,6 @@ const TAG_KIDS = 6;
 /** Notes listed on a page before "Show N more". */
 const PAGE_NOTES = 60;
 const TAG_CARDS = 40;
-
-/** A note just created on the Map while its name field is open. */
-interface Naming {
-	path: string;
-	file: TFile;
-	content: string;
-	mtime: number;
-	size: number;
-	/** Something wrote in the note since it was created (Sync, another plugin): never removed then. */
-	touched: boolean;
-	/** Stops watching the note for writes. */
-	off: () => void;
-}
 
 /** What one drawing needs, computed once. */
 interface Frame {
@@ -130,8 +118,6 @@ export class HomeView implements WorkbenchTabInstance {
 	private pins: { update(): void; destroy(): void } | null = null;
 	private pinsBox: HTMLElement | null = null;
 	private pinsRail: ReturnType<HomeRuntime["rail"]> | null = null;
-	/** A note just created on the Map, its name field open (redraws wait until it closes). */
-	private naming: Naming | null = null;
 	private readonly phoneOpen = new Set<string>();
 	/** Tasks checked while the page is shown: they stay, struck through, until the page is left. */
 	private readonly justDone = new Set<string>();
@@ -261,7 +247,7 @@ export class HomeView implements WorkbenchTabInstance {
 	dataChanged(): void {
 		if (this.destroyed) return;
 		// Not shown, a note flying, a block being dragged or a "?" panel open: drawn when that ends.
-		if (!this.root.isShown() || this.flying || this.drag || this.popup || this.naming) {
+		if (!this.root.isShown() || this.flying || this.drag || this.popup) {
 			this.stale = true;
 			return;
 		}
@@ -613,14 +599,15 @@ export class HomeView implements WorkbenchTabInstance {
 		if (!row) return;
 		row.empty();
 		const add = (act: string, icon: string, label: string) => {
-			const button = this.item(row, "button", "sk-btn is-primary", { key: `chip:${act}`, act });
+			const button = this.item(row, "button", "sk-btn is-soft", { key: `chip:${act}`, act });
 			button.setAttr("data-sk-item", "");
 			button.tabIndex = 0;
 			setIcon(button.createSpan(), icon);
 			button.createSpan({ text: label });
 		};
 		if (this.startBrainstorm()) add("new-brainstorm", "zap", this.t("today.new-brainstorm"));
-		if (typeof this.rt.tasks()?.newTask === "function") add("new-task", "plus", this.t("today.new-task"));
+		if (typeof this.rt.tasks()?.newTask === "function") add("new-task", "square-check", this.t("today.new-task"));
+		add("new-note", "file-plus", this.t("today.new-note"));
 	}
 
 	private drawRoot(): void {
@@ -678,6 +665,7 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 		// A new brainstorm, with Brainstorm on (its service starts one and opens it).
 		if (!this.phone && this.startBrainstorm()) this.chip(row, { key: "chip:new-brainstorm", act: "new-brainstorm", icon: "plus", label: this.t("today.new-brainstorm") });
+		if (!this.phone) this.chip(row, { key: "chip:new-note", act: "new-note", icon: "file-plus", label: this.t("today.new-note") });
 	}
 
 	/** The Brainstorm service's start(), or null without it. */
@@ -1107,8 +1095,6 @@ export class HomeView implements WorkbenchTabInstance {
 	}
 
 	private destroyMap(): void {
-		// The name field goes with the Map: the note keeps the name it has.
-		if (this.naming) this.endNaming();
 		if (this.map) {
 			this.mapState = this.map.getState();
 			try {
@@ -1147,7 +1133,7 @@ export class HomeView implements WorkbenchTabInstance {
 		const root = this.map?.getState().root ?? source.home();
 		if (node.hasChildren && id !== root) menu.addItem((i) => i.setTitle(this.t("menu.recenter")).setIcon("crosshair").onClick(() => this.map?.recenter(id)));
 		menu.addItem((i) => i.setTitle(this.t(pinned ? "menu.unpin" : "menu.pin")).setIcon("pin").onClick(() => void this.togglePin(id, null)));
-		menu.addItem((i) => i.setTitle(this.t("menu.new-note")).setIcon("file-plus").onClick(() => void this.newNoteUnder(id)));
+		menu.addItem((i) => i.setTitle(this.t("menu.new-note")).setIcon("file-plus").onClick(() => this.newNote(id)));
 		// A domain under the home page: move it up or down, the same order as the Domains view.
 		const layout = this.rt.layout();
 		const section = layout.sections.find((s) => s.blocks.some((b) => b.id === id));
@@ -1234,117 +1220,53 @@ export class HomeView implements WorkbenchTabInstance {
 	}
 
 	/**
-	 * "New note here" on the Map: a note in the same folder as `parentPath`, with `up` toward it,
-	 * named "Untitled" in a field on the Map at once. Enter keeps the name typed, Escape removes the
-	 * note while it is still as created.
+	 * The New note window, from Home: notes open next to the Workbench; a note created and kept
+	 * here lands on the Map. `parent`: "New note here" on a node of the Map.
 	 */
-	private async newNoteUnder(parentPath: string): Promise<void> {
-		const app = this.rt.app;
-		const parent = this.fileAt(parentPath);
-		if (!parent || this.naming) return;
-		const folder = parent.parent?.path ?? "";
-		const base = cleanNoteName(this.t("map.untitled")) || "Untitled";
-		const taken = new Set(app.vault.getAllLoadedFiles().map((f) => f.path.toLowerCase()));
-		const path = freeNotePath(folder === "/" ? "" : folder, base, (p) => taken.has(p.toLowerCase()));
-		const link = parentLink(app, path, parent);
-		const content = `---\nup: "${link.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"\n---\n`;
-		let file: TFile;
-		try {
-			file = await app.vault.create(path, content);
-		} catch (error) {
-			console.error("[Snailkit] home: could not create the note", error);
-			this.rt.ctx.toast(this.t("toast.create-failed"));
-			return;
-		}
-		const vault = app.vault;
-		const naming: Naming = { path: file.path, file, content, mtime: file.stat.mtime, size: file.stat.size, touched: false, off: () => undefined };
-		const ref = vault.on("modify", (changed) => {
-			if (changed === file) naming.touched = true;
+	private newNote(parent?: string): void {
+		this.rt.newNote({
+			from: "home",
+			parent: parent ?? null,
+			open: (path, tab) => this.openNote(path, null, undefined, tab),
+			created: (path, from) => this.landNote(path, from),
 		});
-		naming.off = () => vault.offref(ref);
-		this.naming = naming;
+	}
+
+	/**
+	 * A note just created from Home, on the Map when it shows: its branch unfolds, its name glides
+	 * from the window to its place, and it lights up a moment. The places index takes a moment to
+	 * see a new note: tried again for 4 s.
+	 */
+	private landNote(path: string, from: DOMRect | null): void {
 		const started = Date.now();
 		const attempt = () => {
-			if (this.destroyed || this.naming?.path !== file.path) return;
-			if (!this.fileAt(file.path)) {
-				this.endNaming();
+			if (this.destroyed || this.page || this.lens !== "map" || !this.map || !this.mapBox || !this.fileAt(path)) return;
+			this.rt.mapSource.invalidate();
+			const el = this.map.reveal(path) ? Array.from(this.mapBox.querySelectorAll<HTMLElement>("[data-map-key]")).find((e) => e.dataset.mapKey === `n:${path}`) : null;
+			if (!el) {
+				if (Date.now() - started < 4000) this.later(120, attempt);
 				return;
 			}
-			this.rt.mapSource.invalidate();
-			if (this.map?.edit(file.path, this.nameField(file))) return;
-			// The places index takes a moment to see the new note; after 4 s, open it instead.
-			if (Date.now() - started < 4000) this.later(120, attempt);
-			else {
-				this.endNaming();
-				this.openNote(file.path, null);
+			const label = el.querySelector<HTMLElement>(".sk-map-label") ?? el;
+			const land = () => {
+				el.removeClass("is-landing");
+				el.addClass("is-landed");
+				this.later(1900, () => el.removeClass("is-landed"));
+			};
+			// No glide when it would not be seen (a hidden window pauses animations: the name would wait).
+			if (!from || reduced(this.root) || this.doc.hidden) {
+				land();
+				return;
 			}
+			el.addClass("is-landing");
+			// The Map unfolds first: the name leaves once its place has stopped moving.
+			this.later(440, () => {
+				if (!el.isConnected) return;
+				if (this.doc.hidden) land();
+				else void glide(this.doc, label.textContent ?? "", from, 12, label.getBoundingClientRect()).then(land);
+			});
 		};
 		attempt();
-	}
-
-	/** The name field closes (or the Map goes away): the note stays as it is, the Home redraws again. */
-	private endNaming(): void {
-		const naming = this.naming;
-		if (!naming) return;
-		this.naming = null;
-		naming.off();
-		this.stale = true;
-		this.catchUp();
-	}
-
-	/** The name field of a note just created on the Map. */
-	private nameField(file: TFile) {
-		const app = this.rt.app;
-		const done = () => this.endNaming();
-		return {
-			value: file.basename,
-			label: this.t("map.name-label"),
-			commit: async (typed: string): Promise<boolean> => {
-				const name = cleanNoteName(typed) || file.basename;
-				if (name === file.basename) {
-					done();
-					return true;
-				}
-				const folder = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
-				const path = `${folder}${name}.md`;
-				const other = app.vault.getAbstractFileByPath(path) ?? (app.vault as unknown as { getAbstractFileByPathInsensitive?(p: string): unknown }).getAbstractFileByPathInsensitive?.(path);
-				if (other && other !== file) {
-					this.rt.ctx.toast(this.t("map.name-taken", { name }));
-					return false;
-				}
-				try {
-					await app.fileManager.renameFile(file, path);
-				} catch (error) {
-					console.error("[Snailkit] home: could not rename the note", error);
-					this.rt.ctx.toast(this.t("map.name-taken", { name }));
-					return false;
-				}
-				done();
-				return true;
-			},
-			cancel: () => {
-				const naming = this.naming;
-				if (!naming || naming.file !== file) {
-					done();
-					return;
-				}
-				// Escape: the note goes to the trash only if it is still exactly as created (same
-				// file, same time and size, no write seen, same text), checked again after reading.
-				this.naming = null;
-				this.stale = true;
-				this.catchUp();
-				const untouched = () => !naming.touched && app.vault.getAbstractFileByPath(naming.path) === file && file.stat.mtime === naming.mtime && file.stat.size === naming.size;
-				if (!untouched()) {
-					naming.off();
-					return;
-				}
-				void app.vault
-					.read(file)
-					.then((text) => (text === naming.content && untouched() ? app.fileManager.trashFile(file) : undefined))
-					.catch((error: unknown) => console.error("[Snailkit] home: could not remove the new note", error))
-					.finally(() => naming.off());
-			},
-		};
 	}
 
 	// ----- Tags -----
@@ -1447,7 +1369,7 @@ export class HomeView implements WorkbenchTabInstance {
 		return el;
 	}
 
-	/** The navigator: New brainstorm and New task, Today (what calls for you), then the views. */
+	/** The navigator: New brainstorm, New task and New note, Today (what calls for you), then the views. */
 	private drawNav(): void {
 		const nav = this.nav;
 		if (!nav) return;
@@ -1459,24 +1381,18 @@ export class HomeView implements WorkbenchTabInstance {
 		const brainstorms = rt.brainstorms();
 		const old = tasks ? oldDailyTasks(tasks, (p) => rt.dayOf(p), f.today).reduce((n, g) => n + g.tasks.length, 0) : null;
 		const chips = todayChips({ daily: !!daily, due: tasks ? dueCounts(tasks, f.today) : null, toSort: brainstorms ? toSortCount(brainstorms) : null, toDecide: rt.toDecideCount(), old });
-		// What to create, on top as in the other tabs: New brainstorm, then New task (quieter).
+		// What to create, on top as in the other tabs: three buttons of one family.
 		const tasksApi = rt.tasks();
-		const canTask = typeof tasksApi?.newTask === "function";
-		if (this.startBrainstorm() || canTask) {
-			const row = nav.createDiv({ cls: "sk-home-nav-news" });
-			if (this.startBrainstorm()) {
-				const add = this.item(row, "button", "sk-btn is-primary sk-home-nav-new", { key: "chip:new-brainstorm", act: "new-brainstorm" });
-				add.setAttr("data-sk-item", "");
-				setIcon(add.createSpan({ cls: "sk-home-nav-ic" }), "zap");
-				add.createSpan({ text: this.t("today.new-brainstorm") });
-			}
-			if (canTask) {
-				const add = this.item(row, "button", "sk-btn sk-home-nav-new is-soft", { key: "chip:new-task", act: "new-task" });
-				add.setAttr("data-sk-item", "");
-				setIcon(add.createSpan({ cls: "sk-home-nav-ic" }), "plus");
-				add.createSpan({ text: this.t("today.new-task") });
-			}
-		}
+		const row = nav.createDiv({ cls: "sk-home-nav-news" });
+		const add = (act: string, icon: string, label: string) => {
+			const button = this.item(row, "button", "sk-btn sk-home-nav-new is-soft", { key: `chip:${act}`, act });
+			button.setAttr("data-sk-item", "");
+			setIcon(button.createSpan({ cls: "sk-home-nav-ic" }), icon);
+			button.createSpan({ text: label });
+		};
+		if (this.startBrainstorm()) add("new-brainstorm", "zap", this.t("today.new-brainstorm"));
+		if (typeof tasksApi?.newTask === "function") add("new-task", "square-check", this.t("today.new-task"));
+		add("new-note", "file-plus", this.t("today.new-note"));
 		nav.createDiv({ cls: "sk-home-nav-sec", text: this.t("today.title") });
 		for (const chip of chips) {
 			if (chip.kind === "daily") this.navItem(nav, { key: "chip:daily", act: "daily", icon: "sun", label: chip.exists ? todayLabel(rt.ctx.lang, f.now) : this.t("today.create"), kbd: "T", pin: daily?.path ?? null });
@@ -1938,6 +1854,9 @@ export class HomeView implements WorkbenchTabInstance {
 				if (start) void start().catch((error: unknown) => console.error("[Snailkit] home: could not start a brainstorm", error));
 				return;
 			}
+			case "new-note":
+				this.newNote();
+				return;
 			case "new-task": {
 				const tasks = this.rt.tasks();
 				if (typeof tasks?.newTask === "function") void tasks.newTask().catch((error: unknown) => console.error("[Snailkit] home: could not start a task", error));
@@ -2252,7 +2171,7 @@ export class HomeView implements WorkbenchTabInstance {
 
 	/** A redraw that waited (drag, panel) happens now. */
 	private catchUp(): void {
-		if (!this.stale || this.destroyed || this.drag || this.popup || this.flying || this.naming) return;
+		if (!this.stale || this.destroyed || this.drag || this.popup || this.flying) return;
 		this.later(0, () => this.dataChanged());
 	}
 

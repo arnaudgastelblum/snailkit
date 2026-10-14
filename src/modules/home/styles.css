@@ -1181,7 +1181,8 @@
 }
 .sk-home-tab.is-phone .sk-home-phone-actions {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-auto-columns: minmax(0, 1fr);
+	grid-auto-flow: column;
 	gap: 8px;
 	margin-bottom: 14px;
 }
@@ -1199,6 +1200,19 @@
 }
 .sk-home-tab.is-phone .sk-home-phone-actions .sk-btn > span {
 	min-width: 0;
+}
+/* Three side by side: the icon above the name, so the three read the same. */
+.sk-home-tab.is-phone .sk-home-phone-actions .sk-btn.is-soft {
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px 4px;
+	font-size: 13.5px;
+	line-height: 1.2;
+	text-align: center;
+}
+.sk-home-tab.is-phone .sk-home-phone-actions .sk-btn.is-soft > span:first-child {
+	display: flex;
+	color: var(--text-muted);
 }
 .sk-home-tab.is-phone :is(.sk-home-sech-r, .sk-home-how, .sk-home-hint, .sk-home-help) {
 	display: none;
@@ -1558,12 +1572,160 @@
 .sk-home-tab.is-phone .sk-home-field input {
 	font-size: 16px;
 }
-.sk-home-nav button.sk-home-nav-new.is-soft {
+/* The three ways to create (New brainstorm, New task, New note): one quiet family, in the
+   navigator and on phones. */
+.sk-home-nav button.sk-home-nav-new.is-soft,
+.sk-home-tab.is-phone .sk-home-phone-actions button.sk-btn.is-soft {
 	border: 1px solid var(--sk-line);
 	background: var(--sk-surface);
 	box-shadow: none;
 	color: var(--text-normal);
 }
-.sk-home-nav button.sk-home-nav-new.is-soft:hover {
+.sk-home-nav button.sk-home-nav-new.is-soft:hover,
+.sk-home-tab.is-phone .sk-home-phone-actions button.sk-btn.is-soft:hover {
 	background: var(--sk-hover);
+}
+.sk-home-nav button.sk-home-nav-new .sk-home-nav-ic {
+	color: var(--text-muted);
+}
+
+/* The New note window (new-note.ts): the name, where it goes (the Map), options folded away. */
+.modal.sk-home-newnote {
+	width: min(940px, calc(100vw - 48px));
+	max-width: none;
+}
+.sk-home-newnote input.sk-home-newnote-name {
+	width: 100%;
+	height: 42px;
+	padding: 0 12px;
+	font-size: 17px;
+}
+.sk-home-newnote input.sk-home-newnote-name.is-invalid {
+	border-color: var(--sk-danger);
+	box-shadow: 0 0 0 2px var(--sk-danger-wash);
+}
+.sk-home-newnote-msg {
+	min-height: 0;
+	margin: 6px 2px 0;
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+.sk-home-newnote-msg:empty {
+	display: none;
+}
+.sk-home-newnote-msg.is-error {
+	color: var(--sk-danger);
+}
+.sk-home-newnote-msg kbd {
+	margin: 0 1px;
+	padding: 0 5px;
+	border: 1px solid currentColor;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font-size: 12px;
+}
+.sk-home-newnote-where {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 16px 2px 8px;
+	font-size: 13px;
+}
+.sk-home-newnote-path {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	color: var(--text-muted);
+}
+.sk-home-newnote-path.is-new .sk-home-newnote-parent {
+	animation: sk-home-land 520ms var(--sk-spring);
+}
+.sk-home-newnote-sep {
+	display: inline-flex;
+	color: var(--text-faint);
+	--icon-size: 12px;
+}
+.sk-home-newnote-parent {
+	display: inline-block;
+	color: var(--text-normal);
+	font-weight: 600;
+}
+.sk-home-newnote-none {
+	color: var(--text-faint);
+}
+.sk-home-newnote-hint {
+	flex: none;
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: 12px;
+}
+.sk-home-newnote-map {
+	padding: 6px 8px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+	background: var(--sk-surface);
+}
+.sk-home-newnote-opts {
+	margin-top: 8px;
+}
+.sk-home-newnote-opts .setting-item {
+	padding: 10px 2px;
+}
+.sk-home-newnote-opts .setting-item.sk-home-off {
+	display: none;
+}
+.sk-home-newnote .modal-content.is-writing :is(.sk-home-newnote-map, .sk-home-newnote-opts) {
+	pointer-events: none;
+	opacity: 0.6;
+}
+.sk-home-newnote-foot {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 16px;
+}
+.sk-home-newnote-gap {
+	flex: 1;
+}
+.sk-home-newnote-chev {
+	display: inline-flex;
+	--icon-size: 14px;
+	transition: transform var(--sk-fast) var(--sk-ease);
+}
+.sk-home-newnote-more.is-open .sk-home-newnote-chev {
+	transform: rotate(180deg);
+}
+.is-phone .sk-home-newnote-hint {
+	display: none;
+}
+.is-phone .sk-home-newnote-foot .sk-btn {
+	min-height: 44px;
+}
+
+/* A note just created from Home, on the Map: its name glides in, then it lights up a moment. */
+.sk-map .sk-map-node.is-landing .sk-map-label {
+	opacity: 0;
+}
+.sk-map .sk-map-node.is-landed {
+	animation: sk-home-map-landed 1800ms ease-out;
+}
+@keyframes sk-home-map-landed {
+	0%,
+	35% {
+		background: var(--sk-accent-wash);
+		box-shadow: inset 0 0 0 1.5px var(--sk-accent-line);
+	}
+	100% {
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px transparent;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-home-newnote-path.is-new .sk-home-newnote-parent,
+	.sk-map .sk-map-node.is-landed {
+		animation: none;
+	}
 }

@@ -247,9 +247,11 @@ test("stored settings are cleaned: unknown ids, empty groups, duplicates, bad va
 		pulledOut: [null, "S.md"],
 	});
 	assert.deepEqual(arr, { domainOrder: ["A.md", "B.md"], featured: "", groups: [["g1", "One"]], domainGroups: [["A.md", "g1"]], hidden: [], pulledOut: ["S.md"] });
-	const settings = cleanSettings({ lens: "graph", homePage: "  Home.md ", ignoredFolders: "a", domainOrder: [], featured: "", groups: [], domainGroups: [], hidden: [], pulledOut: [], lensChosen: false, pinsOnTop: false, mapZoom: 1, noteOrder: [] });
+	const settings = cleanSettings({ lens: "graph", homePage: "  Home.md ", ignoredFolders: "a", domainOrder: [], featured: "", groups: [], domainGroups: [], hidden: [], pulledOut: [], lensChosen: false, pinsOnTop: false, mapZoom: 1, noteOrder: [], newNoteCtrlN: false, newNoteLink: false, newNoteTemplate: "", newNoteThen: "later", newNoteParent: "" });
 	assert.equal(settings.lens, "map");
 	assert.equal(settings.homePage, "Home.md");
+	// The New note window's "Then": "open" unless "stay".
+	assert.equal(settings.newNoteThen, "open");
 	assert.deepEqual(splitFolders(" Templates, /Archive/ ,, Templates"), ["Templates", "Archive"]);
 });
 

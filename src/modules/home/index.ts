@@ -1,9 +1,10 @@
 // Home: the first tab of the Workbench. Search, today, pins, domains (or a map, or tags) and
 // recent notes, filled in from the notes themselves; pages of a domain and of a tag. It also sets
 // the home page and ignored folders of the places rule (for all of Snailkit, while it runs).
-// When the Workbench opens by itself is the Workbench's own setting (core). Nothing is ever
-// written in the notes.
-import { Notice } from "obsidian";
+// When the Workbench opens by itself is the Workbench's own setting (core). Its New note window
+// (new-note.ts) creates notes under a parent; otherwise only a move on the Map writes, the moved
+// note's parent property.
+import { Notice, Platform } from "obsidian";
 import { defineModule } from "../../core/module";
 import { buildDemo } from "./demo";
 import type { PlacesService } from "../../core/places/types";
@@ -31,6 +32,9 @@ export const home = defineModule<HomeSettings>({
 	settings(page) {
 		page.section(page.t("settings.layout"))
 			.toggle("pinsOnTop", page.t("settings.pins-top"), { desc: page.t("settings.pins-top-desc") });
+		const key = Platform.isMacOS ? "Cmd+N" : "Ctrl+N";
+		page.section(page.t("settings.new-note"))
+			.toggle("newNoteCtrlN", page.t("settings.ctrl-n", { key }), { desc: page.t("settings.ctrl-n-desc", { key }) });
 		const domains = page.section(page.t("settings.domains"));
 		// The home page found now (with the options in force), through the shared "places" service.
 		const places = (page.app as unknown as { plugins?: { plugins?: Record<string, { api?: { service?(name: string): unknown } }> } }).plugins?.plugins?.snailkit?.api?.service?.("places") as PlacesService | undefined;

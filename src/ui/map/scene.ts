@@ -22,7 +22,10 @@ export class MapScene {
 	private mode: MapMode | null = null;
 	private root: string | null = null;
 	private canvas: CanvasRenderingContext2D | null;
+	/** The node chosen on a Map that picks (options.picked), else null. */
+	picked: string | null;
 	constructor(readonly box: HTMLElement, private options: MapOptions, private life: MapLifetime) {
+		this.picked = options.picked ?? null;
 		this.svg = box.createSvg("svg");
 		this.svg.classList.add("sk-map-branches");
 		this.svg.setAttribute("aria-hidden", "true");
@@ -180,7 +183,8 @@ export class MapScene {
 	private decorate(entry: Entry, expanded: boolean): void {
 		const { row, el } = entry;
 		const node = row.node;
-		const signature = JSON.stringify([node, row.more, this.mode]);
+		const picked = !!node && node.id === this.picked;
+		const signature = JSON.stringify([node, row.more, this.mode, picked]);
 		if (signature !== entry.signature) {
 			entry.signature = signature; el.replaceChildren();
 			el.className = `sk-map-node sk-surface-item${node ? ` is-${node.kind === "root" ? "home" : node.kind}` : " is-more"}`;
@@ -192,6 +196,10 @@ export class MapScene {
 			const label = el.createSpan(); label.className = "sk-map-label";
 			// Give clipped inline text enough vertical room for descenders in every theme.
 			label.textContent = node?.label ?? this.options.strings.more(row.more);
+			if (picked) {
+				const check = el.createSpan(); check.className = "sk-map-check"; check.setAttribute("aria-hidden", "true");
+				this.options.icon(check, "check");
+			}
 			if (node?.hasChildren) {
 				const chevron = el.createSpan(); chevron.className = "sk-map-chevron"; chevron.setAttribute("aria-hidden", "true");
 				this.options.icon(chevron, "chevron-right");
@@ -200,13 +208,15 @@ export class MapScene {
 				button.dataset.mapAction = this.mode === "tree" ? "open" : "recenter";
 				// One tooltip only: Obsidian's, from the aria-label (a title would add the system's on top).
 				button.setAttribute("aria-label", this.mode === "tree" ? this.options.strings.open : this.options.strings.recenterTip);
-				this.options.icon(button, this.mode === "tree" ? "arrow-up-right" : "focus");
+				this.options.icon(button, this.mode === "tree" ? this.options.openIcon ?? "arrow-up-right" : "focus");
 			}
 		}
 		const hue = node ? node.hue : row.parent ? this.options.source.node(row.parent)?.hue : null;
 		el.classList.toggle("is-gray", hue == null);
 		if (hue == null) el.style.removeProperty("--sk-hue"); else el.setCssProps({ "--sk-hue": String(hue) });
 		el.classList.toggle("is-current", !!node && node.id === this.options.current);
+		el.classList.toggle("is-picked", picked);
+		if (this.options.picked !== undefined && node) el.setAttribute("aria-selected", String(picked));
 		el.classList.toggle("is-expanded", expanded);
 		el.classList.toggle("is-root", row.depth === 0);
 		el.setCssProps({ "--sk-map-level": String(row.depth) });

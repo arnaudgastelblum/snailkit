@@ -32,6 +32,18 @@ export interface HomeSettings {
 	pulledOut: string[];
 	/** The order of the notes under a parent, dragged on the Map: [parent path, child paths]. */
 	noteOrder: Array<[string, string[]]>;
+
+	// The New note window (new-note.ts); its options are kept from one note to the next.
+	/** Ctrl+N (Obsidian's "Create new note") opens the New note window. */
+	newNoteCtrlN: boolean;
+	/** A link to the new note at the end of its parent note. */
+	newNoteLink: boolean;
+	/** The template of new notes (a vault path), "" for none. */
+	newNoteTemplate: string;
+	/** After Create: "open" the note, or "stay" where you are. */
+	newNoteThen: string;
+	/** The last parent chosen (a vault path), proposed next time from Home. */
+	newNoteParent: string;
 }
 
 export const DEFAULTS: HomeSettings = {
@@ -48,6 +60,11 @@ export const DEFAULTS: HomeSettings = {
 	hidden: [],
 	pulledOut: [],
 	noteOrder: [],
+	newNoteCtrlN: false,
+	newNoteLink: false,
+	newNoteTemplate: "",
+	newNoteThen: "open",
+	newNoteParent: "",
 };
 
 /** Settings that hold the user's data rather than preferences. */
