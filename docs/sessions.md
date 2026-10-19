@@ -30,7 +30,8 @@ moment.
   As a full page, a navigator on the left gives the views (All brainstorms, In progress, To sort,
   To decide, Finished, Archived) and the contexts. Each row says where the brainstorm stands and
   what it holds, with its buttons on hover; the panel on the right follows the row under the
-  pointer.
+  pointer. A finished brainstorm wears a small seal on its row, which drops into place the moment
+  you finish it.
 - Each brainstorm can have a **context**, a tag written at the top of the note (`#work`): click
   it on its row or in the panel on the right to change it. **Pin** the ones you come back to (they
   stay on top) and give a **color** to those you want to stand out, from the panel on the right or

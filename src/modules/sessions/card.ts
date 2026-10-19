@@ -77,6 +77,16 @@ export function miniFrieze(el: HTMLElement, flow: Flow): HTMLElement {
 	return box;
 }
 
+/**
+ * The seal of a finished row: the stamp of the note, small, in place of the four dots. Landing
+ * (the brainstorm was just finished), it drops onto the row.
+ */
+export function seal(el: HTMLElement, land = false): HTMLElement {
+	const s = el.createSpan({ cls: "sk-sessions-row-seal" + (land ? " is-land" : ""), attr: { "aria-hidden": "true" } });
+	setIcon(s, "check");
+	return s;
+}
+
 /** "14 ideas dropped · 4 tasks launched · 1 to decide · 23 lines". */
 export function tally(el: HTMLElement, w: Words, flow: Flow): HTMLElement {
 	const p = el.createEl("p", { cls: "sk-sessions-tally" });

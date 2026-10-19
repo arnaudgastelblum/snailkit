@@ -8,12 +8,13 @@
 import { MarkdownView, Menu, Platform, Scope, setIcon, TFile } from "obsidian";
 import { ago, contextsOf, filterSessions, layoutTimeline, searchable, SESSION_COLORS, stateOf, tabCount, tabTone, viewCounts, viewSessions, type SessionColor, type SessionInfo } from "./atelier";
 import { capsule } from "./capsule";
-import { actionLabel, fillCard, ICONS, leftoverText, miniFrieze, stateLabel, type CardAction, type Words } from "./card";
+import { actionLabel, fillCard, ICONS, leftoverText, miniFrieze, seal, stateLabel, type CardAction, type Words } from "./card";
 import { leadOf, nextAction, weekRecap, type Flow } from "./flow";
 import { isTagName, type SummaryQuestion } from "./logic";
 import type { SessionsRuntime } from "./runtime";
 import type { ViewTab, ViewTabHost, ViewTabInstance } from "./types";
 import { elementOf, wheelSideways } from "../../ui/dom";
+import { reducedMotion } from "../../ui/playful";
 
 const TIMELINE_KEY = "snailkit-sessions-timeline";
 const DONE_KEY = "snailkit-sessions-done-open";
@@ -76,6 +77,8 @@ class TabView implements ViewTabInstance {
 	private showArchived = false;
 	/** The "Finished" group is unfolded. */
 	private doneOpen = false;
+	/** Whether each brainstorm was finished at the last drawing: one that just was gets its seal landing. */
+	private closedBefore = new Map<string, boolean>();
 	private recapHidden = false;
 	private context: string | null = null;
 	private query = "";
@@ -557,6 +560,7 @@ class TabView implements ViewTabInstance {
 		const archVisible = this.desk ? this.view === "archived" : this.showArchived;
 		if (tlShown) this.renderTimeline(all.filter((s) => archVisible || !s.archived), new Set(shown.map((s) => s.path)));
 		this.renderList(all, shown);
+		this.closedBefore = new Map(all.map((s) => [s.path, !!s.closed]));
 		this.renderDetail();
 		this.markZoneItems();
 		if (had && !this.root.contains(this.doc.activeElement)) {
@@ -877,7 +881,11 @@ class TabView implements ViewTabInstance {
 		row.createSpan({ cls: "sk-sessions-row-date", text: date.format(s.closed ? s.modified ?? s.created : s.modified ?? s.created) });
 		// What the card over the row used to say, on the row itself: the steps, where it stands, what it holds.
 		const meta = row.createDiv({ cls: "sk-sessions-row-meta" });
-		miniFrieze(meta, flow);
+		// Finished: the seal in place of the four dots; just finished, it lands and the row glows once.
+		const landing = !!s.closed && this.closedBefore.get(s.path) === false && !reducedMotion(this.doc.defaultView ?? window);
+		if (s.closed) seal(meta, landing);
+		else miniFrieze(meta, flow);
+		if (landing) row.addClass("is-landed");
 		const word = meta.createSpan({ cls: "sk-sessions-row-word" + (flow.kind === "ready" ? " is-ready" : "") });
 		word.appendText(flow.kind === "ready" ? `${stateLabel(this.words, flow)} ✓` : stateLabel(this.words, flow));
 		if (flow.stale) {
@@ -1006,15 +1014,19 @@ class TabView implements ViewTabInstance {
 		(row?.querySelector<HTMLElement>(".sk-sessions-row-ask button") ?? this.detail?.querySelector<HTMLElement>("button[data-action]"))?.focus({ preventScroll: true });
 	}
 
-	/** Page layout: the row under the pointer fills the detail, as a click would (after a short intent). */
+	/**
+	 * Page layout: the row under the pointer fills the detail, as a click would (after a short intent).
+	 * Not while a delete waits for its answer: the menu that asked for it closes over another row,
+	 * which would take the selection and drop the question.
+	 */
 	private onListHover(e: MouseEvent): void {
-		if (!this.desk || this.pop || this.editing) return;
+		if (!this.desk || this.pop || this.editing || this.confirming) return;
 		const row = (e.target as HTMLElement).closest?.<HTMLElement>(".sk-sessions-row");
 		if (!row || row.dataset.path === this.selected) return;
 		// At the next frame (one detail drawn per frame, however fast the pointer goes), with no entrance.
 		window.cancelAnimationFrame(this.hoverTimer);
 		this.hoverTimer = window.requestAnimationFrame(() => {
-			if (!this.destroyed && row.isConnected && row.matches(":hover") && row.dataset.path) this.select(row.dataset.path, false, true);
+			if (!this.destroyed && !this.confirming && row.isConnected && row.matches(":hover") && row.dataset.path) this.select(row.dataset.path, false, true);
 		});
 	}
 
