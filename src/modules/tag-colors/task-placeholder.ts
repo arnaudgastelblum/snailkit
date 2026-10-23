@@ -3,7 +3,7 @@ import { StateEffect, type AnnotationType, type Range } from "@codemirror/state"
 import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { Decoration, ViewPlugin, WidgetType, type DecorationSet, type EditorView, type ViewUpdate } from "@codemirror/view";
-import { openTagPicker, tagColorsFrom, type TagPickerHandle } from "../../ui/tag-picker";
+import { openTagPicker, tagColorsFrom, taskTagChoices, type TagPickerHandle } from "../../ui/tag-picker";
 import type { TagRuntime } from "./runtime";
 import { frequencies } from "./types";
 import { checkedSourceTaskInsertion, checkedTaskInsertion, checkedTaskTagChange, hasTaskTag, taskBodyStart, taskLine, taskLines } from "./task-placeholder-logic";
@@ -54,11 +54,16 @@ export function registerTaskPlaceholders(runtime: TagRuntime): { changeTag(view:
 		const all = Object.entries(frequencies(ctx.app)).sort((a, b) => b[1] - a[1]).map(([tag]) => tag.replace(/^#/, "")).filter(notPriority);
 		const cache = ctx.app.metadataCache.getCache(path);
 		const near = parentFirst(cache ? (getAllTags(cache) ?? []).map(tag => tag.replace(/^#/, "")).filter(notPriority) : [], parentAt(path));
+		// With Tasks: its tag tree, and the tags used around the note (the step's task first) instead of the note's tags.
+		const choices = taskTagChoices(ctx, path);
 		pickerOwner = owner;
 		pickerPath = path;
 		picker = openTagPicker(anchor, {
 			t: (key, vars) => ctx.t(key, vars), colors: tagColorsFrom(ctx),
-			sources: { all: () => all, near: () => near, recent: () => ctx.settings.placeholderRecent.filter(notPriority), chosen: () => chosen },
+			sources: {
+				all: () => all, near: () => (choices ? [] : near), around: () => choices?.around ?? [], tree: () => choices?.tree ?? [],
+				recent: () => ctx.settings.placeholderRecent.filter(notPriority), chosen: () => chosen,
+			},
 			onCancel: () => { picker = undefined; pickerOwner = null; pickerPath = null; },
 			onChoose: (tag) => {
 				picker = undefined;

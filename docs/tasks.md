@@ -39,6 +39,9 @@ the two.
   check, date, prioritize, tag or delete them together, or drag them onto a tag. One Undo for all.
 - A checkbox written without a tag is not lost: if its note changed in the last 30 days, it waits
   under **No tag** at the bottom of the list, with a **tag** button to give it one.
+- Choosing a tag (the **tag** button, a Brainstorm, this list) starts with what is used **around
+  the note**: the tags of its tasks, then those of the notes above it, with where they were found.
+  Below come **your tags**, as the navigator shows them. Other tags of the vault come up as you type.
 - **Today** shows today's tasks first. Those from earlier days wait quietly below, folded, with
   **All to today**, **All to tomorrow** or **Remove dates** to settle them in one go (one Undo
   for all). Prefer the overdue ones first? **Show overdue first** in the settings.

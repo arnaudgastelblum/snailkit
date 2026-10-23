@@ -147,7 +147,8 @@
 	align-items: center;
 	gap: 9px;
 	height: 30px;
-	padding: 0 8px 0 9px;
+	/* A sub-tag of the tree sits under its parent (--sk-tag-depth: 1, 2...). */
+	padding: 0 8px 0 calc(9px + var(--sk-tag-depth, 0) * 20px);
 	border-radius: 7px;
 	color: var(--text-normal);
 	cursor: var(--cursor);
@@ -208,11 +209,36 @@
 	text-overflow: ellipsis;
 }
 .sk-tag-picker-it-why {
+	flex: 0 1 auto;
+	min-width: 0;
+	margin-left: auto;
+	overflow: hidden;
+	color: var(--text-faint);
+	font-size: 11.5px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+/* Open tasks of a tag of the tree, as in the Tasks navigator. */
+.sk-tag-picker-it-count {
 	flex: none;
 	margin-left: auto;
 	color: var(--text-faint);
 	font-size: 11.5px;
-	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+/* Above a group of rows when the column shows the tree: "Around this note", "Your tags". */
+.sk-tag-picker-heading {
+	position: relative;
+	z-index: 1;
+	padding: 4px 9px 3px;
+	color: var(--text-faint);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.sk-tag-picker-heading.is-later {
+	margin-top: 6px;
 }
 .sk-tag-picker button.sk-tag-picker-it-more {
 	flex: none;
@@ -259,6 +285,7 @@
 }
 .sk-tag-picker-it.is-hi .sk-tag-picker-it-kids,
 .sk-tag-picker-it.is-hi .sk-tag-picker-it-why,
+.sk-tag-picker-it.is-hi .sk-tag-picker-it-count,
 .sk-tag-picker .sk-tag-picker-it.is-hi button.sk-tag-picker-it-more {
 	color: inherit;
 	opacity: 0.7;

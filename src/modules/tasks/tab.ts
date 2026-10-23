@@ -4,6 +4,7 @@
 // layout; this tab owns everything inside its root, div.sk-tasks-view.
 import { Menu, Platform, Scope, type WorkspaceLeaf } from "obsidian";
 import { openTagPicker, type TagPickerHandle } from "../../ui/tag-picker";
+import { tagChoices } from "./around";
 
 /** A tag the task lines read back (the grammar of the Tasks API). */
 const TAG_NAME = /^[\p{L}\p{N}_][\p{L}\p{N}_/-]*$/u;
@@ -973,7 +974,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				const pick = scopes.createEl("button", { cls: "sk-tasks-scope sk-tasks-scope-tag" });
 				icon(pick, "hash");
 				pick.createSpan({ text: this.t("scope.tag") });
-				pick.addEventListener("click", () => this.chooseTag(pick, null, [], (tag) => this.setScope("tag:" + tag.toLowerCase())));
+				pick.addEventListener("click", () => this.chooseTag(pick, null, null, (tag) => this.setScope("tag:" + tag.toLowerCase())));
 			}
 			if (this.st.scope.startsWith("tag:") && !Platform.isPhone) {
 				const tag = this.st.scope.slice(4);
@@ -1108,7 +1109,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			item
 				.setTitle(this.t("filter.focus"))
 				.setIcon("hash")
-				.onClick(() => this.chooseTag(this.filterBtn ?? this.rootEl, null, [], (tag) => this.setScope("tag:" + tag.toLowerCase()))),
+				.onClick(() => this.chooseTag(this.filterBtn ?? this.rootEl, null, null, (tag) => this.setScope("tag:" + tag.toLowerCase()))),
 		);
 		menu.showAtMouseEvent(event);
 	}
@@ -1413,10 +1414,10 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	/**
 	 * The shared tag picker (the one of the Brainstorm capture) under `anchor`, a sheet on a phone:
-	 * starts on `current`, offers the tags of `near` first. A flag (#high, a flag tag of the settings)
-	 * marks a task, it never groups it: refused with a word.
+	 * starts on `current`, offers the tags used around the note `path` first, then the tag tree. A
+	 * flag (#high, a flag tag of the settings) marks a task, it never groups it: refused with a word.
 	 */
-	private chooseTag(anchor: HTMLElement, current: string | null, near: string[], onChoose: (tag: string) => void, onCancel?: () => void): void {
+	private chooseTag(anchor: HTMLElement, current: string | null, path: string | null, onChoose: (tag: string) => void, onCancel?: () => void): void {
 		this.tagPop?.close();
 		// Where the focus goes back when the picker closes without a tag (the row, the field, the list).
 		const back = () => {
@@ -1424,11 +1425,18 @@ export class TasksTab implements WorkbenchTabInstance {
 			if (onCancel) onCancel();
 			else this.rootEl.focus({ preventScroll: true });
 		};
+		const choices = tagChoices(this.hub.index, this.hub.ctx, path);
 		const handle = openTagPicker(anchor, {
 			t: (key, vars) => this.hub.ctx.t(key, vars),
 			colors: (tag) => this.hub.tagClasses(tag),
 			// Flags mark a task, they never group it: not offered. The current tag first, even nested.
-			sources: { all: () => this.hub.index.allTags().filter((x) => !this.hub.index.flags().has(x.replace(/^#/, "").toLowerCase())), near: () => near, chosen: () => current },
+			sources: {
+				all: () => this.hub.index.allTags().filter((x) => !this.hub.index.flags().has(x.replace(/^#/, "").toLowerCase())),
+				near: () => (choices.tree.length || !path ? [] : this.nearTags(path)),
+				around: () => choices.around,
+				tree: () => choices.tree,
+				chosen: () => current,
+			},
 			want: current,
 			onChoose: (raw) => {
 				if (this.tagPop === handle) this.tagPop = null;
@@ -1463,7 +1471,7 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	/** The shared tag picker under `anchor`: the chosen tag is written in the task's line. */
 	private tagUntagged(t: Task, anchor: HTMLElement): void {
-		this.chooseTag(anchor, null, this.nearTags(t.path), (tag) => void this.hub.retag(t, tag));
+		this.chooseTag(anchor, null, t.path, (tag) => void this.hub.retag(t, tag));
 	}
 
 	/**
@@ -1936,7 +1944,7 @@ export class TasksTab implements WorkbenchTabInstance {
 	/** One tag for all the picked tasks (the tag picker of a single task, here for all). */
 	private pickTagAll(tasks: Task[]): void {
 		const anchor = this.rootEl.querySelector<HTMLElement>(".sk-tasks-pickbar") ?? this.rootEl;
-		this.chooseTag(anchor, null, [], (tag) => void this.hub.retagAll(tasks, tag).then(() => this.clearPicked()));
+		this.chooseTag(anchor, null, null, (tag) => void this.hub.retagAll(tasks, tag).then(() => this.clearPicked()));
 	}
 
 	/** Right click on a picked task: the actions for all of them. */
@@ -2104,7 +2112,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.chooseTag(
 			at,
 			t.primary || null,
-			this.nearTags(t.path),
+			t.path,
 			(tag) => {
 				if (tag.toLowerCase() !== (t.primary ?? "").toLowerCase()) void this.hub.retag(t, tag);
 			},
@@ -2266,7 +2274,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.chooseTag(
 				tagBtn,
 				tag,
-				[],
+				null,
 				(chosen) => {
 					this.startAdd(chosen);
 					again();

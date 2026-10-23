@@ -603,7 +603,10 @@ export class Composer {
 			limit: ROWS,
 			sources: {
 				all: () => rt.allTags(),
-				near: () => rt.nearTags(this.sv.file),
+				// With Tasks: the tags used around the note and the tag tree; else the tags of the note and its area.
+				near: () => (rt.tagChoices(this.sv.file) ? [] : rt.nearTags(this.sv.file)),
+				around: () => rt.tagChoices(this.sv.file)?.around ?? [],
+				tree: () => rt.tagChoices(this.sv.file)?.tree ?? [],
 				recent: () => rt.recentTags(),
 				chosen: () => this.tag,
 				suggestion: () => this.suggestionInfo(),

@@ -22,6 +22,7 @@ import {
 	type Summary,
 } from "./logic";
 import { TAB_ORDER } from "../../core/workbench/types";
+import { taskTagChoices, type TagAround, type TagTreeEntry } from "../../ui/tag-picker";
 import type { PlacesService, SessionsService, SessionsSettings, TagColorsService, TasksWorkbench } from "./types";
 import { colorOf, contextOf, contextsOf, createdAt, keepColors, keepCreated, keepIn, keepKept, keptIn, renameColors, renameCreated, renameKept, withColor, withKept, renameIn, searchable, serviceList, toggleIn, triageOf, locateRaw, withContext, withCreated, type SessionColor, type SessionInfo, type Triage } from "./atelier";
 import { SessionsTab } from "./tab";
@@ -49,6 +50,7 @@ export class SessionsRuntime {
 	private saveTimer = 0;
 	private statusTimer = 0;
 	private areaCache: { at: number; byArea: Map<string, Map<string, number>> } | null = null;
+	private choicesCache: { at: number; path: string | null; choices: { tree: TagTreeEntry[]; around: TagAround[] } | null } | null = null;
 	/** Callbacks of the service's onChange (the rail's sessions panel). */
 	private listeners = new Set<() => void>();
 	stopped = false;
@@ -863,6 +865,17 @@ export class SessionsRuntime {
 			for (const t of [...area.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t)) out.push(t);
 		}
 		return out.filter((t) => !isFlag(t));
+	}
+
+	/**
+	 * The Tasks tag tree and the tags used around this note (null without Tasks): the picker then
+	 * shows them instead of the tags of the vault. Kept a few seconds, the picker reads it at each key.
+	 */
+	tagChoices(file: TFile | null): { tree: TagTreeEntry[]; around: TagAround[] } | null {
+		const path = file?.path ?? null;
+		const now = Date.now();
+		if (!this.choicesCache || this.choicesCache.path !== path || now - this.choicesCache.at > 5_000) this.choicesCache = { at: now, path, choices: taskTagChoices(this.ctx, path) };
+		return this.choicesCache.choices;
 	}
 
 	/** Tags chosen recently, most recent first. */

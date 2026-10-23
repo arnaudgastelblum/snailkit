@@ -209,7 +209,10 @@ export class Sorter {
 			t: (k, v) => this.t(k, v),
 			sources: {
 				all: () => rt.allTags(),
-				near: () => rt.nearTags(file),
+				// With Tasks: the tags used around the brainstorm and the tag tree; else the tags of the note and its area.
+				near: () => (rt.tagChoices(file) ? [] : rt.nearTags(file)),
+				around: () => rt.tagChoices(file)?.around ?? [],
+				tree: () => rt.tagChoices(file)?.tree ?? [],
 				recent: () => rt.recentTags(),
 				suggestion: () => (sug ? { tag: sug.tag, reason: sug.word ? this.t("why.learned", { word: sug.word }) : this.t("why.suggested") } : null),
 			},

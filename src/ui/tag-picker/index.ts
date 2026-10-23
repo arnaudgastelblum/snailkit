@@ -12,10 +12,10 @@
 // The tags come from `sources`, read again at each render; nothing here depends on a module.
 import { Platform, setIcon } from "obsidian";
 import { tagCapsule } from "./capsule";
-import { chipList, highlight, shownName, type Chip, type ChipWhy } from "./logic";
+import { chipList, highlight, shownName, type Chip, type ChipGroup, type ChipWhy, type TagAround, type TagTreeEntry } from "./logic";
 
 export { tagCapsule } from "./capsule";
-export { chipList, highlight, isTagName, shownName, type Chip, type ChipGroup, type ChipQuery, type ChipWhy } from "./logic";
+export { chipList, highlight, isTagName, shownName, type Chip, type ChipGroup, type ChipQuery, type ChipWhy, type TagAround, type TagPlace, type TagTreeEntry } from "./logic";
 
 /** Where the tags come from. Every function is called again at each render of the column. */
 export interface TagPickerSources {
@@ -23,6 +23,13 @@ export interface TagPickerSources {
 	all(): readonly string[];
 	/** Tags of the place being edited (the note, its area): offered before the others. */
 	near?(): readonly string[];
+	/** Tags used around the note (from Tasks, see `taskTagChoices`), nearest first, with where they were found. */
+	around?(): readonly TagAround[];
+	/**
+	 * The user's tag tree (from Tasks). When it is not empty the column shows the suggestions, then
+	 * the tree whole; tags no task uses only come up when typing.
+	 */
+	tree?(): readonly TagTreeEntry[];
 	/** Tags chosen recently, most recent first: after the near ones. */
 	recent?(): readonly string[];
 	/** The tag already chosen, offered first (its reason: "chosen"). */
@@ -60,6 +67,22 @@ export interface TagPickerOptions {
 	onEmpty?(): void;
 	/** The column changed: `"list"` it was rebuilt (filter, level, open), `"move"` the highlight moved. */
 	onChange?(kind: "list" | "move"): void;
+}
+
+/**
+ * The tag tree and the tags used around the note `path`, from Tasks when it runs (null without
+ * Tasks, or when no task has a tag yet: the picker then offers the tags of the vault as before).
+ * Read once, when a picker opens.
+ */
+export function taskTagChoices(ctx: { service<T>(name: string): T | undefined }, path: string | null): { tree: TagTreeEntry[]; around: TagAround[] } | null {
+	const tasks = ctx.service<{ version: number; tagChoices?(path: string | null): { tree: TagTreeEntry[]; around: TagAround[] } }>("tasks");
+	if (!tasks || tasks.version !== 1 || typeof tasks.tagChoices !== "function") return null;
+	try {
+		const choices = tasks.tagChoices(path);
+		return choices && Array.isArray(choices.tree) && choices.tree.length ? { tree: choices.tree, around: Array.isArray(choices.around) ? choices.around : [] } : null;
+	} catch {
+		return null;
+	}
 }
 
 /** The classes of Tag colors for a tag, when that module runs. `ctx` is a module context (or anything with `service`). */
@@ -101,8 +124,12 @@ export class TagPicker {
 		this.fieldEl = el.createDiv({ cls: "sk-tag-picker-field" });
 		setIcon(this.fieldEl.createSpan({ cls: "sk-tag-picker-field-icon" }), "tag");
 		this.crumb = this.fieldEl.createSpan({ cls: "sk-tag-picker-crumb" });
-		this.input = this.fieldEl.createEl("input", { cls: "sk-tag-picker-input", attr: { type: "text", autocomplete: "off", spellcheck: "false", "aria-label": t("tag-picker.search") } });
-		this.listEl = el.createDiv({ cls: "sk-tag-picker-list", attr: { role: "listbox", "aria-label": options.label ?? t("tag-picker.label") } });
+		// Named by hidden texts: an aria-label would show as Obsidian's tooltip over the field and the column.
+		const uid = `sk-tag-picker-${Math.random().toString(36).slice(2, 8)}`;
+		el.createSpan({ cls: "sk-tag-picker-sr", text: t("tag-picker.search"), attr: { id: `${uid}-input` } });
+		el.createSpan({ cls: "sk-tag-picker-sr", text: options.label ?? t("tag-picker.label"), attr: { id: `${uid}-list` } });
+		this.input = this.fieldEl.createEl("input", { cls: "sk-tag-picker-input", attr: { type: "text", autocomplete: "off", spellcheck: "false", "aria-labelledby": `${uid}-input` } });
+		this.listEl = el.createDiv({ cls: "sk-tag-picker-list", attr: { role: "listbox", "aria-labelledby": `${uid}-list` } });
 		this.cursorEl = this.listEl.createDiv({ cls: "sk-tag-picker-cursor" });
 		this.input.addEventListener("input", () => this.onInput());
 		this.input.addEventListener("keydown", (e) => {
@@ -219,6 +246,8 @@ export class TagPicker {
 			suggested: sug?.tag ?? null,
 			near: s.near?.() ?? [],
 			recent: s.recent?.() ?? [],
+			around: s.around?.() ?? [],
+			tree: s.tree?.() ?? [],
 			all: s.all(),
 			limit: this.options.limit ?? 60,
 		});
@@ -233,7 +262,22 @@ export class TagPicker {
 		if (!why) return "";
 		const t = this.options.t;
 		if (why.kind === "learned") return this.options.sources.suggestion?.()?.reason || t("tag-picker.why.suggested");
+		if (why.kind === "around") {
+			const w = why.where;
+			if (w.kind === "task" || w.kind === "note") return t(`tag-picker.why.${w.kind}`);
+			// A count of tasks is at least 1: "one" for 1 and "other" above, in each language of Snailkit.
+			const form = w.count === 1 ? "one" : "other";
+			return w.kind === "here" ? t(`tag-picker.why.here.${form}`, { count: w.count }) : t(`tag-picker.why.above.${form}`, { count: w.count, note: w.name });
+		}
 		return t(`tag-picker.why.${why.kind}`);
+	}
+
+	/** The heading above a group of rows when the column shows a tree (null: no heading). */
+	private headingOf(group: ChipGroup, list: readonly Chip[]): string | null {
+		const t = this.options.t;
+		if (group === "tree") return t("tag-picker.group.tree");
+		if (group === "top" || group === "around" || group === "recent") return t(list.some((c) => c.group === "around") ? "tag-picker.group.around" : "tag-picker.group.suggested");
+		return null;
 	}
 
 	private render(snap = false): void {
@@ -250,22 +294,34 @@ export class TagPicker {
 		for (const el of Array.from(this.listEl.children)) if (el !== this.cursorEl) el.remove();
 		if (!list.length) this.listEl.createDiv({ cls: "sk-tag-picker-empty", text: t("tag-picker.no-match") });
 		const showKids = !level && !this.filterText;
+		// With the tree, each group has its heading ("Around this note", "Your tags").
+		const headed = list.some((c) => c.group === "tree");
 		let lastGroup: string | null = null;
+		let lastHeading: string | null = null;
 		list.forEach((item, i) => {
-			const gap = lastGroup !== null && item.group !== lastGroup;
+			const heading = headed ? this.headingOf(item.group, list) : null;
+			if (heading && heading !== lastHeading) this.listEl.createDiv({ cls: "sk-tag-picker-heading" + (i ? " is-later" : ""), text: heading, attr: { "aria-hidden": "true" } });
+			const gap = lastGroup !== null && item.group !== lastGroup && !(heading && heading !== lastHeading);
 			lastGroup = item.group;
+			lastHeading = heading;
 			const classes = item.create ? "" : this.classes(item.tag);
 			const row = this.listEl.createDiv({ cls: `sk-tag-picker-it ${classes}`.trim(), attr: { role: "option", "data-i": String(i), "aria-selected": String(i === this.hi) } });
 			row.toggleClass("is-hi", i === this.hi);
 			row.toggleClass("is-gap", gap);
 			row.toggleClass("is-new", !!item.create);
 			row.toggleClass("is-gray", !classes);
+			if (item.depth) row.setCssProps({ "--sk-tag-depth": String(item.depth) });
 			row.createEl("i", { cls: "sk-tag-picker-it-dot" });
 			const name = row.createSpan({ cls: "sk-tag-picker-it-name" });
 			if (item.create) {
 				name.appendText(t("tag-picker.create-row") + " ");
 				name.createEl("b", { text: item.tag });
 				row.setAttr("aria-label", t("tag-picker.create", { tag: item.tag }));
+			} else if (item.group === "tree") {
+				// The tree shows the name under its parent; screen readers hear the whole tag.
+				const label = item.label ?? item.tag;
+				if (label.length < item.tag.length) name.createSpan({ cls: "sk-tag-picker-sr", text: item.tag.slice(0, item.tag.length - label.length) });
+				name.createSpan({ cls: "sk-tag-picker-it-leaf", text: label });
 			} else this.renderName(name, item.tag);
 			if (showKids && item.kids.length) {
 				const shown = item.kids.slice(0, 4);
@@ -273,6 +329,7 @@ export class TagPicker {
 			}
 			const why = this.whyText(item.why);
 			if (why) row.createSpan({ cls: "sk-tag-picker-it-why", text: why });
+			else if (item.count && !item.create) row.createSpan({ cls: "sk-tag-picker-it-count", text: String(item.count) });
 			if (showKids && item.parent) {
 				const more = row.createEl("button", { cls: "sk-tag-picker-it-more", attr: { type: "button", tabindex: "-1", "aria-label": t("tag-picker.subtags", { key: t("tag-picker.key.tab") }), "data-more": String(i) } });
 				setIcon(more, "chevron-right");
@@ -456,17 +513,6 @@ export function openTagPicker(anchor: HTMLElement, options: OpenTagPickerOptions
 		},
 		onCancel: () => finish(false),
 	});
-	// Named by hidden texts: an aria-label would show as Obsidian's tooltip over the whole popover.
-	const uid = `sk-tag-picker-${Math.random().toString(36).slice(2, 8)}`;
-	const nameIt = (el: HTMLElement, key: string) => {
-		const label = el.getAttribute("aria-label");
-		if (!label) return;
-		pop.createSpan({ cls: "sk-tag-picker-sr", text: label, attr: { id: `${uid}-${key}` } });
-		el.removeAttribute("aria-label");
-		el.setAttribute("aria-labelledby", `${uid}-${key}`);
-	};
-	nameIt(picker.listEl, "list");
-	nameIt(picker.input, "input");
 	// On a phone: the sheet sits above the keyboard and the editing toolbar, the column shrinks first.
 	let keyboard = 0;
 	const baseHeight = win.innerHeight;

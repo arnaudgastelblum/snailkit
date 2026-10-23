@@ -4,6 +4,7 @@
 // It is undefined while the module is off; listen to the workspace event
 // "snailkit:services-changed" to know when it comes and goes. Documented in docs/tasks.md.
 import { isIsoDate } from "./group";
+import { tagChoices, type TagChoices } from "./around";
 import { plainTitle } from "./parse";
 import type { TasksHub } from "./hub";
 import type { TaskIndex } from "./task-index";
@@ -11,6 +12,7 @@ import type { Task, TaskRef } from "./types";
 import type { TaskWriter, Written } from "./writer";
 
 export type TaskPriority = "high" | "medium" | "low";
+export type { TagChoices, TagAround, TagPlace, TagTreeEntry } from "./around";
 
 /** Enough to find a task again: its note, its 0-based line and the whole line as last read. */
 export interface TaskLocation {
@@ -125,6 +127,8 @@ export interface TasksApi {
 	getTags(): string[];
 	/** The open task whose 📝 note is `path` (the checkboxes of that note are its steps), or null. */
 	parentOf?(path: string): { key: string; tag: string; title: string; plainTitle: string } | null;
+	/** What the tag picker offers for a task of the note `path` (null: no note): the Tasks tag tree and the tags used around the note. */
+	tagChoices?(path: string | null): TagChoices;
 	/** Called after any change of the tasks (a note edited, the vault read). Returns an unsubscribe function. */
 	on(event: "change", callback: () => void): () => void;
 
@@ -252,6 +256,7 @@ export function createTasksApi(index: TaskIndex, writer: TaskWriter, alive: () =
 			const owner = alive() && typeof path === "string" ? index.ownerOf(path) : null;
 			return owner ? { key: owner.key, tag: owner.primary, title: owner.title, plainTitle: plainTitle(owner.title) } : null;
 		},
+		tagChoices: (path) => alive() ? tagChoices(index, hub?.ctx, typeof path === "string" ? path : null) : { tree: [], around: [] },
 		on: (event, callback) => {
 			if (event !== "change" || typeof callback !== "function" || !alive()) return () => undefined;
 			return index.onChange(callback);

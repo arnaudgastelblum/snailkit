@@ -2,16 +2,41 @@
 // is shown inside a parent, what part of it matches the filter. No Obsidian here: tested in
 // test/tag-picker.test.ts.
 
+/** Where a tag was found around the note being edited (read from Tasks, see its `tagChoices`). */
+export type TagPlace =
+	/** The note is the 📝 note of an open task: that task's tag. */
+	| { kind: "task"; title: string }
+	/** Tasks of this note carry the tag. */
+	| { kind: "here"; count: number }
+	/** The tag is written on the note itself, and some task uses it. */
+	| { kind: "note" }
+	/** Tasks in that parent note or in the notes below it. */
+	| { kind: "above"; name: string; path: string; count: number };
+
+export interface TagAround {
+	tag: string;
+	where: TagPlace;
+}
+
+/** A tag of the user's tree (the Tasks navigator): parents before their sub-tags, in the user's order. */
+export interface TagTreeEntry {
+	tag: string;
+	depth: number;
+	/** Open tasks of the tag and of its sub-tags. */
+	count: number;
+}
+
 /** Why a tag ranks where it does in the column (shown in small type next to it). */
 export type ChipWhy =
 	| { kind: "chosen" }
 	| { kind: "learned"; word: string | null }
 	| { kind: "recent" }
 	| { kind: "near" }
-	| { kind: "parent" };
+	| { kind: "parent" }
+	| { kind: "around"; where: TagPlace };
 
-/** Rows that belong together; a thin gap separates two groups. */
-export type ChipGroup = "top" | "near" | "recent" | "all" | "level" | "hits" | "new";
+/** Rows that belong together; a thin gap (or a heading, with a tree) separates two groups. */
+export type ChipGroup = "top" | "near" | "around" | "recent" | "all" | "tree" | "level" | "hits" | "new";
 
 export interface Chip {
 	tag: string;
@@ -24,6 +49,12 @@ export interface Chip {
 	why?: ChipWhy;
 	/** The last part of each direct sub-tag, shown in grey behind the tag. */
 	kids: string[];
+	/** In the tree: how deep the tag sits (0 for a family). */
+	depth?: number;
+	/** Open tasks of the tag (with its sub-tags), shown when it has no reason. */
+	count?: number;
+	/** In the tree: the name under the nearest parent shown above it ("car" for home/car), the whole tag without one. */
+	label?: string;
 }
 
 export interface ChipQuery {
@@ -39,8 +70,16 @@ export interface ChipQuery {
 	near: readonly string[];
 	/** Tags chosen recently, most recent first: after the near ones. */
 	recent?: readonly string[];
+	/** Tags used around the note, nearest first (with a tree, they take the place of `near`). */
+	around?: readonly TagAround[];
+	/**
+	 * The user's tag tree. When it is not empty the column shows the suggestions, then the whole
+	 * tree; the other tags of the vault only come up when typing.
+	 */
+	tree?: readonly TagTreeEntry[];
 	/** Every tag of the vault, most used first. */
 	all: readonly string[];
+	/** Rows offered at most (the tree is always shown whole). */
 	limit?: number;
 }
 
@@ -59,22 +98,27 @@ export function chipList(q: ChipQuery): Chip[] {
 	const limit = q.limit ?? 14;
 	const lower = (t: string) => t.toLowerCase();
 	const recent = q.recent ?? [];
+	const around = q.around ?? [];
+	const tree = q.tree ?? [];
 	const known = new Map<string, string>();
-	for (const t of [...q.near, ...recent, ...q.all]) if (!known.has(lower(t))) known.set(lower(t), t);
+	for (const t of [...q.near, ...around.map((a) => a.tag), ...recent, ...tree.map((n) => n.tag), ...q.all]) if (!known.has(lower(t))) known.set(lower(t), t);
 	const keys = [...known.keys()];
 	const folded = new Map(keys.map((k) => [k, foldChars(k)]));
 	const fold = (k: string) => folded.get(k) ?? foldChars(k);
+	const counts = new Map(tree.map((n) => [lower(n.tag), n.count]));
 	const isParent = (key: string) => keys.some((k) => k.startsWith(key + "/"));
 	const kidsOf = (key: string) => keys.filter((k) => k.startsWith(key + "/") && !k.slice(key.length + 1).includes("/")).map((k) => (known.get(k) ?? k).split("/").pop()!);
 	const has = (list: readonly string[], tag: string) => list.some((t) => lower(t) === lower(tag));
 	const why = (tag: string): ChipWhy | undefined => {
 		if (q.tag && lower(tag) === lower(q.tag)) return { kind: "chosen" };
 		if (q.suggested && lower(tag) === lower(q.suggested)) return { kind: "learned", word: q.suggestedWord ?? null };
+		const found = around.find((a) => lower(a.tag) === lower(tag));
+		if (found) return { kind: "around", where: found.where };
 		if (has(q.near, tag)) return { kind: "near" };
 		if (has(recent, tag)) return { kind: "recent" };
 		return undefined;
 	};
-	const chip = (tag: string, group: ChipGroup): Chip => ({ tag, group, parent: isParent(lower(tag)), suggested: !!q.suggested && lower(tag) === lower(q.suggested), why: why(tag), kids: kidsOf(lower(tag)) });
+	const chip = (tag: string, group: ChipGroup): Chip => ({ tag, group, parent: isParent(lower(tag)), suggested: !!q.suggested && lower(tag) === lower(q.suggested), why: why(tag), kids: kidsOf(lower(tag)), count: counts.get(lower(tag)) });
 	const typed = lower(q.filter.trim().replace(/^#/, ""));
 	const f = foldChars(typed);
 	const out: Chip[] = [];
@@ -87,7 +131,8 @@ export function chipList(q: ChipQuery): Chip[] {
 	if (f) {
 		const scope = q.level ? keys.filter((k) => k.startsWith(lower(q.level!) + "/")) : [];
 		const tier = (k: string) => (fold(k).startsWith(f) ? 0 : fold(k).split("/").some((p) => p.startsWith(f)) ? 1 : fold(k).includes(f) ? 2 : 3);
-		const order = (list: string[]) => list.filter((k) => tier(k) < 3).sort((a, b) => tier(a) - tier(b) || Number(fold(b) === f) - Number(fold(a) === f));
+		// Within a tier: the exact name, then the tags of the tree (used by tasks), then the others.
+		const order = (list: string[]) => list.filter((k) => tier(k) < 3).sort((a, b) => tier(a) - tier(b) || Number(fold(b) === f) - Number(fold(a) === f) || Number(counts.has(b)) - Number(counts.has(a)));
 		for (const k of [...order(scope), ...order(keys)]) push(k, "hits");
 		// The new name keeps what was typed (lowercased); none is offered when a tag spelled like it exists.
 		const full = q.level && !typed.includes("/") ? lower(q.level) + "/" + typed : typed.replace(/\/+$/, "");
@@ -101,6 +146,26 @@ export function chipList(q: ChipQuery): Chip[] {
 		for (const k of keys.filter((k) => k.startsWith(lower(q.level!) + "/") && !k.slice(q.level!.length + 1).includes("/"))) push(k, "level");
 		for (const k of keys.filter((k) => k.startsWith(lower(q.level!) + "/"))) push(k, "level");
 		return out.slice(0, limit);
+	}
+	if (tree.length) {
+		// The suggestions (recent tags only when there is nothing else), then the whole tree, where a
+		// suggested tag shows again. Sub-tags are on screen: Tab chooses, it never goes into a tag.
+		push(q.tag, "top");
+		push(q.suggested, "top");
+		for (const a of around) push(a.tag, "around");
+		if (!out.length) for (const t of recent.slice(0, 3)) push(t, "recent");
+		for (const c of out) c.parent = false;
+		const inTree = new Set(tree.map((n) => lower(n.tag)));
+		const labelOf = (tag: string) => {
+			const parts = tag.split("/");
+			for (let i = parts.length - 1; i > 0; i--) if (inTree.has(lower(parts.slice(0, i).join("/")))) return parts.slice(i).join("/");
+			return tag;
+		};
+		for (const n of tree) {
+			const tag = known.get(lower(n.tag)) ?? n.tag;
+			out.push({ tag, group: "tree", depth: n.depth, count: n.count, kids: [], label: labelOf(tag) });
+		}
+		return out;
 	}
 	push(q.tag, "top");
 	push(q.suggested, "top");

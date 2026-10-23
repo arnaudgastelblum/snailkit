@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { chipList, highlight, isTagName, shownName } from "../src/ui/tag-picker/logic";
-import { tagColorsFrom } from "../src/ui/tag-picker";
+import { taskTagChoices, tagColorsFrom } from "../src/ui/tag-picker";
 
 test("tag picker: chosen, suggested, near tags, then the families of the vault; filter, sub-tags, create", () => {
 	const base = { filter: "", level: null, tag: null, suggested: "home/car", near: ["work/team", "home/car"], all: ["home", "home/car", "home/garden", "work", "work/team", "reading"] };
@@ -106,4 +106,63 @@ test("the colors come from Tag colors when it runs, and stay neutral otherwise",
 	assert.equal(colors("home"), "");
 	services["tag-colors"] = { version: 1, classes: () => { throw new Error("broken"); } };
 	assert.equal(colors("home"), "");
+});
+
+test("with the Tasks tree: what is used around the note, then the whole tree in the user's order; other tags only when typing", () => {
+	const tree = [
+		{ tag: "client", depth: 0, count: 9 },
+		{ tag: "client/oriel", depth: 1, count: 2 },
+		{ tag: "client/brindle", depth: 1, count: 7 },
+		{ tag: "practice", depth: 0, count: 4 },
+	];
+	const q = {
+		filter: "",
+		level: null,
+		tag: null,
+		suggested: null,
+		near: [],
+		recent: ["reading"],
+		around: [{ tag: "client/brindle", where: { kind: "above" as const, name: "Brindle Intake", path: "Brindle Intake.md", count: 7 } }],
+		tree,
+		all: ["status/active", "client", "client/brindle", "client/oriel", "practice", "status"],
+	};
+	const rows = chipList(q);
+	assert.deepEqual(rows.map((c) => [c.tag, c.group]), [["client/brindle", "around"], ["client", "tree"], ["client/oriel", "tree"], ["client/brindle", "tree"], ["practice", "tree"]]);
+	assert.deepEqual(rows[0].why, { kind: "around", where: q.around[0].where });
+	assert.deepEqual(rows.slice(1).map((c) => [c.depth, c.count]), [[0, 9], [1, 2], [1, 7], [0, 4]]);
+	// Sub-tags are on screen: no row goes into a parent with Tab.
+	assert.ok(!rows.some((c) => c.parent));
+	// Nothing around: the recent tags fill in; the chosen tag and a suggestion come first.
+	assert.deepEqual(chipList({ ...q, around: [] }).map((c) => [c.tag, c.group]).slice(0, 2), [["reading", "recent"], ["client", "tree"]]);
+	assert.deepEqual(chipList({ ...q, tag: "practice" }).map((c) => [c.tag, c.why?.kind ?? null]).slice(0, 3), [["practice", "chosen"], ["client/brindle", "around"], ["client", null]]);
+	// The tree is shown whole, whatever the limit.
+	assert.equal(chipList({ ...q, limit: 2 }).length, 5);
+	// Typing finds the other tags of the vault too, the tags used by tasks first in their tier, with their count.
+	const hits = chipList({ ...q, filter: "act" });
+	assert.deepEqual(hits.map((c) => c.tag), ["status/active", "practice", "act"]);
+	assert.equal(hits[1].count, 4);
+	assert.equal(hits[0].count, undefined);
+	// A row of the tree is named under the nearest parent shown above it, else by its whole tag.
+	assert.deepEqual(rows.slice(1).map((c) => c.label), ["client", "oriel", "brindle", "practice"]);
+	const orphan = chipList({ ...q, tree: [{ tag: "2026/plan", depth: 0, count: 1 }, { tag: "2026/plan/q1", depth: 1, count: 1 }] });
+	assert.deepEqual(orphan.filter((c) => c.group === "tree").map((c) => c.label), ["2026/plan", "q1"]);
+	// Without a tree, the column is the one of before (the near tags, the recent ones, the families of the vault).
+	assert.deepEqual(chipList({ ...q, tree: [] }).map((c) => [c.tag, c.group]), [["reading", "recent"], ["client", "all"], ["practice", "all"], ["status", "all"]]);
+});
+
+test("the tree and the tags around a note are read from Tasks when it offers them", () => {
+	const services: Record<string, unknown> = {};
+	const ctx = { service: <T>(name: string) => services[name] as T | undefined };
+	assert.equal(taskTagChoices(ctx, "a.md"), null);
+	services.tasks = { version: 1 };
+	assert.equal(taskTagChoices(ctx, "a.md"), null);
+	let asked: string | null | undefined;
+	services.tasks = { version: 1, tagChoices: (path: string | null) => ((asked = path), { tree: [{ tag: "home", depth: 0, count: 1 }], around: [] }) };
+	assert.deepEqual(taskTagChoices(ctx, null), { tree: [{ tag: "home", depth: 0, count: 1 }], around: [] });
+	assert.equal(asked, null);
+	// No task has a tag yet: the picker keeps the tags of the vault.
+	services.tasks = { version: 1, tagChoices: () => ({ tree: [], around: [] }) };
+	assert.equal(taskTagChoices(ctx, "a.md"), null);
+	services.tasks = { version: 1, tagChoices: () => { throw new Error("broken"); } };
+	assert.equal(taskTagChoices(ctx, "a.md"), null);
 });
