@@ -622,9 +622,9 @@ test("service list: newest first, state named for other modules, counts kept", (
 		({ path, title: path.replace(/\.md$/, ""), created, ideas: 0, tasks, decide, pending, closed, text: "" });
 	const list = [info("Old.md", 1, true, 0, 2, 0), info("New.md", 3, false, 2, 3, 1), info("Mid.md", 2, false, 0, 0, 0)];
 	assert.deepEqual(serviceList(list), [
-		{ path: "New.md", title: "New", created: 3, state: "to-sort", tasks: 3, undecided: 1 },
-		{ path: "Mid.md", title: "Mid", created: 2, state: "open", tasks: 0, undecided: 0 },
-		{ path: "Old.md", title: "Old", created: 1, state: "closed", tasks: 2, undecided: 0 },
+		{ path: "New.md", title: "New", created: 3, state: "to-sort", tasks: 3, undecided: 1, pending: 2 },
+		{ path: "Mid.md", title: "Mid", created: 2, state: "open", tasks: 0, undecided: 0, pending: 0 },
+		{ path: "Old.md", title: "Old", created: 1, state: "closed", tasks: 2, undecided: 0, pending: 0 },
 	]);
 	assert.equal(tabTone(list), "warn");
 	assert.equal(tabTone([list[0], list[2]]), null);

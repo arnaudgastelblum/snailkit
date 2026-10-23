@@ -18,6 +18,8 @@ export interface NewNoteRequest {
 	from: "home" | "command";
 	/** A parent already chosen ("New note here" on the Map). */
 	parent?: string | null;
+	/** A name already typed elsewhere (the launcher of Mouse gestures): it fills the field, no selection is linked. */
+	name?: string;
 	/** Opens a note the caller's way (Home: next to the Workbench); `tab`: in a new tab. */
 	open?(path: string, tab: boolean): void;
 	/** The note exists and was not opened (Home shows it on its Map); `from`: where its name was typed. */
@@ -74,7 +76,7 @@ export class NewNoteModal extends Modal {
 		const file = request.from === "command" ? app.workspace.getActiveFile() : null;
 		this.activePath = file && file.extension === "md" ? file.path : null;
 		this.textSel = null;
-		const editor = view?.getMode() === "source" ? view.editor : null;
+		const editor = view?.getMode() === "source" && !request.name ? view.editor : null;
 		if (editor && view?.file && editor.somethingSelected()) {
 			const text = editor.getSelection();
 			if (nameFromSelection(text)) this.textSel = { view, editor, path: view.file.path, from: editor.getCursor("from"), to: editor.getCursor("to"), text };
@@ -141,6 +143,7 @@ export class NewNoteModal extends Modal {
 			attr: { type: "text", spellcheck: "false", placeholder: this.t("map.untitled"), "aria-label": this.t("map.name-label") },
 		});
 		if (this.textSel) this.nameInput.value = nameFromSelection(this.textSel.text) ?? "";
+		else if (this.request.name) this.nameInput.value = this.request.name;
 		this.messageEl = contentEl.createDiv({ cls: "sk-home-newnote-msg", attr: { role: "status", "aria-live": "polite" } });
 		this.messageEl.id = `sk-home-newnote-msg-${Date.now()}`;
 		this.nameInput.setAttr("aria-describedby", this.messageEl.id);

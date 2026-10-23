@@ -493,6 +493,7 @@ export class HomeRuntime {
 			openDomain: (path) => (typeof path === "string" ? this.openDomain(path) : Promise.resolve(false)),
 			openTag: (tag) => this.openTag(tag),
 			openMap: (path) => this.openMap(typeof path === "string" ? path : undefined),
+			newNote: (options) => this.newNote({ from: "command", name: typeof options?.name === "string" ? options.name : undefined }),
 		};
 	}
 

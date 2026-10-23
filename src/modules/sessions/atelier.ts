@@ -154,6 +154,8 @@ export interface SessionEntry {
 	state: "open" | "to-sort" | "closed";
 	tasks: number;
 	undecided: number;
+	/** Lines still to sort (tasks without a tag, lines kept to decide). */
+	pending: number;
 }
 
 /** The sessions as the service lists them: archived ones left out, newest first, the state named for other modules. */
@@ -163,7 +165,7 @@ export function serviceList(list: readonly SessionInfo[]): SessionEntry[] {
 		.sort((a, b) => b.created - a.created || a.title.localeCompare(b.title))
 		.map((s) => {
 			const state = stateOf(s);
-			return { path: s.path, title: s.title, created: s.created, state: state === "triage" ? "to-sort" : state, tasks: s.tasks, undecided: s.decide };
+			return { path: s.path, title: s.title, created: s.created, state: state === "triage" ? "to-sort" : state, tasks: s.tasks, undecided: s.decide, pending: s.pending };
 		});
 }
 

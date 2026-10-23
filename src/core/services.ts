@@ -25,6 +25,8 @@ export interface HomeService {
 	openTag(tag: string): Promise<boolean>;
 	/** The Home on its Map, centered on this note (the home page when missing). */
 	openMap(path?: string): Promise<void>;
+	/** Since 2026-10-23: the New note window, its name filled with `name` (the parent proposed from the active note). */
+	newNote?(options?: { name?: string }): void;
 }
 
 // ----- "note-rail": the Note rail module -----
@@ -213,7 +215,10 @@ export interface TaskInfoLite {
 export interface SessionsReader {
 	version: 1;
 	isSession(file: TFile): boolean;
-	list?(): Array<{ path: string; title: string; created: number; state: "open" | "to-sort" | "closed"; tasks: number; undecided: number }>;
+	/** Starts a new brainstorm (its note opens). */
+	start?(): Promise<void>;
+	/** `pending` (since 2026-10-23): the lines still to sort. */
+	list?(): Array<{ path: string; title: string; created: number; state: "open" | "to-sort" | "closed"; tasks: number; undecided: number; pending?: number }>;
 	/** Since 2026-10-08: the "- [?]" lines of every brainstorm, finished ones too (archived ones only when the user asks). */
 	toDecide?(): Array<{ path: string; title: string; created: number; closed: boolean; archived: boolean; line: number; text: string }>;
 	/** Since 2026-10-08: opens the sorting mode on that queue. */

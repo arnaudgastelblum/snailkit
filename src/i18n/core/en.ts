@@ -3,7 +3,7 @@
 // picker (src/ui/tag-picker).
 export const en = {
 	"plugin.tagline": "Everything your notes need, in one shell.",
-	"plugin.welcome": "Snailkit is ready: Home, Tasks, Brainstorm, Search and the Note menu are on. More tools wait in its settings.",
+	"plugin.welcome": "Snailkit is ready: Home, Tasks, Brainstorm, Search, the Note menu and Mouse gestures are on. More tools wait in its settings.",
 	"plugin.welcome-action": "See all tools",
 	"plugin.start-error": "Snailkit: {name} could not start. See its settings for details.",
 
@@ -26,7 +26,7 @@ export const en = {
 	"category.write": "Writing",
 	"category.export": "Export",
 	"category.workbench.desc": "One panel for your day: Home, Tasks and Brainstorm as tabs, Search inside Home.",
-	"category.notes.desc": "On every note: a menu of icons, and tags you recognize at a glance.",
+	"category.notes.desc": "On every note: a menu of icons, tags you recognize at a glance, and mouse gestures for tabs.",
 	"category.write.desc": "Write, insert and move text faster.",
 	"category.export.desc": "Take your notes out of Obsidian.",
 	"group.workbench-settings": "Workbench settings",

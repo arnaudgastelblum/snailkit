@@ -64,12 +64,16 @@ away. [Note menu →](docs/note-rail.md)
 <td><img src="assets/scenes/pdf-export.webp" alt="PDF export"><br><b><a href="docs/pdf-export.md">PDF export</a></b><br>Your note, its look, its links. All in a PDF.</td>
 <td><img src="assets/scenes/slides-export.webp" alt="Slides to PowerPoint"><br><b><a href="docs/slides-export.md">Slides to PowerPoint</a></b><br>Your Excalidraw frames, ready for PowerPoint.</td>
 </tr>
+<tr>
+<td><img src="assets/scenes/mouse-gestures.webp" alt="Mouse gestures"><br><b><a href="docs/mouse-gestures.md">Mouse gestures</a></b><br>Right-click, draw a line, and the tab closes.</td>
+<td></td>
+</tr>
 </table>
 
 ## Get started
 
 1. In Obsidian: **Settings → Community plugins → Browse**, search **Snailkit**, install and enable it.
-2. Home, Tasks, Brainstorm, Search and the Note menu are on from the start. Open **Settings → Snailkit** for the other tools, or **Get them all**. Each tool leaves nothing behind when you turn it off.
+2. Home, Tasks, Brainstorm, Search, the Note menu and Mouse gestures are on from the start. Open **Settings → Snailkit** for the other tools, or **Get them all**. Each tool leaves nothing behind when you turn it off.
 3. Write a task with a `#tag` in any note. It is already waiting in your Workbench.
 
 English, French, Dutch and Spanish. Desktop and mobile. Snailkit sends nothing about you or your

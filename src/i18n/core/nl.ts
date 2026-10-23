@@ -3,7 +3,7 @@ import type { en } from "./en";
 
 export const nl: StringsOf<typeof en> = {
 	"plugin.tagline": "Alles wat je notities nodig hebben, in één huisje.",
-	"plugin.welcome": "Snailkit is klaar: Start, Taken, Brainstorm, Search en het Notitiemenu staan aan. Meer tools wachten in de instellingen.",
+	"plugin.welcome": "Snailkit is klaar: Start, Taken, Brainstorm, Search, het Notitiemenu en Muisgebaren staan aan. Meer tools wachten in de instellingen.",
 	"plugin.welcome-action": "Alle tools bekijken",
 	"plugin.start-error": "Snailkit: {name} kon niet starten. Meer details in de instellingen ervan.",
 
@@ -26,7 +26,7 @@ export const nl: StringsOf<typeof en> = {
 	"category.write": "Schrijven",
 	"category.export": "Exporteren",
 	"category.workbench.desc": "Eén paneel voor je dag: Start, Taken en Brainstorm als tabbladen, Search in Start.",
-	"category.notes.desc": "Op elke notitie: een menu met icoontjes, en tags die je in één oogopslag herkent.",
+	"category.notes.desc": "Op elke notitie: een menu met icoontjes, tags die je in één oogopslag herkent en muisgebaren voor tabbladen.",
 	"category.write.desc": "Sneller tekst schrijven, invoegen en verplaatsen.",
 	"category.export.desc": "Je notities buiten Obsidian brengen.",
 	"group.workbench-settings": "Instellingen van de Werkbank",

@@ -1,0 +1,54 @@
+.sk-demo-mouse-gestures-paper { fill: var(--background-primary); stroke: var(--background-modifier-border); stroke-width: 0.8; }
+.sk-demo-mouse-gestures-strip { fill: var(--background-secondary); }
+.sk-demo-mouse-gestures-tab-bg { fill: var(--background-primary); }
+.sk-demo-mouse-gestures-is-plain .sk-demo-mouse-gestures-tab-bg { fill: none; }
+.sk-demo-mouse-gestures-tab, .sk-demo-mouse-gestures-title, .sk-demo-mouse-gestures-arrows, .sk-demo-mouse-gestures-name {
+	fill: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: 8.5px;
+}
+.sk-demo-mouse-gestures-is-plain .sk-demo-mouse-gestures-tab { fill: var(--text-muted); }
+.sk-demo-mouse-gestures-title { font-size: 14px; font-weight: 600; }
+.sk-demo-mouse-gestures-bar { fill: var(--text-faint); opacity: 0.25; }
+.sk-demo-mouse-gestures-press { fill: var(--sk-accent); opacity: 0; }
+.sk-demo-mouse-gestures-trail { fill: none; stroke: var(--sk-accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 100; opacity: 0.75; }
+.sk-demo-mouse-gestures-chip-bg { fill: var(--sk-surface); stroke: var(--background-modifier-border); stroke-width: 0.8; }
+.sk-demo-mouse-gestures-arrows { fill: var(--sk-accent-text); font-weight: 600; }
+.sk-demo-mouse-gestures-pointer { fill: var(--text-normal); stroke: var(--background-primary); stroke-width: 0.9; stroke-linejoin: round; }
+.sk-demo-mouse-gestures-cursor { transform: translate(70px, 46px); }
+
+/* Still frame: the gesture drawn and its tab already gone, the next one in its place. */
+.sk-demo-mouse-gestures-tab-closing, .sk-demo-mouse-gestures-note-before { opacity: 0; }
+.sk-demo-mouse-gestures-tab-next { transform: translateX(-102px); }
+
+@media (prefers-reduced-motion: no-preference) {
+	.sk-demo.is-playing .sk-demo-mouse-gestures-press { animation: sk-demo-mouse-gestures-press 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-mouse-gestures-trail { animation: sk-demo-mouse-gestures-trail 8s linear infinite; }
+	.sk-demo.is-playing .sk-demo-mouse-gestures-cursor { animation: sk-demo-mouse-gestures-cursor 8s linear infinite; }
+	.sk-demo.is-playing .sk-demo-mouse-gestures-chip { animation: sk-demo-mouse-gestures-chip 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-mouse-gestures-tab-closing { animation: sk-demo-mouse-gestures-closing 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-mouse-gestures-tab-next { animation: sk-demo-mouse-gestures-next 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-mouse-gestures-tab-next .sk-demo-mouse-gestures-tab-bg { animation: sk-demo-mouse-gestures-after 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-mouse-gestures-note-before { animation: sk-demo-mouse-gestures-before 8s var(--sk-ease) infinite; }
+	.sk-demo.is-playing .sk-demo-mouse-gestures-note-after { animation: sk-demo-mouse-gestures-after 8s var(--sk-ease) infinite; }
+	.sk-demo-mouse-gestures-tab-closing { transform-box: fill-box; transform-origin: center; }
+	@keyframes sk-demo-mouse-gestures-press { 0%, 8% { opacity: 0; } 10%, 48% { opacity: 0.9; } 54%, 100% { opacity: 0; } }
+	@keyframes sk-demo-mouse-gestures-trail {
+		0%, 10% { stroke-dashoffset: 100; opacity: 0.75; }
+		28% { stroke-dashoffset: 60; }
+		44%, 48% { stroke-dashoffset: 0; opacity: 0.75; }
+		56%, 100% { stroke-dashoffset: 0; opacity: 0; }
+	}
+	@keyframes sk-demo-mouse-gestures-cursor {
+		0%, 10% { transform: translate(0, 0); opacity: 0; }
+		4% { opacity: 1; }
+		28% { transform: translate(0, 46px); opacity: 1; }
+		44%, 90% { transform: translate(70px, 46px); opacity: 1; }
+		96%, 100% { transform: translate(70px, 46px); opacity: 0; }
+	}
+	@keyframes sk-demo-mouse-gestures-chip { 0%, 30% { opacity: 0; transform: translateY(3px); } 36%, 48% { opacity: 1; transform: translateY(0); } 56%, 100% { opacity: 0; } }
+	@keyframes sk-demo-mouse-gestures-closing { 0%, 50% { opacity: 1; transform: scale(1); } 58%, 94% { opacity: 0; transform: scale(0.85); } 100% { opacity: 1; transform: scale(1); } }
+	@keyframes sk-demo-mouse-gestures-next { 0%, 52% { transform: translateX(0); } 62%, 94% { transform: translateX(-102px); } 100% { transform: translateX(0); } }
+	@keyframes sk-demo-mouse-gestures-before { 0%, 50% { opacity: 1; } 56%, 94% { opacity: 0; } 100% { opacity: 1; } }
+	@keyframes sk-demo-mouse-gestures-after { 0%, 52% { opacity: 0; } 60%, 94% { opacity: 1; } 100% { opacity: 0; } }
+}

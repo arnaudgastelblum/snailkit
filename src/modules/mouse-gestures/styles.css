@@ -1,0 +1,349 @@
+/* Mouse gestures: the line drawn with the right button and the name of its action. */
+.sk-mouse-gestures {
+	position: fixed;
+	inset: 0;
+	z-index: var(--layer-tooltip);
+	pointer-events: none;
+}
+.sk-mouse-gestures svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+.sk-mouse-gestures-line {
+	fill: none;
+	stroke: var(--sk-accent);
+	stroke-width: 3;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	opacity: 0.7;
+}
+.sk-mouse-gestures-hint {
+	position: absolute;
+	top: 0;
+	left: 0;
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 4px 10px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius-s);
+	background: var(--sk-surface);
+	box-shadow: var(--sk-shadow-pop);
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-small);
+	white-space: nowrap;
+	opacity: 0;
+}
+.sk-mouse-gestures-hint.is-shown {
+	opacity: 1;
+}
+.sk-mouse-gestures-arrows {
+	color: var(--sk-accent-text);
+	font-weight: 600;
+}
+.sk-mouse-gestures-hint.is-unknown .sk-mouse-gestures-arrows,
+.sk-mouse-gestures-hint.is-unknown .sk-mouse-gestures-name {
+	color: var(--text-faint);
+}
+.sk-mouse-gestures.is-leaving {
+	opacity: 0;
+	transition: opacity var(--sk-mid) var(--sk-ease);
+}
+.sk-mouse-gestures.is-leaving.is-done .sk-mouse-gestures-line {
+	opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-mouse-gestures.is-leaving {
+		transition: none;
+	}
+}
+
+/* ----- The launcher (gesture ↓): a field, the open tabs, the brainstorms in progress, create and go. ----- */
+.modal-container.sk-launcher-host {
+	align-items: flex-start;
+}
+.modal.sk-launcher {
+	width: min(540px, calc(100vw - 24px));
+	max-width: none;
+	margin-top: 12vh;
+	padding: 14px;
+	border-radius: var(--sk-radius-l);
+	box-shadow: var(--sk-shadow-pop);
+	font-family: var(--font-interface);
+}
+/* The window springs from the gesture by itself (see launcher.ts): not Obsidian's own entrance. */
+.modal.sk-launcher.is-arriving {
+	animation: none;
+}
+.modal.sk-launcher .modal-close-button,
+.modal.sk-launcher .modal-header-button,
+.modal.sk-launcher .modal-header {
+	display: none;
+}
+.modal.sk-launcher .modal-content {
+	padding: 0;
+}
+.sk-launcher-sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+.sk-launcher-field {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: 44px;
+	padding: 0 14px;
+	border-radius: var(--sk-radius);
+	background: var(--sk-surface-sunken);
+}
+.sk-launcher-field-icon {
+	display: flex;
+	color: var(--text-muted);
+}
+.sk-launcher-field-icon svg {
+	width: 18px;
+	height: 18px;
+}
+.sk-launcher input.sk-launcher-input {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: 15px;
+}
+.sk-launcher input.sk-launcher-input:focus,
+.sk-launcher input.sk-launcher-input:focus-visible {
+	box-shadow: none;
+	outline: none;
+}
+
+/* Create: three tiles that lift when pointed at, their icon jumps. */
+.sk-launcher-create:empty {
+	display: none;
+}
+.sk-launcher-create {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 8px;
+	margin-top: 12px;
+}
+.sk-launcher button.sk-launcher-tile {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 7px;
+	height: auto;
+	padding: 13px 6px 11px;
+	border: 1px solid var(--sk-line);
+	border-radius: var(--sk-radius);
+	background: var(--sk-surface);
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: 13px;
+	cursor: var(--cursor);
+	transition: background var(--sk-fast), border-color var(--sk-fast), transform var(--sk-mid) var(--sk-spring);
+}
+.sk-launcher-tile-icon {
+	display: flex;
+	color: var(--text-muted);
+	transition: color var(--sk-fast);
+}
+.sk-launcher-tile-icon svg {
+	width: 20px;
+	height: 20px;
+}
+.sk-launcher button.sk-launcher-tile:hover,
+.sk-launcher button.sk-launcher-tile:focus-visible {
+	border-color: var(--sk-accent-line);
+	background: var(--sk-accent-soft);
+	transform: translateY(-2px);
+}
+.sk-launcher button.sk-launcher-tile:hover .sk-launcher-tile-icon,
+.sk-launcher button.sk-launcher-tile:focus-visible .sk-launcher-tile-icon {
+	color: var(--sk-accent-text);
+	animation: sk-pop 420ms var(--sk-spring);
+}
+
+/* The list: one gliding cursor (src/ui/surface.ts) in the hue of each note's domain. */
+.sk-launcher-list {
+	max-height: min(440px, 56vh);
+	margin: 0 -2px;
+	padding: 0 2px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+.sk-launcher-head {
+	position: relative;
+	z-index: 1;
+	padding: 14px 10px 5px;
+	color: var(--text-faint);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.sk-launcher-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: 38px;
+	padding: 0 10px;
+	border-radius: 8px;
+	color: var(--text-normal);
+	font-size: 14px;
+	cursor: var(--cursor);
+}
+.sk-launcher-title {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	transition: color var(--sk-mid) var(--sk-ease);
+}
+.sk-launcher-title mark {
+	background: none;
+	color: inherit;
+	font-weight: 600;
+}
+.sk-launcher-row.is-hi .sk-launcher-title {
+	font-weight: 500;
+}
+.sk-launcher-row.is-new .sk-launcher-title {
+	color: var(--text-muted);
+}
+.sk-launcher-row.is-new .sk-launcher-title b {
+	color: var(--text-normal);
+	font-weight: 500;
+}
+.sk-launcher-pill {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 7px;
+	background: hsl(var(--sk-hue, 220) var(--sk-pill-s) var(--sk-pill-l));
+	color: hsl(var(--sk-hue, 220) var(--sk-ink-s) var(--sk-ink-l));
+	font-size: 11.5px;
+	font-weight: 700;
+	transition: transform var(--sk-slow) var(--sk-spring);
+}
+.sk-launcher-row.is-gray .sk-launcher-pill {
+	background: var(--sk-surface-sunken);
+	color: var(--text-muted);
+}
+.sk-launcher-pill.is-storm,
+.sk-launcher-row.is-gray .sk-launcher-pill.is-storm {
+	background: var(--sk-accent-wash);
+	color: var(--sk-accent-text);
+}
+.sk-launcher-pill svg {
+	width: 13px;
+	height: 13px;
+}
+.sk-launcher-row.is-hi .sk-launcher-pill {
+	transform: scale(1.12) rotate(-4deg);
+}
+.sk-launcher-where {
+	flex: 0 2 auto;
+	min-width: 0;
+	margin-left: auto;
+	overflow: hidden;
+	color: var(--text-faint);
+	font-size: 12px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.sk-launcher-steps {
+	margin-left: auto;
+}
+.sk-launcher-state {
+	flex: none;
+	min-width: 74px;
+	color: var(--text-muted);
+	font-size: 12px;
+	text-align: right;
+}
+.sk-launcher-empty {
+	padding: 14px 10px 4px;
+	color: var(--text-faint);
+	font-size: 13px;
+}
+
+/* Go: the Workbench's tabs, with what waits there. */
+.sk-launcher-go {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 12px;
+	padding-top: 10px;
+	border-top: 1px solid var(--sk-line);
+}
+.sk-launcher .sk-launcher-go-btn {
+	gap: 6px;
+}
+.sk-launcher-go-icon {
+	display: flex;
+}
+.sk-launcher-go-icon svg {
+	width: 15px;
+	height: 15px;
+}
+.sk-launcher-n {
+	color: var(--text-faint);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+.sk-launcher-keys {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: 11.5px;
+	white-space: nowrap;
+}
+.sk-launcher-keys kbd {
+	margin: 0 2px;
+}
+
+/* Each piece comes in after the other (--sk-i: its rank). */
+.sk-launcher-in {
+	animation: sk-rise 320ms var(--sk-ease) both;
+	animation-delay: calc(120ms + var(--sk-i, 0) * 28ms);
+}
+.modal.sk-launcher.is-phone .sk-launcher-where {
+	display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-launcher-in,
+	.sk-launcher button.sk-launcher-tile:hover .sk-launcher-tile-icon {
+		animation: none;
+	}
+	.sk-launcher button.sk-launcher-tile:hover {
+		transform: none;
+	}
+}
+
+/* Settings: the row that just took its gesture from another one says so, once. */
+.sk-mouse-gestures-moved {
+	margin-top: 4px;
+	color: var(--sk-accent-text);
+	font-size: var(--font-ui-small);
+	animation: sk-rise 320ms var(--sk-ease) both;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-mouse-gestures-moved {
+		animation: none;
+	}
+}

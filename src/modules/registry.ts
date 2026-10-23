@@ -13,6 +13,7 @@ import { slidesExport } from "./slides-export";
 import { sessions } from "./sessions";
 import { home } from "./home";
 import { search } from "./search";
+import { mouseGestures } from "./mouse-gestures";
 
 // Erase each module's settings shape at the registry boundary; the host pairs it with its own defaults.
-export const MODULES = [moveText, pdfExport, noteRail, tagColors, tables, tasks, slashMenu, columnSelect, slidesExport, sessions, home, search] as unknown as AnyModule[];
+export const MODULES = [moveText, pdfExport, noteRail, tagColors, tables, tasks, slashMenu, columnSelect, slidesExport, sessions, home, search, mouseGestures] as unknown as AnyModule[];

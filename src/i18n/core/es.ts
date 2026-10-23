@@ -3,7 +3,7 @@ import type { en } from "./en";
 
 export const es: StringsOf<typeof en> = {
 	"plugin.tagline": "Todo lo que tus notas necesitan, en una sola concha.",
-	"plugin.welcome": "Snailkit está listo: Inicio, Tareas, Lluvia de ideas, Search y el Menú de nota están activados. Más herramientas te esperan en sus ajustes.",
+	"plugin.welcome": "Snailkit está listo: Inicio, Tareas, Lluvia de ideas, Search, el Menú de nota y los Gestos del ratón están activados. Más herramientas te esperan en sus ajustes.",
 	"plugin.welcome-action": "Ver todas las herramientas",
 	"plugin.start-error": "Snailkit: {name} no pudo iniciarse. Encontrarás los detalles en sus ajustes.",
 
@@ -26,7 +26,7 @@ export const es: StringsOf<typeof en> = {
 	"category.write": "Escritura",
 	"category.export": "Exportación",
 	"category.workbench.desc": "Un solo panel para tu día: Inicio, Tareas y Lluvia de ideas en pestañas, Search dentro de Inicio.",
-	"category.notes.desc": "En cada nota: un menú de iconos, y etiquetas que reconoces de un vistazo.",
+	"category.notes.desc": "En cada nota: un menú de iconos, etiquetas que reconoces de un vistazo y gestos del ratón para las pestañas.",
 	"category.write.desc": "Escribir, insertar y mover texto más rápido.",
 	"category.export.desc": "Sacar tus notas de Obsidian.",
 	"group.workbench-settings": "Ajustes del Taller",

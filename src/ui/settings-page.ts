@@ -98,8 +98,9 @@ export class SettingsSection<S extends object> {
 
 	/**
 	 * Wires one control to one setting. Every change, typed or from the reset arrow, goes through
-	 * `commit`: value stored, saved once, arrow updated, `onChange` called once. Programmatic
-	 * updates of the control (`show`) never count as a change, whatever the control does.
+	 * `commit`: value stored, `beforeSave` called (other settings that follow it change in the same
+	 * save), saved once, arrow updated, `onChange` called once. Programmatic updates of the control
+	 * (`show`) never count as a change, whatever the control does.
 	 */
 	private bind<V>(
 		setting: Setting,
@@ -107,6 +108,7 @@ export class SettingsSection<S extends object> {
 		defaultLabel: string,
 		onChange: ((value: V) => void) | undefined,
 		build: (commit: (value: V) => Promise<void>, isQuiet: () => boolean) => (value: V) => void,
+		beforeSave?: (value: V) => void,
 	): void {
 		const defaults = this.defaults as Record<string, unknown>;
 		let quiet = false;
@@ -115,6 +117,7 @@ export class SettingsSection<S extends object> {
 		const commit = async (value: V) => {
 			if (this.values[key] === value) return;
 			this.values[key] = value;
+			beforeSave?.(value);
 			refreshArrow();
 			await this.page.save();
 			onChange?.(value);
@@ -207,7 +210,7 @@ export class SettingsSection<S extends object> {
 		key: KeysOfType<S, string>,
 		name: string,
 		choices: Record<string, string>,
-		options: RowOptions & { onChange?: (value: string) => void } = {},
+		options: RowOptions & { onChange?: (value: string) => void; beforeSave?: (value: string) => void } = {},
 	): Setting {
 		const setting = this.row(name, options);
 		const def = (this.defaults as Record<string, unknown>)[key] as string;
@@ -220,7 +223,7 @@ export class SettingsSection<S extends object> {
 				show = (value) => { void dropdown.setValue(value); };
 			});
 			return show;
-		});
+		}, options.beforeSave);
 		return setting;
 	}
 
