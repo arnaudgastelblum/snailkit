@@ -506,12 +506,56 @@ body.theme-dark {
 .sk-tasks-lvl-2 > .sk-tasks-grp-h .sk-tasks-grp-rule {
 	background: color-mix(in srgb, var(--sk-tag-l-fg, var(--sk-tasks-l-fg)) 25%, transparent);
 }
-.sk-tasks-grp.is-sub .sk-tasks-grp.is-sub {
+/* Under a tag's head, its sub-tags sit inside it: indented on a guide line, a compact head (a dot
+   of their color and their name) instead of a band. The bands stay for the top sections of a
+   tag's page, which has no head above them. */
+.sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub {
 	margin-top: 4px;
-	margin-left: 13px;
-	padding-top: 2px;
-	padding-left: 8px;
-	border-left: 2px solid color-mix(in srgb, var(--sk-tag-l-fg, var(--sk-tasks-l-fg)) 30%, transparent);
+	margin-left: 11px;
+	padding-left: 10px;
+	border-left: 2px solid var(--sk-line);
+}
+.sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h {
+	height: 30px;
+	padding: 0 4px;
+	background: none;
+}
+.sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h::before {
+	display: none;
+}
+.sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h:hover {
+	background: var(--sk-hover);
+}
+.sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h .sk-tasks-dot {
+	display: block;
+	width: 8px;
+	height: 8px;
+	margin: 0 2px 0 0;
+	border-radius: 50%;
+	opacity: 1;
+}
+.sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h .sk-tasks-grp-name {
+	color: var(--sk-tag-l-fg, var(--sk-tasks-l-fg));
+	font-size: 14px;
+	font-weight: 600;
+}
+.sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h .sk-tasks-grp-rule {
+	visibility: hidden;
+}
+/* Their "+" is smaller and plain until the pointer comes: the head of the tag keeps the big one. */
+.sk-tasks-view:not(.is-phone) .sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h button.sk-btn.sk-tasks-grp-add {
+	width: 24px;
+	height: 24px;
+	min-width: 24px;
+	padding: 0;
+	background: transparent;
+}
+.sk-tasks-view:not(.is-phone) .sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h button.sk-btn.sk-tasks-grp-add:hover {
+	background: var(--sk-tasks-add-c);
+}
+.sk-tasks-view:not(.is-phone) .sk-tasks-grp:not(.is-headless) > .sk-tasks-grp-body > .sk-tasks-grp.is-sub > .sk-tasks-grp-h button.sk-btn.sk-tasks-grp-add svg {
+	width: 14px;
+	height: 14px;
 }
 
 /* ---------- rows ---------- */
@@ -533,11 +577,21 @@ body.theme-dark {
 	--sk-tasks-rbg: var(--sk-surface);
 	background: var(--sk-tasks-row-sel);
 }
-/* Several tasks picked together. */
+/* Several tasks picked together. Picked rows that follow each other read as one block:
+   rounded at its two ends only, one straight bar on its edge (tab.ts marks the ends). */
 .sk-tasks-row.is-picked {
 	--sk-tasks-rbg: var(--sk-surface);
+	border-radius: 0;
 	background: color-mix(in srgb, var(--sk-accent) 12%, transparent);
 	box-shadow: inset 3px 0 0 var(--sk-accent);
+}
+.sk-tasks-row.is-picked.is-pick-first {
+	border-top-left-radius: var(--sk-radius-s);
+	border-top-right-radius: var(--sk-radius-s);
+}
+.sk-tasks-row.is-picked.is-pick-last {
+	border-bottom-left-radius: var(--sk-radius-s);
+	border-bottom-right-radius: var(--sk-radius-s);
 }
 .sk-tasks-pickbar {
 	position: sticky;
@@ -707,6 +761,30 @@ body.theme-dark {
 .sk-tasks-m-due.is-overdue {
 	color: var(--sk-danger);
 	font-weight: 550;
+}
+/* Late, without "Show overdue first": a fact in grey ("since Oct 7"), not an alarm. */
+.sk-tasks-m-due.is-late {
+	color: var(--text-faint);
+}
+
+/* Weight you feel before you read it: a High task is a little larger, darker, with air around it;
+   a Low task smaller, grey and close-set; no priority sits between the two. */
+.sk-tasks-view:not(.is-phone) .sk-tasks-row.p-high:not(.is-step) {
+	padding-top: 10px;
+	padding-bottom: 10px;
+}
+.sk-tasks-view:not(.is-phone) .sk-tasks-row.p-high:not(.is-step) .sk-tasks-txt {
+	color: var(--text-normal);
+	font-size: 15.5px;
+	font-weight: 600;
+}
+.sk-tasks-view:not(.is-phone) .sk-tasks-row.p-low:not(.is-step) {
+	padding-top: 4px;
+	padding-bottom: 4px;
+}
+.sk-tasks-view:not(.is-phone) .sk-tasks-row.p-low:not(.is-step) .sk-tasks-txt {
+	color: var(--text-muted);
+	font-size: 13.5px;
 }
 .sk-tasks-m-due.is-today {
 	color: var(--sk-accent-text);
@@ -1099,6 +1177,9 @@ body.sk-tasks-dnd.sk-tasks-dnd .sk-tasks-grip {
 .sk-tasks-due-val.is-overdue {
 	color: var(--sk-danger);
 }
+.sk-tasks-due-val.is-late {
+	color: var(--text-muted);
+}
 .sk-tasks-due-val.is-today {
 	color: var(--sk-accent-text);
 }
@@ -1481,27 +1562,33 @@ button.sk-tasks-scope.sk-tasks-scope.is-on {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
-.sk-tasks-nav-chip {
-	min-width: 0;
-	padding: 0 8px;
-	overflow: hidden;
-	border-radius: 6px;
-	background: var(--sk-tag-l-bg, var(--sk-tasks-l-bg));
-	color: var(--sk-tag-l-fg, var(--sk-tasks-l-fg));
-	font-size: 12.5px;
-	font-weight: 600;
-	line-height: 20px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+/* Sub-tags: a dot of their color and their name, on a guide line from their parent. */
+.sk-tasks-nav-tag.is-sub {
+	position: relative;
+	gap: 7px;
+	min-height: 26px;
+	padding-left: calc(8px + var(--sk-tasks-depth, 1) * 16px);
+	font-size: 13px;
 }
-.sk-tasks-nav-chip.is-deep {
-	padding: 0 4px;
-	background: none;
-	font-size: 12px;
-	font-weight: 550;
+.sk-tasks-nav-guide {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--sk-tasks-depth, 1) * 16px - 1px);
+	width: 1.5px;
+	border-radius: 1px;
+	background: var(--sk-line);
+	pointer-events: none;
 }
-.sk-tasks-nav-item.is-on .sk-tasks-nav-chip {
-	box-shadow: 0 0 0 1.5px var(--sk-tag-l-fg, var(--sk-tasks-l-fg));
+.sk-tasks-nav-tag.is-sub .sk-tasks-nav-dot {
+	width: 8px;
+	height: 8px;
+	margin: 0;
+	border-radius: 50%;
+	opacity: 1;
+}
+.sk-tasks-nav-tag.is-sub.is-on {
+	color: var(--sk-tag-l-fg, var(--text-normal));
 }
 .sk-tasks-nav-foot {
 	margin-top: auto;
@@ -1509,6 +1596,23 @@ button.sk-tasks-scope.sk-tasks-scope.is-on {
 	color: var(--text-faint);
 	font-size: 12px;
 	line-height: 1.5;
+}
+.sk-tasks-view button.sk-tasks-nav-help {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: max-content;
+	height: auto;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: transparent;
+	box-shadow: none;
+	cursor: pointer;
+}
+.sk-tasks-view button.sk-tasks-nav-help:hover {
+	background: var(--sk-hover);
+	color: var(--text-muted);
 }
 
 .sk-tasks-center {
@@ -1672,14 +1776,131 @@ button.sk-tasks-scope.sk-tasks-scope.is-on {
 	gap: 8px;
 	margin-top: 12px;
 }
-.sk-tasks-ph-tools .sk-tasks-search {
+.sk-tasks-ph-gap {
 	flex: 1;
-	min-width: 160px;
-	max-width: 300px;
 }
-.sk-tasks-ph-tools .sk-tasks-fchips {
+/* The energy of the moment: one segmented control, the chosen one raised. */
+.sk-tasks-ph-tools .sk-tasks-energy {
 	flex-wrap: wrap;
-	margin-right: auto;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 10px;
+	background: var(--background-modifier-hover);
+}
+.sk-tasks-energy button.sk-btn.sk-tasks-fchip {
+	height: 28px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-weight: 500;
+}
+.sk-tasks-energy button.sk-btn.sk-tasks-fchip:hover {
+	color: var(--text-normal);
+}
+.sk-tasks-energy button.sk-btn.sk-tasks-fchip.is-on {
+	background: var(--background-primary);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 6px rgb(0 0 0 / 0.05);
+	color: var(--text-normal);
+}
+.theme-dark .sk-tasks-energy button.sk-btn.sk-tasks-fchip.is-on {
+	background: var(--background-modifier-active-hover, var(--interactive-hover));
+}
+/* Search folded into its magnifier until it is used ("/", a click, or a query on). */
+.sk-tasks-ph-tools .sk-tasks-search.is-compact {
+	flex: none;
+	width: 34px;
+	padding: 0 9px;
+	overflow: hidden;
+	border-color: transparent;
+	background: transparent;
+	cursor: pointer;
+	transition: width var(--sk-slow) var(--sk-ease), border-color var(--sk-fast), background var(--sk-fast);
+}
+.sk-tasks-ph-tools .sk-tasks-search.is-compact:hover {
+	background: var(--sk-hover);
+}
+.sk-tasks-ph-tools .sk-tasks-search.is-compact kbd {
+	display: none;
+}
+.sk-tasks-ph-tools .sk-tasks-search.is-compact:focus-within,
+.sk-tasks-ph-tools .sk-tasks-search.is-compact.has-query {
+	width: 260px;
+	border-color: var(--sk-line);
+	background: var(--background-modifier-form-field);
+	cursor: text;
+}
+.sk-tasks-ph-tools .sk-tasks-search.is-compact:focus-within {
+	border-color: var(--sk-accent-line);
+}
+.sk-tasks-ph-tools .sk-tasks-search.is-compact:focus-within kbd,
+.sk-tasks-ph-tools .sk-tasks-search.is-compact.has-query kbd {
+	display: inline-flex;
+}
+
+/* "+ New task": a quiet line (top of the list, and under each tag's head), lit by the pointer. */
+.sk-tasks-view button.sk-tasks-newline {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	height: 38px;
+	margin: 10px 0 6px;
+	padding: 0 12px 0 22px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-faint);
+	font-size: 14.5px;
+	font-weight: 500;
+	text-align: left;
+	cursor: text;
+	transition: background var(--sk-fast), color var(--sk-fast);
+}
+.sk-tasks-view button.sk-tasks-newline:hover,
+.sk-tasks-view button.sk-tasks-newline:focus-visible {
+	background: var(--sk-accent-wash);
+	color: var(--sk-accent-text, var(--sk-accent));
+}
+.sk-tasks-newline .sk-tasks-ic svg {
+	width: 17px;
+	height: 17px;
+	stroke-width: 2.2;
+	transition: transform var(--sk-fast) var(--sk-ease);
+}
+.sk-tasks-newline:hover .sk-tasks-ic svg {
+	transform: rotate(90deg);
+}
+.sk-tasks-newline-label {
+	flex: 1;
+}
+.sk-tasks-newline kbd {
+	opacity: 0;
+	transition: opacity var(--sk-fast);
+}
+.sk-tasks-newline:hover kbd,
+.sk-tasks-newline:focus-visible kbd {
+	opacity: 0.8;
+}
+/* Under a tag's head: the size of a task row, its plus where the checkboxes are. */
+.sk-tasks-view button.sk-tasks-newline.is-in-group {
+	height: 32px;
+	margin: 0;
+	padding-left: 24px;
+	font-size: 13.5px;
+	font-weight: 400;
+}
+.sk-tasks-newline.is-in-group .sk-tasks-ic svg {
+	width: 15px;
+	height: 15px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-tasks-newline:hover .sk-tasks-ic svg {
+		transform: none;
+	}
 }
 .sk-tasks-page .sk-tasks-list {
 	padding: 4px max(20px, calc((100% - 1040px) / 2)) 90px;
@@ -2117,6 +2338,10 @@ textarea.sk-tasks-tnote-area {
 	outline: 2px solid var(--sk-accent);
 	outline-offset: 2px;
 }
+/* Inside a block of picked rows, the focused one is ringed inside the block, not around it. */
+.sk-tasks-view .sk-tasks-row.is-picked[data-sk-item]:focus-visible {
+	outline-offset: -2px;
+}
 
 /* Phone: a lighter head. The tab already says Tasks; the page button has no sense here; one big New task button. */
 .sk-tasks-view.is-phone .sk-tasks-side-top .sk-tasks-title,
@@ -2511,16 +2736,6 @@ textarea.sk-tasks-tnote-area {
 		transform: none;
 	}
 }
-/* New task on top of the navigator (page), like New brainstorm in the Brainstorms tab. */
-.sk-tasks-view button.sk-btn.sk-tasks-nav-new {
-	flex: none;
-	justify-content: center;
-	gap: 6px;
-	margin: 0 0 12px;
-}
-.sk-tasks-nav-new kbd {
-	margin-left: 4px;
-}
 /* The pill of the day opens what was done today. */
 .sk-tasks-done {
 	cursor: var(--cursor);
@@ -2634,5 +2849,558 @@ textarea.sk-tasks-tnote-area {
 @media (prefers-reduced-motion: reduce) {
 	.sk-tasks-donepop {
 		animation: none;
+	}
+}
+
+/* The own tasks of a tag that has sub-tags (see tagGroup in tab.ts): "· main" stays quieter than the name. */
+.sk-tasks-grp-own {
+	font-weight: 500;
+	opacity: 0.7;
+}
+
+/* ---------- weight folds and the harvest of the day (page) ---------- */
+/* "35 lighter · 3 waiting · 1 someday": one quiet line under what weighs. */
+.sk-tasks-view button.sk-tasks-fold {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: max-content;
+	height: 28px;
+	margin: 2px 0 4px 18px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-faint);
+	font-size: 13px;
+	cursor: pointer;
+}
+.sk-tasks-view button.sk-tasks-fold:hover {
+	background: var(--sk-hover);
+	color: var(--text-muted);
+}
+.sk-tasks-fold .sk-tasks-ic svg {
+	width: 14px;
+	height: 14px;
+	transition: transform var(--sk-fast) var(--sk-ease);
+}
+.sk-tasks-fold.is-open .sk-tasks-ic svg {
+	transform: rotate(90deg);
+}
+.sk-tasks-row.is-unfolded {
+	animation: sk-rise var(--sk-slow) var(--sk-ease) backwards;
+}
+/* Done today: at the foot of its group, under a dashed rule, faint and struck through. */
+.sk-tasks-harvest {
+	margin: 6px 0 4px 18px;
+	padding-top: 6px;
+	border-top: 1px dashed var(--sk-line);
+}
+.sk-tasks-harvest-h {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 6px 4px;
+	color: var(--text-faint);
+	font-size: 12.5px;
+}
+.sk-tasks-harvest-h .sk-tasks-ic svg {
+	width: 13px;
+	height: 13px;
+	color: var(--sk-ok, var(--color-green));
+}
+.sk-tasks-harvest-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 3px 6px;
+	border-radius: var(--sk-radius-s);
+	color: var(--text-faint);
+	font-size: 13.5px;
+	cursor: pointer;
+}
+.sk-tasks-harvest-row:hover {
+	background: var(--sk-hover);
+}
+.sk-tasks-harvest-box svg {
+	width: 15px;
+	height: 15px;
+	color: var(--sk-ok, var(--color-green));
+}
+.sk-tasks-harvest-t {
+	text-decoration: line-through;
+	text-decoration-color: color-mix(in srgb, currentColor 60%, transparent);
+}
+.sk-tasks-harvest-row.is-landed {
+	animation: sk-tasks-harvest-in 900ms var(--sk-ease);
+}
+@keyframes sk-tasks-harvest-in {
+	0% { opacity: 0; transform: translateY(-8px); background: var(--sk-accent-wash); }
+	40% { opacity: 1; transform: none; background: var(--sk-accent-wash); }
+	100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-tasks-row.is-unfolded,
+	.sk-tasks-harvest-row.is-landed {
+		animation: none;
+	}
+}
+
+/* ---------- a tag is a room (page) ---------- */
+.sk-tasks-page-head.is-room {
+	background: color-mix(in srgb, var(--sk-tag-l-bg, var(--sk-tasks-l-bg)) 70%, transparent);
+	transition: background var(--sk-slow) var(--sk-ease);
+}
+.sk-tasks-room-crumbs {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin: -6px 0 6px -6px;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+.sk-tasks-view button.sk-tasks-room-crumb {
+	height: 24px;
+	padding: 0 6px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 13px;
+	cursor: pointer;
+}
+.sk-tasks-view button.sk-tasks-room-crumb:hover {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+.sk-tasks-room-sep svg {
+	width: 13px;
+	height: 13px;
+	color: var(--text-faint);
+}
+
+/* ---------- the card of the place (right column, no task picked) ---------- */
+.sk-tasks-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 22px 22px 18px;
+	animation: sk-rise var(--sk-slow) var(--sk-ease);
+}
+.sk-tasks-card-kicker {
+	color: var(--text-faint);
+	font-size: 12.5px;
+}
+.sk-tasks-card-title h2 {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 650;
+}
+.sk-tasks-card-sub {
+	color: var(--text-faint);
+	font-size: 13px;
+}
+.sk-tasks-card-day {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 10px 0 4px;
+}
+.sk-tasks-card-ring.sk-tasks-card-ring {
+	flex: none;
+	width: 42px;
+	height: 42px;
+}
+.sk-tasks-card-day-t {
+	color: var(--text-normal);
+	font-size: 14.5px;
+	font-weight: 600;
+}
+.sk-tasks-card-day-s {
+	color: var(--text-faint);
+	font-size: 12.5px;
+}
+.sk-tasks-card-sec {
+	display: flex;
+	flex-direction: column;
+	margin-top: 14px;
+}
+.sk-tasks-card-h {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 0 6px 6px;
+	color: var(--text-faint);
+	font-size: 11px;
+	font-weight: 650;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.sk-tasks-card-h .sk-tasks-ic svg {
+	width: 13px;
+	height: 13px;
+}
+.sk-tasks-card-line {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	min-height: 30px;
+	padding: 0 6px;
+	border-radius: var(--sk-radius-s);
+	color: var(--text-muted);
+	font-size: 13.5px;
+}
+.sk-tasks-card-line .sk-tasks-ic svg {
+	width: 15px;
+	height: 15px;
+	color: var(--text-faint);
+}
+.sk-tasks-card-line.is-link {
+	cursor: pointer;
+}
+.sk-tasks-card-line.is-link:hover {
+	background: var(--sk-hover);
+	color: var(--text-normal);
+}
+.sk-tasks-card-line-t {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-tasks-card-line .sk-tasks-nav-dot {
+	width: 8px;
+	height: 8px;
+	margin: 0 3px;
+	border-radius: 50%;
+	opacity: 1;
+}
+.sk-tasks-card-foot {
+	margin-top: 18px;
+	padding: 0 6px;
+	color: var(--text-faint);
+	font-size: 12.5px;
+	line-height: 1.5;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-tasks-card {
+		animation: none;
+	}
+}
+
+/* What the typed words become, under the add line: it takes the hint's place while it says something. */
+.sk-tasks-add-preview {
+	display: none;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin-top: 4px;
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+.sk-tasks-add.has-preview .sk-tasks-add-preview {
+	display: flex;
+	animation: sk-rise var(--sk-fast) var(--sk-ease);
+}
+.sk-tasks-add.has-preview .sk-tasks-add-hint {
+	display: none;
+}
+.sk-tasks-add-becomes {
+	color: var(--text-faint);
+}
+.sk-tasks-add-part {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 20px;
+	padding: 0 7px;
+	border-radius: 6px;
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.sk-tasks-add-part .sk-tasks-ic svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* New task (page): a button that unfolds a small map of the tags, like the Map of Home (tag-map.ts). */
+.sk-tasks-nb { position: relative; z-index: 5; height: 36px; margin: 12px 0 10px 14px; }
+.sk-tasks-nb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sk-tasks-view button.sk-tasks-nb-btn { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 9px; height: 36px; padding: 0 14px 0 6px; border: 1px solid var(--sk-line); border-radius: 999px; background: var(--sk-surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); color: var(--text-normal); font-size: 14px; font-weight: 550; cursor: pointer; transition: border-color var(--sk-fast), box-shadow var(--sk-mid) var(--sk-ease), transform var(--sk-fast) var(--sk-ease); }
+.sk-tasks-nb-ic { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--interactive-accent); color: var(--text-on-accent); transition: transform var(--sk-mid) var(--sk-spring); }
+.sk-tasks-nb-ic svg { width: 15px; height: 15px; stroke-width: 2.6; }
+.sk-tasks-nb-btn kbd { margin-left: 2px; opacity: 0.55; }
+.sk-tasks-view .sk-tasks-nb:is(:hover, .is-open) button.sk-tasks-nb-btn, .sk-tasks-view button.sk-tasks-nb-btn:focus-visible { border-color: var(--sk-accent-line); box-shadow: 0 0 0 3px var(--sk-accent-wash); }
+.sk-tasks-nb.is-open .sk-tasks-nb-ic { transform: rotate(45deg) scale(1.05); }
+.sk-tasks-view button.sk-tasks-nb-btn:active { transform: scale(0.97); }
+.sk-tasks-nb-map { position: absolute; left: -10px; top: -10px; z-index: 1; box-sizing: content-box; width: var(--sk-nb-mw, 0); height: var(--sk-nb-mh, 0); padding: 10px 14px 10px 10px; border: 1px solid var(--sk-line); border-radius: 14px; background: var(--sk-surface); box-shadow: var(--sk-shadow-pop); animation: sk-tasks-nb-in var(--sk-mid) var(--sk-ease); }
+.sk-tasks-nb-map[hidden] { display: none; }
+.sk-tasks-nb-map > * { translate: 10px 10px; }
+@keyframes sk-tasks-nb-in { from { opacity: 0; transform: scale(0.98); } }
+.sk-tasks-nb-lines { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.sk-tasks-nb-lines path { fill: none; stroke: var(--background-modifier-border-hover, var(--sk-line)); stroke-width: 1.4; }
+.sk-tasks-nb-lines path:is(.is-on, .is-sub) { stroke: var(--text-faint); }
+.sk-tasks-view button.sk-tasks-nb-node { position: absolute; left: var(--sk-nb-x, 0); top: var(--sk-nb-y, 0); width: var(--sk-nb-w, auto); display: flex; align-items: center; gap: 8px; box-sizing: border-box; height: 30px; margin-top: 2px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; box-shadow: none; color: var(--text-normal); font-size: 13.5px; white-space: nowrap; cursor: pointer; transition: background var(--sk-fast), transform var(--sk-fast) var(--sk-ease); }
+.sk-tasks-view button.sk-tasks-nb-node:is(:hover, :focus-visible, .is-open) { background: var(--sk-hover); }
+.sk-tasks-view button.sk-tasks-nb-node:focus-visible { outline: 1px solid var(--sk-accent-line); outline-offset: 0; }
+.sk-tasks-view button.sk-tasks-nb-node:active { transform: scale(0.97); }
+.sk-tasks-nb-node.is-sub { font-weight: 500; }
+.sk-tasks-nb-n { margin-left: auto; padding-left: 10px; color: var(--text-faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.sk-tasks-nb-chev, .sk-tasks-nb-plus { display: inline-flex; width: 14px; height: 14px; color: var(--text-faint); transition: opacity var(--sk-fast), transform var(--sk-fast) var(--sk-ease); }
+.sk-tasks-nb-chev svg, .sk-tasks-nb-plus svg { width: 14px; height: 14px; }
+.sk-tasks-nb-plus { position: absolute; right: 8px; opacity: 0; color: var(--sk-accent-text, var(--sk-accent)); transform: scale(0.6); }
+.sk-tasks-nb-node:is(:hover, :focus-visible) .sk-tasks-nb-plus { opacity: 1; transform: none; }
+.sk-tasks-nb-node:is(:hover, :focus-visible) :is(.sk-tasks-nb-n, .sk-tasks-nb-chev) { opacity: 0; }
+.sk-tasks-nb-node.is-open .sk-tasks-nb-chev { transform: translateX(2px); color: var(--text-muted); }
+.sk-tasks-nb-fly { position: fixed; left: 0; top: 0; z-index: var(--layer-tooltip, 9999); pointer-events: none; }
+.sk-tasks-add-tag.is-landing { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .sk-tasks-nb-map { animation: none; } .sk-tasks-nb-ic { transition: none; } }
+
+/* Today (page): Your day, Worth a look and its decisions (tab.ts, todayPage). */
+.sk-tasks-look-h { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 6px; padding: 0 6px 6px 8px; border-bottom: 1px solid var(--sk-line); }
+.sk-tasks-day .sk-tasks-look-h { margin-top: 6px; }
+.sk-tasks-look-lbl { color: var(--text-muted); font-size: 12px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
+.sk-tasks-look-n { color: var(--text-faint); font-size: 12.5px; }
+.sk-tasks-look-keys { display: flex; align-items: center; gap: 4px; margin-left: auto; color: var(--text-faint); font-size: 12px; }
+.sk-tasks-look-keys span { margin: 0 6px 0 2px; }
+.sk-tasks-look-keys kbd { font-size: 10.5px; }
+.sk-tasks-look-sub { margin: 12px 0 2px 24px; color: var(--text-faint); font-size: 12.5px; }
+.sk-tasks-look-note { margin: 8px 0 4px 24px; color: var(--text-faint); font-size: 13px; }
+.sk-tasks-look-set { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px 24px; color: var(--text-muted); font-size: 13.5px; }
+.sk-tasks-look-set .sk-tasks-ic { color: var(--sk-accent-text, var(--sk-accent)); }
+.sk-tasks-look-acts { display: none; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.sk-tasks-row.is-look.is-sel .sk-tasks-look-acts { display: flex; }
+.sk-tasks-look-acts .sk-btn { gap: 5px; height: 26px; font-size: 12.5px; font-weight: 500; }
+.sk-tasks-look-acts kbd { font-size: 10.5px; opacity: 0.75; }
+.sk-tasks-look-today { color: var(--sk-accent-text, var(--sk-accent)); }
+.sk-tasks-look-w { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--sk-hover); }
+.sk-tasks-look-w .sk-btn { height: 22px; padding: 0 8px; border: 0; background: transparent; box-shadow: none; }
+.sk-tasks-look-w .sk-btn:hover { background: var(--sk-surface); }
+.sk-tasks-look-f { width: 9px; height: 9px; border: 1.5px solid currentColor; border-radius: 2px; }
+.sk-tasks-card-line.is-today .sk-tasks-card-line-t { color: var(--sk-accent-text, var(--sk-accent)); }
+
+/* Today (page): From your brainstorms (tab.ts, ideasFold). */
+.sk-tasks-idea { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 8px 6px 24px; border-radius: var(--sk-radius-s); }
+.sk-tasks-idea:hover { background: var(--sk-hover); }
+.sk-tasks-idea-ic { flex: none; color: var(--text-faint); }
+.sk-tasks-idea-ic svg { width: 15px; height: 15px; }
+.sk-tasks-idea-main { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
+.sk-tasks-idea-t { color: var(--text-normal); font-size: 14.5px; }
+.sk-tasks-view button.sk-tasks-idea-where { align-self: flex-start; height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: var(--text-faint); font-size: 12.5px; cursor: pointer; }
+.sk-tasks-view button.sk-tasks-idea-where:hover { color: var(--text-muted); text-decoration: underline; }
+.sk-tasks-idea-acts { display: flex; flex: none; align-items: center; gap: 6px; }
+
+/* The room's tie (page, tab.ts drawRoomLink): the chosen tag reaches the navigator's edge in the
+   room's wash, and a band of the same wash climbs along that edge to the tinted head. */
+.sk-tasks-page { position: relative; }
+.sk-tasks-page .sk-tasks-nav-tag.is-on {
+	position: relative;
+	z-index: 1;
+	margin-right: -10px;
+	padding-right: 18px;
+	border-radius: var(--sk-radius-s) 0 0 var(--sk-radius-s);
+	background: color-mix(in srgb, var(--sk-tag-l-bg, var(--sk-tasks-l-bg)) 70%, var(--sk-tasks-bg, var(--background-primary)));
+	transition: background var(--sk-slow) var(--sk-ease);
+}
+.sk-tasks-room-link { position: absolute; left: 0; top: 0; z-index: 2; overflow: visible; pointer-events: none; }
+.sk-tasks-room-link path { fill: color-mix(in srgb, var(--sk-tag-l-bg, var(--sk-tasks-l-bg)) 70%, var(--sk-tasks-bg, var(--background-primary))); }
+.sk-tasks-room-fly { position: fixed; left: 0; top: 0; z-index: var(--layer-tooltip, 9999); transform-origin: 0 0; pointer-events: none; }
+.sk-tasks-ph-name .sk-tasks-cap.is-landing { visibility: hidden; }
+.sk-tasks-page .sk-tasks-page-head.is-room { background: color-mix(in srgb, var(--sk-tag-l-bg, var(--sk-tasks-l-bg)) 70%, var(--sk-tasks-bg, var(--background-primary))); }
+
+/* Navigator: a sub-tag shows its whole capsule (root and name), smaller than its parent's. */
+.sk-tasks-nav-tag.is-sub > .sk-tasks-cap-nav { font-size: 10px; }
+.sk-tasks-nav-tag.is-sub > .sk-tasks-cap-nav .sk-tasks-cap-body { text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+/* ---------- phone: the list of the page (Today page, weight, folds, room, the "+" of tags) ---------- */
+/* Weight you feel before you read it, at the phone's size. */
+.sk-tasks-view.is-phone .sk-tasks-row.p-high:not(.is-step) .sk-tasks-txt {
+	color: var(--text-normal);
+	font-size: 17.5px;
+	font-weight: 600;
+}
+.sk-tasks-view.is-phone .sk-tasks-row.p-low:not(.is-step) .sk-tasks-txt {
+	color: var(--text-muted);
+	font-size: 15px;
+}
+/* Worth a look: no selection on a phone, every row shows its decisions, big enough for a thumb. */
+.sk-tasks-view.is-phone .sk-tasks-look-acts {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
+}
+.sk-tasks-view.is-phone .sk-tasks-look-acts .sk-btn {
+	height: 34px;
+	padding: 0 12px;
+	font-size: 14px;
+}
+.sk-tasks-view.is-phone .sk-tasks-look-w .sk-btn {
+	height: 30px;
+	min-width: 40px;
+}
+.sk-tasks-view.is-phone .sk-tasks-look-acts kbd,
+.sk-tasks-view.is-phone .sk-tasks-look-keys {
+	display: none;
+}
+.sk-tasks-view.is-phone .sk-tasks-look-h {
+	margin-top: 26px;
+}
+.sk-tasks-view.is-phone .sk-tasks-look-lbl {
+	font-size: 13px;
+}
+.sk-tasks-view.is-phone .sk-tasks-look-sub,
+.sk-tasks-view.is-phone .sk-tasks-look-note {
+	font-size: 14px;
+}
+.sk-tasks-view.is-phone .sk-tasks-idea {
+	flex-wrap: wrap;
+	padding-left: 8px;
+}
+.sk-tasks-view.is-phone .sk-tasks-idea-t {
+	font-size: 16px;
+}
+.sk-tasks-view.is-phone .sk-tasks-idea-acts {
+	width: 100%;
+	padding-left: 25px;
+}
+.sk-tasks-view.is-phone .sk-tasks-idea-acts .sk-btn {
+	height: 34px;
+	font-size: 14px;
+}
+.sk-tasks-view.is-phone button.sk-tasks-fold {
+	min-height: 38px;
+	font-size: 14px;
+}
+.sk-tasks-view.is-phone .sk-tasks-harvest-row {
+	min-height: 36px;
+	font-size: 15px;
+}
+/* The room of a tag: its wash on a banner on top of the list. */
+.sk-tasks-proom {
+	margin: 0 -12px 12px;
+	padding: 14px 18px 14px;
+	background: color-mix(in srgb, var(--sk-tag-l-bg, var(--sk-tasks-l-bg)) 70%, var(--sk-tasks-bg, var(--background-primary)));
+	animation: sk-rise var(--sk-mid) var(--sk-ease);
+}
+.sk-tasks-proom .sk-tasks-room-crumbs {
+	margin: 0 0 8px -6px;
+	font-size: 14px;
+}
+.sk-tasks-view .sk-tasks-proom button.sk-tasks-room-crumb {
+	height: 30px;
+	font-size: 14px;
+}
+.sk-tasks-proom-name {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+.sk-tasks-proom-sub {
+	color: var(--text-muted);
+	font-size: 14px;
+}
+
+/* New task: the tags rise from the round "+", joined to it by curves, over a light veil. */
+.sk-tasks-fan {
+	position: absolute;
+	inset: 0;
+	z-index: 19;
+}
+.sk-tasks-fan-veil {
+	position: absolute;
+	inset: 0;
+	background: color-mix(in srgb, var(--sk-tasks-bg, var(--background-primary)) 78%, transparent);
+	backdrop-filter: blur(2px);
+}
+.sk-tasks-fan-stage {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+.sk-tasks-fan-lines {
+	position: absolute;
+	left: 0;
+	top: 0;
+	overflow: visible;
+}
+.sk-tasks-fan-lines path {
+	fill: none;
+	stroke: var(--background-modifier-border-hover, var(--sk-line));
+	stroke-width: 1.6;
+}
+.sk-tasks-fan-lines path.is-on {
+	stroke: var(--sk-accent);
+}
+.sk-tasks-view button.sk-tasks-fan-node,
+.sk-tasks-view button.sk-tasks-fan-back {
+	position: absolute;
+	right: var(--sk-fan-r);
+	top: var(--sk-fan-y);
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	height: 40px;
+	padding: 0 12px 0 10px;
+	border: 1px solid var(--sk-line);
+	border-radius: 999px;
+	background: var(--sk-surface);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+	transform: translate(0, -50%);
+	pointer-events: auto;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: transform var(--sk-fast) var(--sk-ease);
+}
+.sk-tasks-view button.sk-tasks-fan-node:active {
+	transform: translate(0, -50%) scale(0.95);
+}
+.sk-tasks-fan-node .sk-tasks-cap {
+	font-size: 12.5px;
+}
+.sk-tasks-view button.sk-tasks-fan-node.is-whole {
+	border-color: var(--sk-accent);
+}
+.sk-tasks-fan-n {
+	color: var(--text-faint);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+.sk-tasks-fan-chev {
+	display: inline-flex;
+	order: -1;
+	color: var(--text-faint);
+}
+.sk-tasks-fan-chev svg {
+	width: 15px;
+	height: 15px;
+}
+.sk-tasks-view button.sk-tasks-fan-back {
+	height: 32px;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 14px;
+}
+.sk-tasks-fan-back svg {
+	width: 15px;
+	height: 15px;
+}
+.sk-tasks-view button.sk-tasks-fab .sk-tasks-ic svg,
+.sk-tasks-view button.sk-tasks-fab svg {
+	transition: transform var(--sk-mid) var(--sk-spring);
+}
+.sk-tasks-view button.sk-tasks-fab.is-fan svg {
+	transform: rotate(45deg);
+}
+@media (prefers-reduced-motion: reduce) {
+	.sk-tasks-proom {
+		animation: none;
+	}
+	.sk-tasks-view button.sk-tasks-fab svg {
+		transition: none;
 	}
 }

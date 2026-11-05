@@ -1,6 +1,7 @@
 import type { TFile } from "obsidian";
 import type { SessionEntry } from "./atelier";
 import type { DecideEntry } from "./flow";
+import type { TaskIdea } from "../../core/services";
 import type { Learned, LearnedVerbs } from "./logic";
 
 export interface SessionsSettings {
@@ -78,6 +79,10 @@ export interface SessionsService {
 	sortToDecide(): void;
 	/** Called (soon, once per burst) when sessions change; returns an unsubscribe function. */
 	onChange(callback: () => void): () => void;
+	/** Sentences of brainstorms in progress that look like tasks (Today of Tasks). Since 2026-11-04. */
+	taskIdeas(): Promise<TaskIdea[]>;
+	acceptIdea(idea: TaskIdea, tag: string): Promise<boolean>;
+	dismissIdea(idea: TaskIdea): void;
 }
 
 /** What the module reads from Tag colors, when it is on. */

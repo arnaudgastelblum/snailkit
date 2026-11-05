@@ -15,7 +15,7 @@ function fakePlugin() {
 	const plugin = {
 		app: { commands: { addCommand: (c: { id: string }) => commands.set(c.id, c), removeCommand: (id: string) => commands.delete(id) }, workspace: { updateOptions() {}, trigger() {} } },
 		data: defaultData(),
-		workbench: { setAutoOpen() {}, setStartTabs() {} },
+		workbench: { setAutoOpen() {}, setStartTabs() {}, refresh() {}, applyTextSize() {} },
 		saveData: async () => undefined,
 		lang: "en",
 		manifest: { id: "snailkit", name: "Snailkit" },

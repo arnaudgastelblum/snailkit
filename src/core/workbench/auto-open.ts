@@ -10,6 +10,9 @@
 //   tab; when it is still empty and active a frame later (a tab opened to show a note is not), it
 //   becomes a transient Workbench: opening a note from it takes its place.
 // Phones follow the same setting; the focus is not put in a field there (no keyboard popping up).
+// On phones, the main area stays hidden from the plugin's load to the end of the startup opening:
+// Obsidian shows the restored note first (on a slow phone, its big title before the note loads),
+// and the Workbench would then replace it before the user's eyes.
 import { Platform, View, type WorkspaceLeaf, type WorkspaceParent } from "obsidian";
 import type SnailkitPlugin from "../../main";
 import type { WorkbenchCore } from "./index";
@@ -26,6 +29,8 @@ export class AutoOpener {
 	private disposed = false;
 	/** Gives back the keys held while the startup Workbench opens (see holdKeys). */
 	private releaseKeys: (() => void) | null = null;
+	/** Shows the main area again once the startup opening is over (see veil). */
+	private releaseVeil: (() => void) | null = null;
 
 	constructor(
 		private readonly plugin: SnailkitPlugin,
@@ -36,7 +41,10 @@ export class AutoOpener {
 		const workspace = plugin.app.workspace;
 		plugin.registerEvent(workspace.on("layout-change", () => this.newTabSoon()));
 		plugin.registerEvent(workspace.on("active-leaf-change", () => this.newTabSoon()));
-		if (startup) this.holdKeys();
+		if (startup) {
+			this.holdKeys();
+			this.veil();
+		}
 	}
 
 	private get app() {
@@ -48,6 +56,7 @@ export class AutoOpener {
 		if (this.disposed || this.layoutReady) return;
 		this.layoutReady = true;
 		if (!this.startup) {
+			this.releaseVeil?.();
 			this.startupDone = true;
 			return;
 		}
@@ -55,6 +64,7 @@ export class AutoOpener {
 			.catch((error) => console.error("[Snailkit] workbench: could not open at startup", error))
 			.finally(() => {
 				this.releaseKeys?.();
+				this.releaseVeil?.();
 				this.startupDone = true;
 			});
 	}
@@ -177,6 +187,24 @@ export class AutoOpener {
 		};
 	}
 
+	/**
+	 * Phones: hides the main area while Obsidian restores the last note and the Workbench takes
+	 * its place (class on the body, see 50-workbench.css). Given back at the end of the startup
+	 * opening, or after a few seconds whatever happens.
+	 */
+	private veil(): void {
+		if (!Platform.isMobile) return;
+		const body = window.document.body;
+		body.addClass("sk-wb-starting");
+		const timer = window.setTimeout(() => this.releaseVeil?.(), 5000);
+		this.releaseVeil = () => {
+			this.releaseVeil = null;
+			window.clearTimeout(timer);
+			// A frame later: the Workbench has drawn its first tab.
+			window.requestAnimationFrame(() => body.removeClass("sk-wb-starting"));
+		};
+	}
+
 	/** An empty tab of the main area may be a new tab: checked again a frame later. */
 	private newTabSoon(): void {
 		if (this.disposed || !this.layoutReady || !this.startupDone || this.core.autoOpenMode !== "startup-and-new-tabs") return;
@@ -217,6 +245,7 @@ export class AutoOpener {
 	dispose(): void {
 		this.disposed = true;
 		this.releaseKeys?.();
+		this.releaseVeil?.();
 		this.checking.clear();
 	}
 }

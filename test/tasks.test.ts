@@ -16,7 +16,7 @@ import {
 import {
 	flagSet, inlineParts, isInFolder, parseFolderList, parseTagList, parseTaskText, plainTitle, scanTasks, taskKey,
 } from "../src/modules/tasks/parse";
-import { normalizeWord, parseQuickAdd } from "../src/modules/tasks/quick-add";
+import { normalizeWord, parseQuickAdd, WEEKDAY_WORDS } from "../src/modules/tasks/quick-add";
 import { TaskIndex } from "../src/modules/tasks/task-index";
 import type { Context, Task, TasksSettings } from "../src/modules/tasks/types";
 import { TaskWriter } from "../src/modules/tasks/writer";
@@ -352,16 +352,71 @@ test("where new tasks go", () => {
 
 test("quick add reads priority and due date shortcuts in every language", () => {
 	const words = { today: ["today", "aujourdhui", "hoy"], tomorrow: ["tomorrow", "demain", "morgen", "mañana"] };
-	assert.deepEqual(parseQuickAdd("Call the bank !1 @tomorrow", "2026-10-02", words), { text: "Call the bank", priority: "high", due: "2026-10-03" });
-	assert.deepEqual(parseQuickAdd("@2026-10-12 Pay !3 #home", "2026-10-02", words), { text: "Pay #home", priority: "low", due: "2026-10-12" });
+	assert.deepEqual(parseQuickAdd("Call the bank !1 @tomorrow", "2026-10-02", words), { text: "Call the bank", priority: "high", due: "2026-10-03", tag: null });
+	assert.deepEqual(parseQuickAdd("@2026-10-12 Pay !3 #home", "2026-10-02", words), { text: "Pay #home", priority: "low", due: "2026-10-12", tag: null });
 	assert.equal(parseQuickAdd("Appeler @aujourd'hui", "2026-10-02", words).due, "2026-10-02");
 	assert.equal(parseQuickAdd("Llamar @MANANA", "2026-10-02", words).due, "2026-10-03");
 	// Unknown words and impossible dates stay in the text.
-	assert.deepEqual(parseQuickAdd("Ask @bob about !5 @2026-02-30", "2026-10-02", words), { text: "Ask @bob about !5 @2026-02-30", priority: null, due: null });
+	assert.deepEqual(parseQuickAdd("Ask @bob about !5 @2026-02-30", "2026-10-02", words), { text: "Ask @bob about !5 @2026-02-30", priority: null, due: null, tag: null });
 	assert.equal(normalizeWord("Mañana"), "manana");
 });
 
 // ----- grouping -----
+
+test("quick add recognizes every weekday in four languages with accents and case ignored", () => {
+	const languages = [
+		["sunday sun", "monday mon", "tuesday tue", "wednesday wed", "thursday thu", "friday fri", "saturday sat"],
+		["dimanche dim", "lundi lun", "mardi mar", "mercredi mer", "jeudi jeu", "vendredi ven", "samedi sam"],
+		["zondag zon", "maandag maa", "dinsdag din", "woensdag woe", "donderdag don", "vrijdag vrij", "zaterdag zat"],
+		["domingo dom", "lunes lun", "martes mar", "miércoles mié", "jueves jue", "viernes vie", "sábado sáb"],
+	];
+	const dates = ["2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10"];
+	for (const language of languages) {
+		language.forEach((aliases, day) => {
+			for (const word of aliases.split(" ")) {
+				const q = parseQuickAdd(`Read @${word.toUpperCase()}`, "2026-10-03", { today: [], tomorrow: [] });
+				assert.equal(q.due, dates[day], word);
+				assert.equal(q.text, "Read");
+			}
+		});
+	}
+});
+
+test("weekday words are unambiguous and always mean strictly after today", () => {
+	const seen = new Map<string, number>();
+	WEEKDAY_WORDS.forEach((aliases, day) => {
+		for (const alias of aliases) {
+			const word = normalizeWord(alias);
+			assert.ok(!seen.has(word) || seen.get(word) === day, word);
+			seen.set(word, day);
+			const today = addDays("2026-10-04", day);
+			assert.equal(parseQuickAdd(`@${word}`, today, { today: [], tomorrow: [] }).due, addDays(today, 7));
+		}
+	});
+	for (const word of ["ma", "di", "do", "me", "vi", "za"]) {
+		assert.ok(!seen.has(word));
+		assert.equal(parseQuickAdd(`@${word}`, "2026-10-02", { today: [], tomorrow: [] }).text, `@${word}`);
+	}
+	assert.equal(parseQuickAdd("@fri @mon", "2026-10-02", { today: [], tomorrow: [] }).due, "2026-10-09");
+	assert.equal(parseQuickAdd("@fri @mon", "2026-10-02", { today: [], tomorrow: [] }).text, "@mon");
+});
+
+test("quick add names the first group tag (left in the text) when flags are supplied", () => {
+	const words = { today: [], tomorrow: ["tomorrow"] };
+	const flags = new Set(["waiting"]);
+	assert.deepEqual(parseQuickAdd("Read #WAITING #HIGH #medium #low #Project/Website #other !2 @tomorrow", "2026-10-02", words, flags), {
+		text: "Read #WAITING #HIGH #medium #low #Project/Website #other", priority: "medium", due: "2026-10-03", tag: "project/website",
+	});
+	for (const text of ["Read", "Read #waiting #high #medium #low", "Read x#project #/invalid"]) {
+		assert.deepEqual(parseQuickAdd(text, "2026-10-02", words, flags), { text, priority: null, due: null, tag: null });
+	}
+	assert.equal(parseQuickAdd("#Équipe_2/Plan-A Read", "2026-10-02", words, new Set()).tag, "équipe_2/plan-a");
+	assert.equal(parseQuickAdd("#project Read", "2026-10-02", words).tag, null);
+	// A number is a reference, not a tag (same rule as tagsOf).
+	assert.equal(parseQuickAdd("Fix issue #123 #2026", "2026-10-02", words, flags).tag, null);
+	assert.equal(parseQuickAdd("Fix issue #123 then #project", "2026-10-02", words, flags).tag, "project");
+	assert.equal(parseQuickAdd("#project Read", "2026-10-02", words).text, "#project Read");
+});
 
 function task(over: Partial<Task>): Task {
 	const base = { path: "A.md", line: 0, raw: "", indent: "", text: "", done: false, tags: [], primary: "home", priority: null, due: null, doneDate: null, title: "t", markers: {}, baseKey: "", key: "", subtasks: [], description: "" };

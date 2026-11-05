@@ -13,6 +13,8 @@
 	flex: 1;
 	flex-direction: column;
 	min-height: 0;
+	/* The text size of the Workbench (its setting, else the text size of notes, over 16 px). */
+	zoom: var(--sk-wb-zoom, 1);
 }
 /* Where a tab is mounted: it scrolls by itself unless the tab fills it (the Tasks tab does). */
 .sk-wb-tab {
@@ -21,16 +23,25 @@
 	overflow: auto;
 }
 
+/* Phones, at Obsidian's startup: the restored note stays hidden until the Workbench is open
+   (see auto-open.ts). The Workbench itself shows as soon as it is there. */
+body.sk-wb-starting .workspace-split.mod-root .workspace-leaf-content:not([data-type="snailkit-tasks"]) {
+	visibility: hidden;
+}
+
 /* Tabs: a few quiet words in the view header, the active one underlined. */
 .sk-wb-tabs-header {
 	position: relative;
 	display: flex;
 	align-items: center;
-	flex: none;
+	justify-content: center;
+	flex: 1;
 	min-width: 0;
+	container: sk-wb-tabs / inline-size;
 }
 .sk-wb-tabs-header:not(.is-in-header) {
-	padding: 6px 8px 4px;
+	flex: none;
+	padding: 6px 8px;
 	border-bottom: 1px solid var(--sk-line);
 }
 .sk-wb-tabs-header.is-in-header {
@@ -40,24 +51,38 @@
 .sk-wb-tabs-header[hidden] {
 	display: none;
 }
-/* The tabs already name the view: the title of the header (shown by the default theme) would repeat it. */
+/* The tabs already name the view: the title of the header (shown by the default theme) would
+   repeat it. They take its room, centered in the header. */
 .view-header.sk-wb-has-tabs > .view-header-title-container {
-	visibility: hidden;
+	display: none;
 }
+
+/* Tabs: a segmented pill in the middle of the header; the active tab sits in a lighter pill
+   that slides from one tab to the other. */
 .sk-wb-tabs {
 	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 2px;
 	min-width: 0;
+	padding: 3px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
 }
 .sk-wb-tabs button.sk-wb-tab-button {
+	position: relative;
+	z-index: 1;
 	min-width: 0;
-	height: 24px;
-	padding: 0 8px;
-	gap: 5px;
-	color: var(--text-faint);
-	font-size: 12.5px;
+	height: 28px;
+	padding: 0 14px;
+	gap: 6px;
+	border-radius: 999px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 13.5px;
+	font-weight: 500;
+	transition: color var(--sk-fast) var(--sk-ease);
 }
 .sk-wb-tab-icon {
 	display: inline-flex;
@@ -66,26 +91,34 @@
 	flex: none;
 }
 .sk-wb-tabs button.sk-wb-tab-button svg {
-	width: 13px;
-	height: 13px;
-	stroke-width: 1.75;
+	width: 15px;
+	height: 15px;
+	stroke-width: 1.9;
 }
 .sk-wb-tabs button.sk-wb-tab-button:hover {
-	background: var(--sk-hover);
-	color: var(--text-muted);
+	background: transparent;
+	color: var(--text-normal);
 }
 .sk-wb-tabs button.sk-wb-tab-button[aria-selected="true"] {
 	color: var(--text-normal);
+	font-weight: 600;
+}
+.sk-wb-tabs button.sk-wb-tab-button[aria-selected="true"] svg {
+	color: var(--sk-accent);
 }
 .sk-wb-tabs-line {
 	position: absolute;
+	top: 3px;
+	bottom: 3px;
 	left: 0;
-	bottom: -3px;
-	height: 2px;
-	border-radius: 2px;
-	background: var(--sk-accent);
+	border-radius: 999px;
+	background: var(--background-primary);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 2px 8px rgb(0 0 0 / 0.06);
 	pointer-events: none;
-	transition: transform var(--sk-slow) var(--sk-ease), width var(--sk-slow) var(--sk-ease);
+	transition: transform var(--sk-slow) var(--sk-spring), width var(--sk-slow) var(--sk-spring);
+}
+.theme-dark .sk-wb-tabs-line {
+	background: var(--background-modifier-active-hover, var(--interactive-hover));
 }
 .sk-wb-tab-label {
 	overflow: hidden;
@@ -94,12 +127,27 @@
 }
 .sk-wb-tab-count {
 	color: var(--text-faint);
-	font-size: 11px;
+	font-size: 11.5px;
 	font-variant-numeric: tabular-nums;
 }
 .sk-wb-tab-count.is-warn {
 	color: var(--sk-danger);
 	font-weight: 600;
+}
+/* Phones: a taller pill, easier to touch. */
+.is-phone .sk-wb-tabs button.sk-wb-tab-button {
+	height: 32px;
+	font-size: 14px;
+}
+/* Little room (side panel, phone): only the active tab keeps its name, the others their icon
+   and count (named in their tooltip). */
+@container sk-wb-tabs (max-width: 400px) {
+	.sk-wb-tabs button.sk-wb-tab-button {
+		padding: 0 10px;
+	}
+	.sk-wb-tabs button.sk-wb-tab-button:not([aria-selected="true"]) .sk-wb-tab-label {
+		display: none;
+	}
 }
 .sk-wb-tabs-header button.sk-wb-tabs-hint {
 	position: absolute;

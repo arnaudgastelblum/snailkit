@@ -291,7 +291,9 @@ export class Composer {
 		ranges.push(Decoration.line({ class: "sk-sessions-task-line is-composing" + (this.step === "title" ? " is-step-title" : "") }).range(line.from));
 		for (let i = 1; i <= this.candCount && this.taskLine + i <= state.doc.lines; i++) {
 			const l = state.doc.line(this.taskLine + i);
-			ranges.push(Decoration.line({ class: "sk-sessions-cand" + (i <= this.count ? " is-grab" : "") }).range(l.from));
+			// The grabbed lines read as one block: rounded at its two ends only.
+			const grab = i <= this.count ? " is-grab" + (i === 1 ? " is-grab-first" : "") + (i === this.count ? " is-grab-last" : "") : "";
+			ranges.push(Decoration.line({ class: "sk-sessions-cand" + grab }).range(l.from));
 		}
 		let name = this.tag;
 		let preview = false;

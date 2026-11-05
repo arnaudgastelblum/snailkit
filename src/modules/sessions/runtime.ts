@@ -12,8 +12,10 @@ import {
 	LEGACY_CLOSING,
 	dayPart,
 	hhmm,
+	fingerprint,
 	learn,
 	learnVerb,
+	suggestion,
 	newSessionText,
 	proposedTitle,
 	remember,
@@ -22,11 +24,13 @@ import {
 	type Summary,
 } from "./logic";
 import { TAB_ORDER } from "../../core/workbench/types";
+import type { TaskIdea } from "../../core/services";
+import { moment } from "../../core/moment";
 import { taskTagChoices, type TagAround, type TagTreeEntry } from "../../ui/tag-picker";
 import type { PlacesService, SessionsService, SessionsSettings, TagColorsService, TasksWorkbench } from "./types";
 import { colorOf, contextOf, contextsOf, createdAt, keepColors, keepCreated, keepIn, keepKept, keptIn, renameColors, renameCreated, renameKept, withColor, withKept, renameIn, searchable, serviceList, toggleIn, triageOf, locateRaw, withContext, withCreated, type SessionColor, type SessionInfo, type Triage } from "./atelier";
 import { SessionsTab } from "./tab";
-import { applyEdit, bodyLineCount, countsOf, decideQueue, flowOf, linesOf, looseCount, type DecideEntry, type Flow, type LineEdit } from "./flow";
+import { applyEdit, bodyLineCount, countsOf, decide, decideQueue, flowOf, linesOf, looseCount, looseItems, type DecideEntry, type Flow, type LineEdit } from "./flow";
 import { Sorter } from "./tri";
 
 
@@ -219,6 +223,9 @@ export class SessionsRuntime {
 			list: () => serviceList(this.sessionInfos()),
 			toDecide: () => this.toDecide(),
 			sortToDecide: () => this.startSort(null, null, "decide"),
+			taskIdeas: () => this.taskIdeas(),
+			acceptIdea: (idea, tag) => this.acceptIdea(idea, tag),
+			dismissIdea: (idea) => this.dismissIdea(idea),
 			onChange: (callback) => {
 				this.listeners.add(callback);
 				return () => this.listeners.delete(callback);
@@ -783,6 +790,60 @@ export class SessionsRuntime {
 	toDecide(): DecideEntry[] {
 		const list = this.sessionInfos().map((s) => ({ ...s, questions: this.details.get(s.path)?.summary.questions ?? [] }));
 		return decideQueue(list, this.settings.decideArchived);
+	}
+
+	/**
+	 * The sentences of the brainstorms in progress (not finished, not archived) that look like tasks
+	 * (the pale dot of the editor), newest brainstorm first. The tag offered is the brainstorm's
+	 * context, else one learned from the words, else the tag used most around the note.
+	 */
+	async taskIdeas(): Promise<TaskIdea[]> {
+		const out: TaskIdea[] = [];
+		let tags: string[] | undefined;
+		const infos = this.sessionInfos()
+			.filter((s) => !s.closed && !this.settings.archived.includes(s.path))
+			.sort((a, b) => b.created - a.created);
+		for (const s of infos) {
+			const text = await this.textOf(s.path);
+			if (text === null) continue;
+			const lines = linesOf(text);
+			const items = looseItems(lines, this.isClosing, this.sortOptions(s.path)).filter((i) => i.kind === "likely" && i.start !== undefined && i.end !== undefined);
+			if (!items.length) continue;
+			const head = contextOf(lines.slice(0, 40));
+			const context = head && !isFlag(head) ? head : null;
+			let around: string | null | undefined;
+			for (const it of items) {
+				let tag = context;
+				if (!tag) {
+					tags ??= this.allTags();
+					const learned = suggestion(it.text, this.settings.learned, tags)?.tag ?? null;
+					tag = learned && !isFlag(learned) ? learned : null;
+				}
+				if (!tag) {
+					around ??= this.tagChoices(this.file(s.path))?.around.find((a) => !isFlag(a.tag))?.tag ?? null;
+					tag = around;
+				}
+				out.push({ path: s.path, title: s.title, created: s.created, line: it.line, raw: it.raw, text: it.text, start: it.start!, end: it.end!, tag });
+			}
+		}
+		return out;
+	}
+
+	/** Writes a sentence as a task with its tag, where it is (as choice 1 of Sort); false when the line changed. */
+	async acceptIdea(idea: TaskIdea, tag: string): Promise<boolean> {
+		const item = { line: idea.line, raw: idea.raw, block: [idea.raw], kind: "likely" as const, text: idea.text, start: idea.start, end: idea.end };
+		const today = moment().format("YYYY-MM-DD");
+		const edit = await this.editNote(idea.path, (lines) => decide(lines, item, "task", tag, "\t", this.isClosing, today));
+		if (!edit) return false;
+		this.learnTag(idea.text, tag);
+		this.learnVerb(idea.text, true);
+		return true;
+	}
+
+	/** Not a task: the sentence is kept as an idea (its dot goes, as choice 3 of Sort), and the dots learn from it. */
+	dismissIdea(idea: TaskIdea): void {
+		this.keepIdeas(idea.path, [fingerprint(idea.text)], true);
+		this.learnVerb(idea.text, false);
 	}
 
 	/** The text of a session now: the open editor's, else the file's. */

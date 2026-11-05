@@ -2,15 +2,21 @@
 // panel, and navigator + list + details when the Workbench is a page. Everything it changes is
 // written in the notes. The Workbench (src/core/workbench) owns the view, the tab bar and the
 // layout; this tab owns everything inside its root, div.sk-tasks-view.
-import { Menu, Platform, Scope, type WorkspaceLeaf } from "obsidian";
+import { Menu, Platform, Scope, setTooltip, type WorkspaceLeaf } from "obsidian";
 import { openTagPicker, type TagPickerHandle } from "../../ui/tag-picker";
 import { tagChoices } from "./around";
 
 /** A tag the task lines read back (the grammar of the Tasks API). */
 const TAG_NAME = /^[\p{L}\p{N}_][\p{L}\p{N}_/-]*$/u;
-import { cssColor, dayClear, dayProgress, dust, fly, glide, odometer, plusOne, pop, spark, wave } from "../../ui/playful";
+import { cssColor, dayClear, reducedMotion, dayProgress, dust, fly, glide, odometer, plusOne, pop, spark, wave } from "../../ui/playful";
 import type { TabState, WorkbenchTabHost, WorkbenchTabInstance } from "../../core/workbench/types";
 import { richText } from "../../ui/settings-page";
+import { foldGroup } from "./weight";
+import { elementOf } from "../../ui/dom";
+import { zoomOf } from "../../ui/surface";
+import { worthALook, type Look } from "./today-plan";
+import { flyTag, mountTagMap, type TagMapHandle, type TagMapNode } from "./tag-map";
+import { openTagFan, type TagFanHandle } from "./tag-fan";
 import { capsule, checkbox, colorFor, descriptionPreview, icon, kbd, renderInline, tagDot } from "./components";
 import {
 	addDays, buildTree, countTasks, dueState, findNode, inScope, matchesQuery, moveInOrder, nextWeek, passesPriority,
@@ -20,7 +26,7 @@ import type { ViewAction } from "./api";
 import type { TasksHub } from "./hub";
 import { TaskNoteView } from "./task-note-view";
 import { RenameTagModal } from "./rename-tag";
-import { TAG_RENAMED_EVENT } from "../../core/services";
+import { TAG_RENAMED_EVENT, type SessionsReader, type TagColorsReader, type TaskIdea } from "../../core/services";
 import type { TagRenameResult } from "../../core/tags/rename";
 import { PRIORITIES, plainTitle } from "./parse";
 import { parseQuickAdd } from "./quick-add";
@@ -42,6 +48,8 @@ interface ViewState {
 	adding: string | null;
 	/** Text typed in the quick add row and not added yet (kept through redraws and tab changes). */
 	draft: string;
+	/** The tag picked in the New task map: the add row on top of the list has it (adding = ""). */
+	topTag?: string | null;
 	/** Property of the details whose choices are unfolded. */
 	editProp: string | null;
 	/** Phone: the panel open under the filter bar, or null. */
@@ -62,7 +70,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** What a Workbench leaf's list showed (search, selection, quick add) when its tab was last mounted. */
-type Memory = Pick<ViewState, "scope" | "query" | "sel" | "open" | "adding" | "draft" | "editProp" | "propsFor"> & {
+type Memory = Pick<ViewState, "scope" | "query" | "sel" | "open" | "adding" | "draft" | "topTag" | "editProp" | "propsFor"> & {
 	/** Where the cursor was in the quick add row, and whether that row had the focus. */
 	caret: { start: number; end: number; focused: boolean } | null;
 };
@@ -83,12 +91,29 @@ export class TasksTab implements WorkbenchTabInstance {
 	private anchor: string | null = null;
 	/** Keys being dragged together (the picked tasks), or empty. */
 	private dragKeys: string[] = [];
-	private readonly st: ViewState = { scope: "all", query: "", sel: null, open: null, adding: null, draft: "", editProp: null, propsFor: null };
+	private readonly st: ViewState = { scope: "today", query: "", sel: null, open: null, adding: null, draft: "", editProp: null, propsFor: null };
 	private pending = false;
 	private animating = 0;
 	private freshKey: string | null = null;
 	/** The task whose added line just landed on it: it glows a moment (kept through redraws). */
 	private landedKey: string | null = null;
+	private tagMap: TagMapHandle | null = null;
+	/** Phone: the tags unfolded by the round "+" (New task). */
+	private tagFan: TagFanHandle | null = null;
+
+	/**
+	 * The list as the page draws it (Today page, folds by weight, harvest, "+ New task" under each
+	 * tag, the room of a tag): the page, and the phone, whose screen is the whole Workbench.
+	 */
+	private get rich(): boolean {
+		return this.layout === "page" || Platform.isPhone;
+	}
+
+	/** The tags most used for tasks, and their sub-tags, for the New task button and the phone's "+". */
+	private newTree(): TagMapNode[] {
+		const toNode = (n: TagNode): TagMapNode => ({ tag: n.tag, count: n.count, children: [...n.children].sort((a, b) => b.count - a.count).map(toNode) });
+		return [...this.tagTree(this.hub.index.open())].sort((a, b) => b.count - a.count).slice(0, 6).map(toNode);
+	}
 	private dragKey: string | null = null;
 	private readonly cleanups: Array<() => void> = [];
 	/** F2 is Obsidian's "Rename file": while the list has the focus, it renames the selected task. */
@@ -102,6 +127,12 @@ export class TasksTab implements WorkbenchTabInstance {
 	private footEl: HTMLElement | null = null;
 	private detailEl: HTMLElement | null = null;
 	private searchInput: HTMLInputElement | null = null;
+	/** Tags whose lighter, waiting and someday tasks are unfolded (page), for this session. */
+	private unfolded = new Set<string>();
+	/** Tasks checked here a moment ago (base keys): their line glows once in the harvest. */
+	private justDone = new Set<string>();
+	/** Row positions before a change that moves rows (a priority given by 1, 2, 3). */
+	private flipFrom: { at: Map<string, number>; time: number } | null = null;
 	private countEl: HTMLElement | null = null;
 	private scopeEl: HTMLElement | null = null;
 	private hubTitleEl: HTMLElement | null = null;
@@ -467,6 +498,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (this.closed) return;
 		this.closed = true;
 		this.closeDonePop();
+		this.tagFan?.close();
+		this.tagFan = null;
 		this.el.removeClass("sk-tasks-tab");
 		this.tagPop?.close();
 		this.tagPop = null;
@@ -474,8 +507,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.notePreview = null;
 		if (this.scoped) this.hub.ctx.app.keymap.popScope(this.keyScope);
 		this.scoped = false;
-		const { scope, query, sel, open, adding, draft, editProp, propsFor } = this.st;
-		memories.set(this.host.leaf, { scope, query, sel, open, adding, draft, editProp, propsFor, caret: this.caret() });
+		const { scope, query, sel, open, adding, draft, topTag, editProp, propsFor } = this.st;
+		memories.set(this.host.leaf, { scope, query, sel, open, adding, draft, topTag, editProp, propsFor, caret: this.caret() });
 		for (const cleanup of this.cleanups.splice(0)) cleanup();
 		this.rootEl.doc.body.removeClass("sk-tasks-dnd");
 		this.rootEl.remove();
@@ -583,7 +616,7 @@ export class TasksTab implements WorkbenchTabInstance {
 					r.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay: k++ * 25, fill: "backwards" });
 					return;
 				}
-				const dy = was - r.getBoundingClientRect().top;
+				const dy = (was - r.getBoundingClientRect().top) / zoomOf(list);
 				if (Math.abs(dy) < 1) return;
 				r.animate([{ transform: `translateY(${dy}px)` }, { transform: `translateY(${-Math.sign(dy) * 3}px)`, offset: 0.7 }, { transform: "none" }], { duration: 460, delay: k++ * 26, easing: "cubic-bezier(0.25, 1, 0.35, 1)", fill: "backwards" });
 			});
@@ -678,6 +711,10 @@ export class TasksTab implements WorkbenchTabInstance {
 		const hub = el.createDiv({ cls: `sk-tasks-hub sk-tasks-${this.layout ?? "side"}` });
 		if (this.layout === "page") {
 			this.navEl = hub.createDiv({ cls: "sk-tasks-nav", attr: { "data-sk-zone": "nav" } });
+			this.listen(this.navEl, "scroll", () => this.queueRoomLink());
+			const watch = new ResizeObserver(() => this.queueRoomLink());
+			watch.observe(hub);
+			this.cleanups.push(() => watch.disconnect());
 			const center = hub.createDiv({ cls: "sk-tasks-center" });
 			this.headEl = center.createDiv({ cls: "sk-tasks-page-head", attr: { "data-sk-zone": "toolbar" } });
 			this.listEl = center.createDiv({ cls: "sk-tasks-list", attr: { "data-sk-zone": "list" } });
@@ -696,6 +733,31 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.refresh();
 	}
 
+	/** Where each row stands now, for the next drawing to move the rows from there (2 s at most). */
+	private captureFlip(): void {
+		const list = this.listEl;
+		if (!list || !this.hub.playful(this.rootEl.win)) return;
+		const at = new Map<string, number>();
+		list.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]").forEach((r) => at.set(r.dataset.key!, r.getBoundingClientRect().top));
+		this.flipFrom = { at, time: Date.now() };
+	}
+
+	/** The rows glide from where they were (captureFlip) to where they are now. */
+	private playFlip(): void {
+		const from = this.flipFrom;
+		const list = this.listEl;
+		if (!from || !list) return;
+		this.flipFrom = null;
+		if (Date.now() - from.time > 2000) return;
+		list.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]").forEach((r) => {
+			const was = from.at.get(r.dataset.key!);
+			if (was === undefined) return;
+			const dy = (was - r.getBoundingClientRect().top) / zoomOf(list);
+			if (Math.abs(dy) < 1) return;
+			r.animate([{ transform: `translateY(${dy}px)` }, { transform: `translateY(${-Math.sign(dy) * 3}px)`, offset: 0.75 }, { transform: "none" }], { duration: 420, easing: "cubic-bezier(0.25, 1, 0.35, 1)" });
+		});
+	}
+
 	refresh(): void {
 		if (this.closed) return;
 		if (!this.listEl) return;
@@ -708,7 +770,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.notePreview?.detach();
 		const focusedScope = this.rootEl.doc.activeElement?.closest<HTMLElement>("[data-scope]")?.dataset.scope;
 		const focusedRow = this.rootEl.doc.activeElement?.closest<HTMLElement>(".sk-tasks-row[data-key]")?.dataset.key;
-		const focusedEarlier = !!this.rootEl.doc.activeElement?.closest(".sk-tasks-grp-earlier .sk-tasks-grp-toggle");
+		const focusedFold = this.rootEl.doc.activeElement?.closest<HTMLElement>(".sk-tasks-grp-earlier .sk-tasks-grp-toggle")?.dataset.focusKey ?? null;
 		const scroll = this.listEl.scrollTop;
 		const addInput = this.listEl.querySelector<HTMLInputElement>(".sk-tasks-add input");
 		const adding = addInput && this.rootEl.doc.activeElement === addInput ? { value: addInput.value, pos: addInput.selectionStart ?? 0 } : null;
@@ -723,12 +785,14 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (this.st.adding !== null && this.listEl) {
 			const want = this.st.adding;
 			const placed = Array.from(this.listEl.querySelectorAll<HTMLElement>(".sk-tasks-add"));
-			if (!placed.some((r) => (r.dataset.tag ?? "") === want)) {
+			const shown = want || (this.st.topTag ?? null) || "";
+			if (!placed.some((r) => (r.dataset.tag ?? "") === shown)) {
 				for (const r of placed) r.remove();
-				this.listEl.prepend(this.addRow(this.listEl, want || null));
+				this.listEl.prepend(this.addRow(this.listEl, shown || null));
 			}
 		}
 		this.reconcilePicked();
+		this.playFlip();
 		if (this.layout === "side") {
 			this.listEl.removeAttribute("data-sk-zone");
 			const entry = this.rowOf(this.st.sel ?? "") ?? this.listEl.querySelector<HTMLElement>(".sk-tasks-row[data-key]");
@@ -748,7 +812,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		this.listEl.scrollTop = scroll;
 		if (focusedRow && this.st.sel) this.rowOf(this.st.sel)?.focus({ preventScroll: true });
-		if (focusedEarlier) this.listEl.querySelector<HTMLElement>(".sk-tasks-grp-earlier .sk-tasks-grp-toggle")?.focus({ preventScroll: true });
+		if (focusedFold) this.listEl.querySelector<HTMLElement>(`.sk-tasks-grp-earlier .sk-tasks-grp-toggle[data-focus-key="${focusedFold}"]`)?.focus({ preventScroll: true });
 		if (focusedScope) Array.from(this.rootEl.querySelectorAll<HTMLElement>("[data-scope]")).find((item) => item.dataset.scope === focusedScope)?.focus({ preventScroll: true });
 		this.rootEl.querySelectorAll<HTMLElement>("[data-sk-zone] button").forEach((button) => button.setAttr("data-sk-item", ""));
 		if (adding) {
@@ -761,6 +825,100 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		// The arrival animation of a new task plays once.
 		if (this.freshKey && this.listEl.querySelector(".sk-tasks-row.is-new")) this.freshKey = null;
+		this.drawRoomLink();
+	}
+
+	/** The room's tie (page): the tag chosen in the navigator is joined to the tinted head by a band of its color. */
+	private roomLink: SVGSVGElement | null = null;
+	/** A tag was just chosen in the navigator: the tie and the capsule play their arrival once. */
+	private roomArrive = false;
+	private roomFrame = 0;
+
+	/**
+	 * Draws the band that joins the chosen tag of the navigator to the head of its room: one shape
+	 * of the room's wash, from the row (stretched to the navigator's edge) up along that edge to the
+	 * head, with soft inner corners. Nothing when no tag is chosen or its row is scrolled away.
+	 */
+	private drawRoomLink(): void {
+		const arrive = this.roomArrive;
+		this.roomArrive = false;
+		this.roomLink?.remove();
+		this.roomLink = null;
+		const nav = this.navEl;
+		const head = this.headEl;
+		const scope = this.st.scope;
+		if (this.layout !== "page" || !nav || !head || !scope.startsWith("tag:")) return;
+		const hub = nav.parentElement;
+		const item = nav.querySelector<HTMLElement>(".sk-tasks-nav-tag.is-on");
+		if (!hub || !item) return;
+		const hr = hub.getBoundingClientRect();
+		const nr = nav.getBoundingClientRect();
+		const ir = item.getBoundingClientRect();
+		const br = head.getBoundingClientRect();
+		if (!ir.height || ir.bottom < nr.top + 4 || ir.top > nr.bottom - 4) return;
+		// Screen lengths back into the Workbench's own (its text size zooms it).
+		const z = zoomOf(hub);
+		const x = (ir.right - hr.left) / z;
+		const top = (ir.top - hr.top) / z;
+		const bottom = (ir.bottom - hr.top) / z;
+		const banner = (br.bottom - hr.top) / z;
+		const W = 7;
+		const R = 9;
+		const svg = hub.createSvg("svg", { cls: "sk-tasks-room-link", attr: { "aria-hidden": "true", width: String(hr.width / z), height: String(hr.height / z) } });
+		colorFor(svg as unknown as HTMLElement, scope.slice(4), this.hub);
+		// The row sits below the head (the usual case): the band climbs from it; at the head's height, the stretched row already touches it.
+		if (top > banner + 2) {
+			const d = [
+				`M${x},${banner}`,
+				`H${x + W + R}`,
+				`Q${x + W},${banner} ${x + W},${banner + R}`,
+				`V${bottom - R}`,
+				`Q${x + W},${bottom} ${x + W - R},${bottom}`,
+				`H${x - R}`,
+				`V${top}`,
+				`Q${x},${top} ${x},${top - R}`,
+				"Z",
+			].join(" ");
+			svg.createSvg("path", { attr: { d } });
+		}
+		this.roomLink = svg;
+		if (!arrive || reducedMotion(this.rootEl.win) || !this.hub.playful(this.rootEl.win)) return;
+		// The arrival: the band rises from the row to the head, the row settles, the capsule flies to the title.
+		svg.animate([{ clipPath: `inset(${bottom}px 0 0 0)` }, { clipPath: "inset(0 0 0 0)" }], { duration: 340, easing: "cubic-bezier(0.3, 0, 0.2, 1)" });
+		item.animate([{ transform: "scale(0.97)" }, { transform: "scale(1)" }], { duration: 260, easing: "cubic-bezier(0.2, 1.3, 0.35, 1)" });
+		const from = item.querySelector<HTMLElement>(".sk-tasks-cap, .sk-tasks-dot");
+		const to = head.querySelector<HTMLElement>(".sk-tasks-ph-name .sk-tasks-cap");
+		if (!from || !to) return;
+		const fr = from.getBoundingClientRect();
+		const tr = to.getBoundingClientRect();
+		const ghost = this.rootEl.doc.body.createDiv({ cls: "sk-tasks-room-fly" });
+		capsule(ghost, scope.slice(4), this.hub, "sk-tasks-cap-lg");
+		to.addClass("is-landing");
+		const scale = Math.max(0.4, Math.min(1, fr.height / Math.max(1, tr.height)));
+		void ghost
+			.animate(
+				[
+					{ transform: `translate(${fr.left}px, ${fr.top}px) scale(${scale})`, opacity: 0.6 },
+					{ transform: `translate(${(fr.left + tr.left) / 2}px, ${Math.min(fr.top, tr.top) - 18}px) scale(${(scale + 1) / 2})`, opacity: 1, offset: 0.5 },
+					{ transform: `translate(${tr.left}px, ${tr.top}px) scale(1)`, opacity: 1 },
+				],
+				{ duration: 460, easing: "cubic-bezier(0.5, 0, 0.2, 1)", fill: "forwards" },
+			)
+			.finished.catch(() => undefined)
+			.then(() => {
+				ghost.remove();
+				to.removeClass("is-landing");
+				to.animate([{ transform: "scale(1)" }, { transform: "scale(1.06)", offset: 0.4 }, { transform: "scale(1)" }], { duration: 280, easing: "cubic-bezier(0.2, 1.3, 0.35, 1)" });
+			});
+	}
+
+	/** Draws the tie again at the next frame (the navigator scrolled, the panel changed size). */
+	private queueRoomLink(): void {
+		if (this.roomFrame) return;
+		this.roomFrame = this.rootEl.win.requestAnimationFrame(() => {
+			this.roomFrame = 0;
+			this.drawRoomLink();
+		});
 	}
 
 	// ----- header -----
@@ -798,11 +956,36 @@ export class TasksTab implements WorkbenchTabInstance {
 			}
 			if (Platform.isPhone) {
 				// A round button floats above the list: New task, always at hand, never in the way.
-				const fab = this.rootEl.createEl("button", { cls: "sk-tasks-fab", attr: { type: "button", "aria-label": this.t("action.new") } });
+				// A tap unfolds the tags most used for tasks (as the button of the page does on hover).
+				const fab = this.rootEl.createEl("button", { cls: "sk-tasks-fab", attr: { type: "button", "aria-label": this.t("action.new"), "aria-haspopup": "true", "aria-expanded": "false" } });
 				icon(fab, "plus");
 				fab.addEventListener("click", () => {
 					this.st.panel = null;
-					this.startAdd(null);
+					if (this.tagFan) {
+						this.tagFan.close();
+						return;
+					}
+					// In the room of a tag, the new task goes there; without any tag, straight to the add row.
+					if (this.st.scope.startsWith("tag:")) {
+						this.startAdd(this.st.scope.slice(4));
+						return;
+					}
+					if (!this.tagTree(this.hub.index.open()).length) {
+						this.startAdd(null);
+						return;
+					}
+					this.tagFan = openTagFan(this.rootEl, fab, {
+						name: this.t("add.choose-tag"),
+						back: this.t("add.all-tags"),
+						roots: () => this.newTree(),
+						draw: (el, tag) => void capsule(el, tag, this.hub),
+						onPick: (tag, from) => {
+							this.tagFan = null;
+							this.addOnTop(tag, from);
+						},
+						onClose: () => (this.tagFan = null),
+						reduced: () => reducedMotion(this.rootEl.win) || !this.hub.playful(this.rootEl.win),
+					});
 				});
 				this.searchBox(toolbar.createDiv({ cls: "sk-tasks-phone-search" }));
 			} else this.searchBox(toolbar);
@@ -816,30 +999,23 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.hubTitleEl = titleRow.createDiv({ cls: "sk-tasks-ph-name" });
 			this.subEl = titleRow.createDiv({ cls: "sk-tasks-ph-sub" });
 			this.doneEl = this.donePill(titleRow);
+			// Above the list, only two questions: the energy of the moment (Everything, 10 minutes,
+			// Focus...) and, folded away, search (/) and the view menu (sort, priorities shown).
 			const tools = head.createDiv({ cls: "sk-tasks-ph-tools" });
-			this.searchBox(tools);
-			const chips = tools.createDiv({ cls: "sk-tasks-fchips" });
-			for (const p of [...PRIORITIES, "none"]) {
-				const chip = chips.createEl("button", { cls: "sk-btn is-s sk-tasks-fchip" + (this.settings.priorityFilter.includes(p) ? " is-on" : "") });
-				chip.dataset.prio = p;
-				icon(chip, p === "none" ? "flag-off" : "flag", "sk-tasks-fl-" + p);
-				chip.createSpan({ text: this.t("prio." + p) });
-				chip.addEventListener("click", () => void this.togglePriorityFilter(p));
-			}
+			const chips = tools.createDiv({ cls: "sk-tasks-fchips sk-tasks-energy", attr: { role: "group" } });
+			const every = chips.createEl("button", { cls: "sk-btn is-s sk-tasks-fchip sk-tasks-every", attr: { type: "button" } });
+			every.setText(this.t("filter.everything"));
+			every.addEventListener("click", () => {
+				const on = this.flagOn();
+				if (on) this.toggleFlagFilter(on);
+			});
 			this.flagChips(chips);
+			tools.createDiv({ cls: "sk-tasks-ph-gap" });
 			this.extEl = tools.createDiv({ cls: "sk-tasks-ext" });
-			const sort = tools.createEl("button", { cls: "sk-btn is-ghost" });
-			icon(sort, "arrow-up-down");
-			this.sortLabel = sort.createSpan();
-			sort.addEventListener("click", (e) => this.sortMenu(e));
-			// New task lives on top of the navigator; without one (a narrow page), it stays here.
-			if (!this.navEl) {
-				const add = tools.createEl("button", { cls: "sk-btn is-primary" });
-				icon(add, "plus");
-				add.createSpan({ text: this.t("action.new") });
-				kbd(add, "N");
-				add.addEventListener("click", () => this.startAdd(null));
-			}
+			this.searchBox(tools);
+			tools.querySelector(".sk-tasks-search")?.addClass("is-compact");
+			this.filterBtn = this.iconButton(tools, "more-horizontal", this.t("view.menu"), (e) => this.viewMenu(e));
+			this.filterBtn.addClass("sk-tasks-view-btn", "sk-tasks-filter-btn");
 		}
 	}
 
@@ -848,6 +1024,16 @@ export class TasksTab implements WorkbenchTabInstance {
 		icon(box, "search");
 		const input = box.createEl("input", { type: "text", attr: { placeholder: this.t("search.placeholder"), spellcheck: "false" } });
 		input.value = this.st.query;
+		// Compact (page head): a magnifier that opens into a field on click, on "/", or while a query is on.
+		box.addEventListener("mousedown", (e) => {
+			if (e.target !== input) {
+				e.preventDefault();
+				input.focus();
+			}
+		});
+		const syncOpen = () => box.toggleClass("has-query", input.value.trim() !== "");
+		input.addEventListener("input", syncOpen);
+		syncOpen();
 		kbd(box, "/");
 		input.addEventListener("input", () => {
 			this.st.query = input.value;
@@ -960,7 +1146,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.countEl?.setText(String(c.all));
 			const scopes = this.scopeEl!;
 			scopes.empty();
-			for (const [id, n] of [["all", c.all], ["today", c.today], ["upcoming", c.upcoming]] as const) {
+			for (const [id, n] of [["today", c.today], ["all", c.all], ["upcoming", c.upcoming]] as const) {
 				const button = scopes.createEl("button", { cls: "sk-tasks-scope" + (this.st.scope === id ? " is-on" : "") });
 				button.dataset.scope = id;
 				button.createSpan({ text: this.t("scope." + id) });
@@ -995,7 +1181,27 @@ export class TasksTab implements WorkbenchTabInstance {
 			const scope = this.st.scope;
 			const title = this.hubTitleEl!;
 			title.empty();
-			if (scope.startsWith("tag:")) capsule(title, scope.slice(4), this.hub, "sk-tasks-cap-lg");
+			// A tag is a place you step into: its wash on the head, the way back above its name.
+			const head = this.headEl!;
+			head.className = "sk-tasks-page-head";
+			head.querySelector(":scope > .sk-tasks-room-crumbs")?.remove();
+			if (scope.startsWith("tag:")) {
+				const tag = scope.slice(4);
+				head.addClass("is-room");
+				colorFor(head, tag, this.hub);
+				const crumbs = createDiv({ cls: "sk-tasks-room-crumbs" });
+				head.prepend(crumbs);
+				const back = crumbs.createEl("button", { cls: "sk-tasks-room-crumb", text: this.t("title.all"), attr: { type: "button" } });
+				back.addEventListener("click", () => this.setScope("all"));
+				const parts = tag.split("/");
+				for (let i = 1; i < parts.length; i++) {
+					const up = parts.slice(0, i).join("/");
+					icon(crumbs, "chevron-right", "sk-tasks-room-sep");
+					const b = crumbs.createEl("button", { cls: "sk-tasks-room-crumb", text: parts[i - 1], attr: { type: "button" } });
+					b.addEventListener("click", () => this.setScope("tag:" + up));
+				}
+				capsule(title, tag, this.hub, "sk-tasks-cap-lg");
+			}
 			else if (scope.startsWith("flag:")) title.createEl("h1", { text: this.flagLabel(scope.slice(5)) });
 			else title.createEl("h1", { text: this.t("title." + scope) });
 			const sub = this.subEl!;
@@ -1024,7 +1230,13 @@ export class TasksTab implements WorkbenchTabInstance {
 				if (c.overdue) sub.createSpan({ cls: "sk-tasks-earlier", text: " · " + this.hub.ctx.tn("head.earlier", c.overdue) });
 			}
 			this.sortLabel?.setText(this.t("sort." + this.sortMode()));
-			this.headEl?.querySelectorAll<HTMLElement>(".sk-tasks-fchip:not(.sk-tasks-flagchip)").forEach((chip) => chip.toggleClass("is-on", filter.includes(chip.dataset.prio ?? "")));
+			const every = this.headEl?.querySelector<HTMLElement>(".sk-tasks-every");
+			if (every) {
+				every.toggleClass("is-on", !this.flagOn());
+				every.setAttr("aria-pressed", String(!this.flagOn()));
+			}
+			// The "..." says when it hides priorities.
+			this.filterBtn?.toggleClass("is-active", filter.length > 0);
 		}
 	}
 
@@ -1114,6 +1326,34 @@ export class TasksTab implements WorkbenchTabInstance {
 		menu.showAtMouseEvent(event);
 	}
 
+	/** The "..." of the page head: how the list is sorted, and which priorities it shows. */
+	private viewMenu(event: MouseEvent): void {
+		const menu = new Menu();
+		menu.addItem((item) => item.setTitle(this.t("sort.label")).setIsLabel(true));
+		for (const mode of SORT_MODES) {
+			menu.addItem((item) =>
+				item
+					.setTitle(this.t("sort." + mode))
+					.setChecked(this.sortMode() === mode)
+					.onClick(async () => {
+						this.settings.sortMode = mode;
+						await this.hub.ctx.saveSettings();
+					}),
+			);
+		}
+		menu.addSeparator();
+		menu.addItem((item) => item.setTitle(this.t("filter.show")).setIsLabel(true));
+		for (const p of [...PRIORITIES, "none"]) {
+			menu.addItem((item) =>
+				item
+					.setTitle(this.t("prio." + p))
+					.setChecked(this.settings.priorityFilter.includes(p))
+					.onClick(() => void this.togglePriorityFilter(p)),
+			);
+		}
+		menu.showAtMouseEvent(event);
+	}
+
 	// ----- navigator (page) -----
 
 	private renderNav(): void {
@@ -1131,31 +1371,32 @@ export class TasksTab implements WorkbenchTabInstance {
 			it.addEventListener("click", () => this.setScope(id));
 			return it;
 		};
-		// New task on top of the navigator, as New brainstorm in the Brainstorms tab.
-		const add = nav.createEl("button", { cls: "sk-btn is-primary sk-tasks-nav-new", attr: { type: "button" } });
-		this.zoneItem(add);
-		icon(add, "plus");
-		add.createSpan({ text: this.t("action.new") });
-		kbd(add, "N");
-		add.addEventListener("click", () => this.startAdd(null));
-		item("all", "layers", c.all);
 		this.dropTarget(item("today", "sun", c.today, c.overdue > 0 && this.settings.overdueFirst), { due: true });
+		item("all", "layers", c.all);
 		item("upcoming", "calendar", c.upcoming);
 		// Waiting on someone, kept for some day: out of the day, one place each to look at them.
 		for (const f of this.parking()) item("flag:" + f, this.flagIcon(f), open.filter((t) => hasFlag(t, f)).length, false, this.flagLabel(f)).addClass("is-flag");
 		nav.createDiv({ cls: "sk-tasks-nav-sec", text: this.t("nav.tags") });
 		const walk = (node: TagNode) => {
 			const it = nav.createDiv({ cls: "sk-tasks-nav-item sk-tasks-nav-tag" + (this.st.scope === "tag:" + node.tag ? " is-on" : "") });
+			if (this.st.scope === "tag:" + node.tag) colorFor(it, node.tag, this.hub);
 			this.zoneItem(it);
 			it.dataset.scope = "tag:" + node.tag;
 			it.setCssProps({ "--sk-tasks-depth": String(node.depth) });
+			// A root tag keeps its capsule; a sub-tag is its name with a dot of its color, on a guide
+			// line that ties it to its parent (as in the list).
 			if (node.depth === 0) capsule(it, node.tag, this.hub, "sk-tasks-cap-nav");
 			else {
-				const chip = it.createSpan({ cls: "sk-tasks-nav-chip sk-tasks-sec" + (node.depth > 1 ? " is-deep" : ""), text: node.name });
-				colorFor(chip, node.tag, this.hub);
+				// A sub-tag shows its whole capsule ("WORK design"), as the head of its room does, on the guide line of its parent.
+				it.addClass("is-sub");
+				it.createSpan({ cls: "sk-tasks-nav-guide", attr: { "aria-hidden": "true" } });
+				capsule(it, node.tag, this.hub, "sk-tasks-cap-nav");
 			}
 			it.createSpan({ cls: "sk-tasks-n", text: String(node.count) });
-			it.addEventListener("click", () => this.setScope("tag:" + node.tag));
+			it.addEventListener("click", () => {
+				if (this.st.scope !== "tag:" + node.tag) this.roomArrive = true;
+				this.setScope("tag:" + node.tag);
+			});
 			it.addEventListener("contextmenu", (event) => this.tagMenu(event, node.tag));
 			this.dropTarget(it, { tag: node.tag });
 			this.tagDrag(it, node.tag);
@@ -1165,7 +1406,12 @@ export class TasksTab implements WorkbenchTabInstance {
 		// Untagged tasks of recent notes: a quiet entry, only when there are some.
 		const loose = this.hub.index.untagged.length;
 		if (loose) item("untagged", "circle-dashed", loose).addClass("is-untagged");
-		nav.createDiv({ cls: "sk-tasks-nav-foot", text: this.t("nav.hint") });
+		// The help is one quiet line: the Workbench's "?" sheet lists the keys and gestures.
+		const help = nav.createEl("button", { cls: "sk-tasks-nav-foot sk-tasks-nav-help", attr: { type: "button" } });
+		setTooltip(help, this.t("nav.hint"));
+		kbd(help, "?");
+		help.createSpan({ text: this.t("nav.keys") });
+		help.addEventListener("click", () => help.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true, cancelable: true })));
 	}
 
 	/** The tag tree of these tasks, in the order the user gave the tags. */
@@ -1249,6 +1495,16 @@ export class TasksTab implements WorkbenchTabInstance {
 				.setDisabled(i < 0 || i >= siblings.length - 1)
 				.onClick(() => void this.placeTag(tag, siblings[i + 1], true)),
 		);
+		const colors = this.hub.ctx.service<TagColorsReader>("tag-colors");
+		if (colors?.chooseColor) {
+			menu.addSeparator();
+			const done = () => this.refresh();
+			menu.addItem((item) => item.setTitle(this.t("menu.tag-color")).setIcon("palette").onClick(() => colors.chooseColor!(tag, done)));
+			if (tag.includes("/")) {
+				const root = tag.split("/")[0];
+				menu.addItem((item) => item.setTitle(this.t("menu.tag-family-color", { tag: root })).setIcon("palette").onClick(() => colors.chooseColor!(root, done)));
+			}
+		}
 		menu.addSeparator();
 		menu.addItem((item) =>
 			item
@@ -1301,6 +1557,8 @@ export class TasksTab implements WorkbenchTabInstance {
 	private renderList(): void {
 		const list = this.listEl!;
 		list.empty();
+		this.look = null;
+		this.lookOrder = [];
 		const scope = this.st.scope;
 		const parking = this.parking();
 		const all = this.filtered();
@@ -1310,7 +1568,17 @@ export class TasksTab implements WorkbenchTabInstance {
 		this.under.clear();
 		this.nested.clear();
 		const own = (ts: Task[]) => ts.filter((t) => !this.nested.has(t.key));
-		if (this.st.adding === "" && !scope.startsWith("tag:") && !scope.startsWith("flag:")) this.addRow(list, null);
+		// The page has no big New task button: a quiet line on top of the list, where the task lands (N).
+		this.tagMap = null;
+		if (this.layout === "page" && this.st.adding === null && !scope.startsWith("flag:") && !scope.startsWith("tag:")) {
+			if (Platform.isPhone) this.newLine(list, null);
+			else this.newButton(list);
+		}
+		if (this.st.adding === "" && !scope.startsWith("tag:") && !scope.startsWith("flag:")) this.addRow(list, (this.st.topTag ?? null));
+		if (scope === "today" && this.rich && !this.settings.overdueFirst) {
+			this.todayPage(list, tasks, today, own);
+			return;
+		}
 		if (scope === "today") {
 			const first = this.settings.overdueFirst;
 			const groups = todayGroups(tasks, today, first);
@@ -1357,7 +1625,8 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (scope.startsWith("tag:")) {
 			const root = scope.slice(4);
 			const node = findNode(tree, root);
-			if (node) this.tagGroup(list, node, 0, this.layout === "page");
+			if (Platform.isPhone) this.phoneRoom(list, root, pool.length);
+			if (node) this.tagGroup(list, node, 0, this.rich);
 			else if (this.st.adding !== null) this.addRow(list, this.st.adding || root);
 		} else tree.forEach((node) => this.tagGroup(list, node, 0));
 		const loose = scope === "all" ? own(untagged) : [];
@@ -1386,6 +1655,306 @@ export class TasksTab implements WorkbenchTabInstance {
 		box.createDiv({ cls: "sk-tasks-empty-t", text: this.t(key + ".title") });
 		box.createDiv({ cls: "sk-tasks-empty-s", text: this.t(key + ".sub") });
 		if (onClear) box.createEl("button", { cls: "sk-btn is-ghost is-s", text: this.t("empty.clear") }).addEventListener("click", onClear);
+	}
+
+	/** Worth a look on the Today page, as last drawn: the decisions (T, 1 2 3, Later) move to the next of its rows. */
+	private look: Look | null = null;
+	/** From your brainstorms (Today page): the sentences offered, null until read; the tag changed by hand, per sentence. */
+	private ideas: TaskIdea[] | null = null;
+	private ideasLoading = false;
+	private ideasOpen = false;
+	private ideasWatched: SessionsReader | null = null;
+	private ideasStop: (() => void) | null = null;
+	/** Bumped when what was read may be stale: a load started before is thrown away, and read again. */
+	private ideasGen = 0;
+	private ideasIndexWatch = false;
+	private readonly ideaTags = new Map<string, string>();
+	/** Every row of Worth a look in order, folded ones too, with its section: the next pick after a decision. */
+	private lookOrder: Array<{ key: string; id: string }> = [];
+	/** Sections of Worth a look unfolded past their first rows. */
+	private readonly lookMore = new Set<string>();
+
+	/**
+	 * Today (page, computer): Your day (due today, by weight, then what was done today), Worth a look
+	 * (the morning triage: due within 7 days, High without a date, new these days without a weight),
+	 * a decision per row (T today, 1 2 3 weight, Later), then the tasks of earlier days, folded.
+	 */
+	private todayPage(list: HTMLElement, tasks: Task[], today: string, own: (ts: Task[]) => Task[]): void {
+		const groups = todayGroups(tasks, today);
+		const look = worthALook(tasks, { today, firstSeen: new Map(this.settings.firstSeen), later: new Map(this.settings.later) });
+		// A section shows its first rows until unfolded (or until the selection is further down).
+		const cut = (id: string, ts: Task[]) => (this.lookMore.has(id) || ts.findIndex((t) => t.key === this.st.sel) >= 5 ? ts : ts.slice(0, 5));
+		this.look = look;
+		const drawn = { soon: cut("soon", look.soon), high: cut("high", look.high), fresh: cut("fresh", look.fresh) };
+		// Steps go under the tasks actually drawn: a step due today under a folded row stays in Your day.
+		this.nest([...groups.today, ...drawn.soon, ...drawn.high, ...drawn.fresh, ...(this.settings.earlierOpen || this.st.query ? groups.overdue : [])]);
+		const overdue = groups.overdue;
+		// Your day.
+		const day = list.createDiv({ cls: "sk-tasks-grp sk-tasks-day" });
+		this.dropTarget(day, { due: true });
+		const dayTasks = own(groups.today);
+		this.lookHead(day, this.t("look.your-day"), dayTasks.length ? this.hub.ctx.tn("look.to-do", dayTasks.length) : "");
+		const dayBody = day.createDiv({ cls: "sk-tasks-grp-body" });
+		for (const t of dayTasks) this.row(dayBody, t, true);
+		if (!dayTasks.length) dayBody.createDiv({ cls: "sk-tasks-look-note", text: this.t(Platform.isPhone ? "look.nothing-today-phone" : "look.nothing-today") });
+		this.harvest(dayBody, null);
+		// Worth a look.
+		const sections: Array<["soon" | "high" | "fresh", Task[]]> = [
+			["soon", own(look.soon)],
+			["high", own(look.high)],
+			["fresh", own(look.fresh)],
+		];
+		this.lookOrder = sections.flatMap(([id, ts]) => ts.map((t) => ({ key: t.key, id })));
+		const total = sections.reduce((n, [, ts]) => n + ts.length, 0);
+		const box = list.createDiv({ cls: "sk-tasks-grp sk-tasks-look" });
+		const head = this.lookHead(box, this.t("look.worth"), total ? String(total) : "");
+		if (total) {
+			const keys = head.createDiv({ cls: "sk-tasks-look-keys" });
+			const hint = (k: string[], word: string) => {
+				for (const x of k) kbd(keys, x);
+				keys.createSpan({ text: this.t(word) });
+			};
+			hint(["T"], "look.hint-today");
+			hint(["1", "2", "3"], "look.hint-weight");
+			hint(["→"], "look.hint-later");
+		}
+		const body = box.createDiv({ cls: "sk-tasks-grp-body" });
+		if (!total) {
+			const set = body.createDiv({ cls: "sk-tasks-look-set" });
+			icon(set, "check-circle-2");
+			set.createSpan({ text: this.t("look.set") });
+		}
+		for (const [id, ts] of sections) {
+			if (!ts.length) continue;
+			body.createDiv({ cls: "sk-tasks-look-sub", text: this.t("look." + id) });
+			const keep = new Set(drawn[id].map((t) => t.key));
+			const shown = ts.filter((t) => keep.has(t.key));
+			for (const t of shown) this.lookActs(this.row(body, t, true), t);
+			if (shown.length < ts.length) {
+				const more = body.createEl("button", { cls: "sk-tasks-fold", attr: { type: "button" } });
+				this.zoneItem(more);
+				icon(more, "chevron-right", "sk-tasks-fold-chev");
+				more.createSpan({ text: this.hub.ctx.tn("look.more", ts.length - shown.length) });
+				more.addEventListener("click", () => {
+					this.lookMore.add(id);
+					this.refresh();
+				});
+			}
+		}
+		this.ideasFold(list);
+		// The days before, folded as before.
+		groups.overdue = own(groups.overdue);
+		if (groups.overdue.length) this.earlierGroup(list, groups.overdue, overdue);
+	}
+
+	/**
+	 * From your brainstorms (Today page), folded: the sentences of brainstorms in progress that look
+	 * like tasks, each with the tag offered (a click changes it). Make it a task writes it as a task
+	 * in its brainstorm, as Sort does; Not a task keeps it as an idea, never offered again.
+	 */
+	private ideasFold(list: HTMLElement): void {
+		const service = this.hub.ctx.service<SessionsReader>("sessions");
+		// One subscription at a time: a Brainstorm module started again replaces the old one.
+		if (this.ideasWatched !== service) {
+			this.ideasStop?.();
+			this.ideasStop = null;
+			this.ideasWatched = service ?? null;
+			this.invalidateIdeas();
+			if (service?.onChange) {
+				this.ideasStop = service.onChange(() => {
+					this.invalidateIdeas();
+					if (this.st.scope === "today") this.refresh();
+				});
+			}
+			if (!this.ideasIndexWatch) {
+				this.ideasIndexWatch = true;
+				// The tags offered follow the tasks around the notes: read again when the tasks change.
+				const unwatch = this.hub.index.onChange(() => this.invalidateIdeas());
+				this.cleanups.push(() => {
+					unwatch();
+					this.ideasStop?.();
+					this.ideasStop = null;
+					this.ideasWatched = null;
+				});
+			}
+		}
+		if (!service?.taskIdeas || !service.acceptIdea || !service.dismissIdea) return;
+		if (this.ideas === null) {
+			if (!this.ideasLoading) {
+				this.ideasLoading = true;
+				const gen = this.ideasGen;
+				void service
+					.taskIdeas()
+					.then((ideas) => {
+						this.ideasLoading = false;
+						// Stale (changed meanwhile, or another Brainstorm module): read again on the next draw.
+						if (gen !== this.ideasGen || this.ideasWatched !== service) {
+							if (this.st.scope === "today") this.refresh();
+							return;
+						}
+						this.ideas = ideas;
+						if (this.st.scope === "today") this.refresh();
+					})
+					.catch((error) => {
+						this.ideasLoading = false;
+						console.error("[Snailkit] tasks: could not read the brainstorms", error);
+					});
+			}
+			return;
+		}
+		const ideas = this.ideas;
+		if (!ideas.length) return;
+		const group = list.createDiv({ cls: "sk-tasks-grp sk-tasks-grp-earlier sk-tasks-ideas" + (this.ideasOpen ? "" : " is-collapsed") });
+		const head = group.createDiv({ cls: "sk-tasks-grp-h" });
+		const toggle = head.createDiv({ cls: "sk-tasks-grp-toggle", attr: { "aria-expanded": String(this.ideasOpen), "data-focus-key": "ideas" } });
+		this.zoneItem(toggle);
+		icon(toggle, "chevron-down", "sk-tasks-grp-chev");
+		toggle.createSpan({ cls: "sk-tasks-grp-lbl", text: this.t("ideas.title") });
+		toggle.createSpan({ cls: "sk-tasks-grp-count", text: String(ideas.length) });
+		const flip = () => {
+			this.ideasOpen = !this.ideasOpen;
+			this.refresh();
+		};
+		toggle.addEventListener("click", flip);
+		toggle.addEventListener("keydown", (e) => {
+			if (e.key !== " ") return;
+			e.preventDefault();
+			flip();
+		});
+		if (!this.ideasOpen) return;
+		const body = group.createDiv({ cls: "sk-tasks-grp-body" });
+		const shown = this.lookMore.has("ideas") ? ideas : ideas.slice(0, 5);
+		for (const idea of shown) this.ideaRow(body, idea, service);
+		if (shown.length < ideas.length) {
+			const more = body.createEl("button", { cls: "sk-tasks-fold", attr: { type: "button" } });
+			this.zoneItem(more);
+			icon(more, "chevron-right", "sk-tasks-fold-chev");
+			more.createSpan({ text: this.hub.ctx.tn("look.more", ideas.length - shown.length) });
+			more.addEventListener("click", () => {
+				this.lookMore.add("ideas");
+				this.refresh();
+			});
+		}
+	}
+
+	private invalidateIdeas(): void {
+		this.ideas = null;
+		this.ideasGen++;
+	}
+
+	private ideaRow(body: HTMLElement, idea: TaskIdea, service: SessionsReader): void {
+		const id = idea.path + "\n" + idea.line + "\n" + idea.text;
+		// A tag Tasks would not group by (a priority, a flag, a number) is not offered: the picker asks.
+		const offered = idea.tag && !(PRIORITIES as readonly string[]).includes(idea.tag) && !this.flags().includes(idea.tag) && !/^[\d/_-]+$/.test(idea.tag) ? idea.tag : null;
+		const tag = this.ideaTags.get(id) ?? offered;
+		const row = body.createDiv({ cls: "sk-tasks-idea" });
+		icon(row, "zap", "sk-tasks-idea-ic");
+		const main = row.createDiv({ cls: "sk-tasks-idea-main" });
+		renderInline(main.createSpan({ cls: "sk-tasks-idea-t" }), idea.text);
+		const where = main.createEl("button", { cls: "sk-tasks-idea-where", text: idea.title, attr: { type: "button" } });
+		where.addEventListener("click", (e) => this.host.open(idea.path, idea.line, e));
+		const acts = row.createDiv({ cls: "sk-tasks-idea-acts" });
+		const tagBtn = acts.createEl("button", { cls: "sk-tasks-add-tag" + (tag ? "" : " is-empty"), attr: { type: "button", "aria-label": this.t("add.choose-tag") } });
+		if (tag) capsule(tagBtn, tag, this.hub, "sk-tasks-cap-sm");
+		else {
+			icon(tagBtn, "tag");
+			tagBtn.createSpan({ text: this.t("row.tag-short") });
+		}
+		const pick = (then?: (chosen: string) => void) =>
+			this.chooseTag(tagBtn, tag, idea.path, (chosen) => {
+				this.ideaTags.set(id, chosen);
+				if (then) then(chosen);
+				else this.refresh();
+			});
+		tagBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			pick();
+		});
+		const accept = async (chosen: string) => {
+			const ok = await service.acceptIdea!(idea, chosen);
+			if (!ok) this.hub.ctx.toast(this.t("ideas.changed"));
+			this.ideaTags.delete(id);
+			this.invalidateIdeas();
+			this.refresh();
+		};
+		const yes = acts.createEl("button", { cls: "sk-btn is-s is-soft", text: this.t("ideas.task"), attr: { type: "button" } });
+		yes.addEventListener("click", (e) => {
+			e.stopPropagation();
+			if (tag) void accept(tag);
+			else pick((chosen) => void accept(chosen));
+		});
+		const no = acts.createEl("button", { cls: "sk-btn is-s is-ghost", text: this.t("ideas.not"), attr: { type: "button" } });
+		no.addEventListener("click", (e) => {
+			e.stopPropagation();
+			service.dismissIdea!(idea);
+			this.ideas = this.ideas?.filter((x) => x !== idea) ?? null;
+			this.refresh();
+		});
+	}
+
+	/** The head of a section of the Today page: its name in small capitals, then what it holds. */
+	private lookHead(group: HTMLElement, label: string, sub: string): HTMLElement {
+		const head = group.createDiv({ cls: "sk-tasks-look-h" });
+		head.createSpan({ cls: "sk-tasks-look-lbl", text: label });
+		if (sub) head.createSpan({ cls: "sk-tasks-look-n", text: sub });
+		return head;
+	}
+
+	/** The decisions of a row of Worth a look, shown on the selected row. */
+	private lookActs(row: HTMLElement, t: Task): void {
+		row.addClass("is-look");
+		const main = row.querySelector<HTMLElement>(".sk-tasks-row-main");
+		if (!main) return;
+		const acts = main.createDiv({ cls: "sk-tasks-look-acts" });
+		const button = (parent: HTMLElement, cls: string, key: string) => {
+			const b = parent.createEl("button", { cls: "sk-btn is-s " + cls, attr: { type: "button" } });
+			b.addEventListener("click", (e) => {
+				e.stopPropagation();
+				void this.decide(t, key);
+			});
+			return b;
+		};
+		const today = button(acts, "sk-tasks-look-today", "t");
+		kbd(today, "T");
+		today.appendText(this.t("look.today"));
+		const weights = acts.createDiv({ cls: "sk-tasks-look-w" });
+		(["high", "medium", "low"] as const).forEach((p, i) => {
+			const b = button(weights, "", String(i + 1));
+			setTooltip(b, this.t("prio." + p));
+			b.createSpan({ cls: "sk-tasks-look-f sk-tasks-fl-" + p });
+			b.appendText(String(i + 1));
+		});
+		const later = button(acts, "is-ghost sk-tasks-look-later", "ArrowRight");
+		later.appendText(this.t("look.later"));
+		kbd(later, "→");
+		setTooltip(later, this.t("look.later-tip"));
+	}
+
+	/** Is this task a row of Worth a look drawn right now (Today page)? */
+	private inLook(t: Task): boolean {
+		return !!this.listEl?.querySelector(`.sk-tasks-row.is-look[data-key="${CSS.escape(t.key)}"]`);
+	}
+
+	/**
+	 * A decision on a row of Worth a look: T plans it today, 1 2 3 give its weight, the right arrow
+	 * puts it aside for a few days. A row that leaves the list hands the selection to the next one,
+	 * so the triage goes on.
+	 */
+	private async decide(t: Task, key: string): Promise<void> {
+		const order = this.lookOrder;
+		const at = order.findIndex((r) => r.key === t.key);
+		const after = order[at + 1] ?? order[at - 1] ?? null;
+		const next = after?.key ?? null;
+		const fresh = !!this.look?.fresh.some((x) => x.key === t.key);
+		const high = !!this.look?.high.some((x) => x.key === t.key);
+		const leaves = key === "t" || key === "ArrowRight" || fresh || (high && key !== "1");
+		if (leaves && at >= 0) this.st.sel = next;
+		if (key === "t") await this.hub.setDue(t, this.today());
+		else if (key === "ArrowRight") await this.hub.later(t);
+		else {
+			this.captureFlip();
+			await this.hub.setPriority(t, ([null, "high", "medium", "low"] as const)[+key]);
+		}
 	}
 
 	private smartGroup(parent: HTMLElement, kind: string, label: string, iconName: string, tasks: Task[], sub?: string): void {
@@ -1517,38 +2086,217 @@ export class TasksTab implements WorkbenchTabInstance {
 		for (const t of tasks) this.row(body, t, true, true);
 	}
 
+	/**
+	 * A tag's group. When the tag has both tasks of its own and sub-tags, or is the tag chosen in
+	 * the navigator (its page, headless), its own tasks get a section of their own
+	 * ("project · main"), first and at the level of the sub-tags, so they are not lost above the
+	 * sub-tags' bands and every tag page reads the same. Its fold key is the tag with a slash
+	 * ("project/"), which no tag can be, and which follows renames like a sub-tag.
+	 */
+	/**
+	 * "New task" (page, computer): a button on top of the list that unfolds, on hover or with N, the
+	 * tags most used for tasks as a small map (sub-tags one level further); a pick opens the add row
+	 * on top with that tag.
+	 */
+	private newButton(parent: HTMLElement): void {
+		if (!this.tagTree(this.hub.index.open()).length) {
+			this.newLine(parent, null);
+			return;
+		}
+		const tree = () => this.newTree();
+		this.tagMap = mountTagMap(parent, {
+			label: this.t("action.new"),
+			name: this.t("add.choose-tag"),
+			roots: tree,
+			drawRoot: (el, tag) => void capsule(el, tag, this.hub, "sk-tasks-cap-sm"),
+			drawSub: (el, tag) => {
+				tagDot(el, tag, this.hub);
+				el.createSpan({ cls: "sk-tasks-nb-name", text: tag.slice(tag.lastIndexOf("/") + 1) });
+			},
+			onPick: (tag, from) => this.addOnTop(tag, from),
+			reduced: () => reducedMotion(this.rootEl.win) || !this.hub.playful(this.rootEl.win),
+		});
+		this.zoneItem(this.tagMap.el.querySelector<HTMLElement>(".sk-tasks-nb-btn")!);
+	}
+
+	/** The add row on top of the list, with this tag; the capsule glides in from where it was picked. */
+	private addOnTop(tag: string, from: DOMRect | null): void {
+		this.startAdd(null);
+		this.st.topTag = tag;
+		this.refresh();
+		const row = this.listEl?.querySelector<HTMLElement>(".sk-tasks-add");
+		const input = row?.querySelector<HTMLInputElement>("input");
+		input?.focus({ preventScroll: true });
+		const to = row?.querySelector<HTMLElement>(".sk-tasks-add-tag");
+		if (!from || !to || reducedMotion(this.rootEl.win) || !this.hub.playful(this.rootEl.win)) return;
+		const mark = elementOf(this.rootEl.doc, "span");
+		capsule(mark, tag, this.hub);
+		flyTag(this.rootEl.doc, mark, from, to, row ?? null);
+	}
+
+	/**
+	 * Phone: the page of a tag is a room, as on the page. Its wash on a banner on top of the list,
+	 * the way back above its name ("All tasks › client"), the count of what is open in it.
+	 */
+	private phoneRoom(list: HTMLElement, tag: string, open: number): void {
+		const room = list.createDiv({ cls: "sk-tasks-proom" });
+		colorFor(room, tag, this.hub);
+		const crumbs = room.createDiv({ cls: "sk-tasks-room-crumbs" });
+		const back = crumbs.createEl("button", { cls: "sk-tasks-room-crumb", text: this.t("title.all"), attr: { type: "button" } });
+		back.addEventListener("click", () => this.setScope("all"));
+		const parts = tag.split("/");
+		for (let i = 1; i < parts.length; i++) {
+			const up = parts.slice(0, i).join("/");
+			icon(crumbs, "chevron-right", "sk-tasks-room-sep");
+			const b = crumbs.createEl("button", { cls: "sk-tasks-room-crumb", text: parts[i - 1], attr: { type: "button" } });
+			b.addEventListener("click", () => this.setScope("tag:" + up));
+		}
+		const name = room.createDiv({ cls: "sk-tasks-proom-name" });
+		capsule(name, tag, this.hub, "sk-tasks-cap-lg");
+		name.createSpan({ cls: "sk-tasks-proom-sub", text: this.hub.ctx.tn("head.open", open) });
+		room.addEventListener("contextmenu", (e) => this.tagMenu(e, tag));
+	}
+
+	/**
+	 * "+ New task" (page): on top of the list, and under the head of each tag shown, in place of the
+	 * "+" buttons. Quiet at rest, it lights up under the pointer; a click opens the add row in its
+	 * place, with that tag.
+	 */
+	private newLine(parent: HTMLElement, tag: string | null): void {
+		const line = parent.createEl("button", { cls: "sk-tasks-newline" + (tag ? " is-in-group" : ""), attr: { type: "button" } });
+		this.zoneItem(line);
+		icon(line, "plus");
+		line.createSpan({ cls: "sk-tasks-newline-label", text: this.t("action.new") });
+		if (!tag) kbd(line, "N");
+		line.addEventListener("click", () => this.startAdd(tag));
+	}
+
 	private tagGroup(parent: HTMLElement, node: TagNode, depth: number, headless = false): void {
 		// The page of a tag has no head for its root: folded, nothing would show and nothing could unfold it.
 		const collapsed = !headless && this.settings.collapsed.includes(node.tag) && !this.st.query;
 		const group = parent.createDiv({
-			cls: "sk-tasks-grp sk-tasks-lvl-" + Math.min(depth, 2) + (depth ? " is-sub sk-tasks-sec" : "") + (collapsed ? " is-collapsed" : ""),
+			cls: "sk-tasks-grp sk-tasks-lvl-" + Math.min(depth, 2) + (depth ? " is-sub sk-tasks-sec" : "") + (collapsed ? " is-collapsed" : "") + (headless ? " is-headless" : ""),
 		});
 		if (depth) colorFor(group, node.tag, this.hub);
 		this.dropTarget(group, { tag: node.tag });
-		if (!headless) {
-			// The root keeps its capsule; below it, a section only says what it adds to its parent.
-			const head = group.createDiv({ cls: "sk-tasks-grp-h", attr: { role: "button", "aria-expanded": String(!collapsed) } });
-			icon(head, "chevron-down", "sk-tasks-grp-chev");
-			if (depth === 0) capsule(head, node.tag, this.hub);
-			else {
-				tagDot(head, node.tag, this.hub);
-				head.createSpan({ cls: "sk-tasks-grp-name", text: node.name });
-			}
-			head.createSpan({ cls: "sk-tasks-grp-count", text: String(node.count) });
-			head.createSpan({ cls: "sk-tasks-grp-rule" });
-			const add = this.iconButton(head, "plus", this.t("group.add"), (e) => {
-				e.stopPropagation();
-				this.startAdd(node.tag);
-			});
-			add.addClass("sk-tasks-grp-add");
-			head.addEventListener("click", () => void this.toggleCollapse(node.tag));
-			head.addEventListener("contextmenu", (e) => this.groupMenu(e, node.tag));
-		}
+		if (!headless) this.groupHead(group, node.tag, node.tag, depth === 0 ? null : node.name, node.count, collapsed);
 		if (collapsed) return;
 		const body = group.createDiv({ cls: "sk-tasks-grp-body" });
-		if (this.st.adding === node.tag) this.addRow(body, node.tag);
-		for (const t of this.sorted(node.own)) this.row(body, t, false);
+		const own = this.sorted(node.own);
+		if (own.length && (node.children.length || headless)) this.ownGroup(body, node, own, depth + 1);
+		else this.ownRows(body, node.tag, own);
 		for (const child of node.children) this.tagGroup(body, child, depth + 1);
+	}
+
+	/** The tasks of a tag that also has sub-tags, as a section before them (see tagGroup). */
+	private ownGroup(parent: HTMLElement, node: TagNode, own: Task[], depth: number): void {
+		const key = node.tag + "/";
+		const collapsed = this.settings.collapsed.includes(key) && !this.st.query;
+		const group = parent.createDiv({
+			cls: "sk-tasks-grp sk-tasks-lvl-" + Math.min(depth, 2) + " is-sub sk-tasks-sec is-own" + (collapsed ? " is-collapsed" : ""),
+		});
+		colorFor(group, node.tag, this.hub);
+		this.dropTarget(group, { tag: node.tag });
+		const head = this.groupHead(group, key, node.tag, node.name, own.length, collapsed);
+		head.querySelector(".sk-tasks-grp-name")?.createSpan({ cls: "sk-tasks-grp-own", text: " · " + this.t("group.main") });
+		if (collapsed) return;
+		const body = group.createDiv({ cls: "sk-tasks-grp-body" });
+		this.ownRows(body, node.tag, own);
+	}
+
+	/**
+	 * The rows of one tag's own tasks (page). In All, a tag shows what weighs (High, Medium, at
+	 * least three tasks) and folds the rest under one line ("35 lighter · 3 waiting · 1 someday");
+	 * in the tag's own page every task shows and only waiting and someday fold. A search or a
+	 * filter shows everything. Under them, what was done here today stays, struck through.
+	 */
+	private ownRows(body: HTMLElement, tag: string, own: Task[]): void {
+		if (this.st.adding === tag) this.addRow(body, tag);
+		else if (this.layout === "page" && !Platform.isPhone && !this.st.scope.startsWith("flag:")) this.newLine(body, tag);
+		if (!this.rich) {
+			for (const t of own) this.row(body, t, false);
+			return;
+		}
+		const parking = this.parking();
+		const plain = !!this.st.query || this.settings.priorityFilter.length > 0 || !!this.flagOn() || this.st.scope.startsWith("flag:");
+		const folded = plain
+			? { shown: own, lighter: [], waiting: [], someday: [] }
+			: foldGroup(own, {
+					room: this.st.scope.startsWith("tag:"),
+					waitingFlag: parking.includes("waiting") ? "waiting" : null,
+					somedayFlag: parking.includes("someday") ? "someday" : null,
+				});
+		// A lighter task stays in view when one of its steps weighs (the step is drawn under it).
+		const heavy = (t: Task, depth = 0): boolean => depth < 20 && (this.under.get(t.key) ?? []).some((c) => (c.priority === "high" || c.priority === "medium") || heavy(c, depth + 1));
+		const lift = folded.lighter.filter((t) => heavy(t));
+		const fold = lift.length ? { ...folded, shown: own.filter((t) => folded.shown.includes(t) || lift.includes(t)), lighter: folded.lighter.filter((t) => !lift.includes(t)) } : folded;
+		const hidden = [...fold.lighter, ...fold.waiting, ...fold.someday];
+		// The task picked, just added or just moved by 1/2/3 never hides in the fold: it opens.
+		const wanted = [this.st.sel, this.freshKey, this.landedKey].filter((k): k is string => !!k);
+		if (hidden.some((t) => wanted.includes(t.key))) this.unfolded.add(tag);
+		const open = this.unfolded.has(tag);
+		for (const t of fold.shown) this.row(body, t, false);
+		if (open) for (const t of hidden) this.row(body, t, false).addClass("is-unfolded");
+		if (hidden.length) {
+			const line = body.createEl("button", { cls: "sk-tasks-fold" + (open ? " is-open" : ""), attr: { type: "button", "aria-expanded": String(open) } });
+			icon(line, "chevron-right", "sk-tasks-fold-chev");
+			const parts: string[] = [];
+			if (fold.lighter.length) parts.push(this.hub.ctx.tn("fold.lighter", fold.lighter.length));
+			if (fold.waiting.length) parts.push(this.hub.ctx.tn("fold.waiting", fold.waiting.length));
+			if (fold.someday.length) parts.push(this.hub.ctx.tn("fold.someday", fold.someday.length));
+			line.createSpan({ text: open ? this.t("fold.less") : parts.join(" · ") });
+			line.addEventListener("click", () => {
+				if (open) this.unfolded.delete(tag);
+				else this.unfolded.add(tag);
+				this.refresh();
+			});
+		}
+		this.harvest(body, tag);
+	}
+
+	/** What was done today in this tag stays at the foot of its group, struck through, until midnight. */
+	private harvest(body: HTMLElement, tag: string | null): void {
+		const done = this.doneTodayTasks().filter((t) => tag === null || t.primary === tag);
+		if (!done.length) return;
+		const box = body.createDiv({ cls: "sk-tasks-harvest" });
+		const head = box.createDiv({ cls: "sk-tasks-harvest-h" });
+		icon(head, "check");
+		head.createSpan({ text: this.hub.ctx.tn("done.today", done.length) });
+		for (const t of done) {
+			const row = box.createDiv({ cls: "sk-tasks-harvest-row" + (this.justDone.has(t.baseKey) ? " is-landed" : "") });
+			this.zoneItem(row);
+			icon(row, "check-square", "sk-tasks-harvest-box");
+			renderInline(row.createSpan({ cls: "sk-tasks-harvest-t" }), t.title);
+			row.addEventListener("click", (e) => void this.openTask(t, e));
+		}
+		this.justDone.clear();
+	}
+
+	/**
+	 * The head of a group: chevron, name (the root keeps its capsule; below it, a section only
+	 * says what it adds to its parent), count, "+". `key` is what folding remembers.
+	 */
+	private groupHead(group: HTMLElement, key: string, tag: string, name: string | null, count: number, collapsed: boolean): HTMLElement {
+		const head = group.createDiv({ cls: "sk-tasks-grp-h", attr: { role: "button", "aria-expanded": String(!collapsed) } });
+		icon(head, "chevron-down", "sk-tasks-grp-chev");
+		if (name === null) capsule(head, tag, this.hub);
+		else {
+			tagDot(head, tag, this.hub);
+			head.createSpan({ cls: "sk-tasks-grp-name", text: name });
+		}
+		head.createSpan({ cls: "sk-tasks-grp-count", text: String(count) });
+		head.createSpan({ cls: "sk-tasks-grp-rule" });
+		// The page has a "+ New task" line under each head instead (the phone keeps its round "+": lines would fill its screen).
+		if (this.layout !== "page" || Platform.isPhone) {
+			const add = this.iconButton(head, "plus", this.t("group.add"), (e) => {
+				e.stopPropagation();
+				this.startAdd(tag);
+			});
+			add.addClass("sk-tasks-grp-add");
+		}
+		head.addEventListener("click", () => void this.toggleCollapse(key));
+		head.addEventListener("contextmenu", (e) => this.groupMenu(e, tag));
+		return head;
 	}
 
 	private async toggleCollapse(tag: string): Promise<void> {
@@ -1641,7 +2389,9 @@ export class TasksTab implements WorkbenchTabInstance {
 		}
 		descriptionPreview(main, t.description);
 		const meta = (this.layout === "page" ? row : main).createDiv({ cls: "sk-tasks-row-meta" });
-		const state = since ? "since" : dueState(t.due, today);
+		// Late without "Show overdue first": a quiet "since Oct 7", not a red alarm.
+		const raw = since ? "since" : dueState(t.due, today);
+		const state = raw === "overdue" && !this.settings.overdueFirst ? "late" : raw;
 		const dueWords = (due: string) => (since ? this.hub.sinceText(due) : this.hub.dueText(due));
 		if (this.layout === "page") {
 			if (showTag && t.primary && !step) capsule(title, t.primary, this.hub, "sk-tasks-cap-sm");
@@ -1722,9 +2472,13 @@ export class TasksTab implements WorkbenchTabInstance {
 			note.createEl("b", { text: name });
 			return;
 		}
-		icon(note, "file-text");
+		// A daily note reads as its day ("Oct 7", a calendar), not as "2026-10-07".
+		const name = noteName(t.path);
+		const day = /^\d{4}-\d{2}-\d{2}$/.test(name) ? name : null;
+		icon(note, day ? "calendar" : "file-text");
 		this.sessionMarker(note, t.path);
-		note.createEl("b", { text: noteName(t.path) });
+		note.createEl("b", { text: day ? this.hub.formatDate(day, day.slice(0, 4) === this.today().slice(0, 4) ? "format.short" : "format.long") : name });
+		if (day) note.setAttr("title", name);
 	}
 
 	/**
@@ -1831,7 +2585,15 @@ export class TasksTab implements WorkbenchTabInstance {
 			if (!shown.has(key) || !t || t.done || t.path !== ref.path || t.raw !== ref.raw) this.picked.delete(key);
 		}
 		if (this.picked.size < 2) this.picked.clear();
-		list.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]").forEach((row) => row.toggleClass("is-picked", this.picked.has(row.dataset.key ?? "")));
+		const rows = Array.from(list.querySelectorAll<HTMLElement>(".sk-tasks-row[data-key]"));
+		rows.forEach((row) => row.toggleClass("is-picked", this.picked.has(row.dataset.key ?? "")));
+		// Picked rows side by side are one block: only its first and last rows are rounded.
+		const picked = (el: Element | null) => !!el && el.hasClass("sk-tasks-row") && el.hasClass("is-picked");
+		for (const row of rows) {
+			const on = row.hasClass("is-picked");
+			row.toggleClass("is-pick-first", on && !picked(row.previousElementSibling));
+			row.toggleClass("is-pick-last", on && !picked(row.nextElementSibling));
+		}
 		if (this.picked.size >= 2) {
 			this.pickBar(list);
 			const bar = list.querySelector(".sk-tasks-pickbar");
@@ -2122,6 +2884,7 @@ export class TasksTab implements WorkbenchTabInstance {
 
 	private async complete(t: Task, rowEl?: HTMLElement): Promise<void> {
 		const row = rowEl ?? this.rowOf(t.key);
+		if (!t.done) this.justDone.add(t.baseKey);
 		if (row?.isConnected && this.doneEl && this.hub.playful(this.rootEl.win)) return this.completePlayful(t, row);
 		this.animating++;
 		try {
@@ -2231,12 +2994,13 @@ export class TasksTab implements WorkbenchTabInstance {
 	// ----- quick add -----
 
 	startAdd(tag: string | null): void {
+		this.st.topTag = null;
 		// Waiting and Someday have no row to add: a new task is written from All.
 		if (this.st.scope.startsWith("flag:")) this.setScope("all");
 		const scope = this.st.scope;
 		if (tag === null && scope.startsWith("tag:")) tag = scope.slice(4);
-		if (tag && this.settings.collapsed.includes(tag)) {
-			this.settings.collapsed = this.settings.collapsed.filter((x) => x !== tag);
+		if (tag && (this.settings.collapsed.includes(tag) || this.settings.collapsed.includes(tag + "/"))) {
+			this.settings.collapsed = this.settings.collapsed.filter((x) => x !== tag && x !== tag + "/");
 			void this.hub.ctx.saveSettings();
 		}
 		this.st.adding = tag ?? "";
@@ -2276,7 +3040,8 @@ export class TasksTab implements WorkbenchTabInstance {
 				tag,
 				null,
 				(chosen) => {
-					this.startAdd(chosen);
+					if (this.st.adding === "" && (this.st.topTag ?? null) !== null) this.addOnTop(chosen, null);
+					else this.startAdd(chosen);
 					again();
 				},
 				again,
@@ -2284,8 +3049,31 @@ export class TasksTab implements WorkbenchTabInstance {
 		});
 		const input = line.createEl("input", { type: "text", attr: { "data-sk-own-tab": "", placeholder: this.t(tag ? "add.placeholder" : "add.placeholder-tag") } });
 		input.value = this.st.draft;
+		// What the typed words become ("!1 @fri #client"), said live under the line.
+		const preview = main.createDiv({ cls: "sk-tasks-add-preview" });
+		const flagNames = new Set(this.flags());
+		const showPreview = () => {
+			preview.empty();
+			const q = parseQuickAdd(input.value, this.today(), this.hub.dayWords(), flagNames);
+			const parts = !!(q.priority || q.due || q.tag);
+			row.toggleClass("has-preview", parts);
+			if (!parts) return;
+			preview.createSpan({ cls: "sk-tasks-add-becomes", text: this.t("add.becomes") });
+			if (q.tag) capsule(preview, q.tag, this.hub, "sk-tasks-cap-sm");
+			if (q.priority) {
+				const p = preview.createSpan({ cls: "sk-tasks-add-part" });
+				icon(p, "flag", "sk-tasks-fl-" + q.priority);
+				p.createSpan({ text: this.t("prio." + q.priority) });
+			}
+			if (q.due) {
+				const d = preview.createSpan({ cls: "sk-tasks-add-part" });
+				icon(d, "calendar");
+				d.createSpan({ text: this.hub.dueText(q.due) });
+			}
+		};
 		input.addEventListener("input", () => {
 			this.st.draft = input.value;
+			showPreview();
 		});
 		if (Platform.isPhone && this.st.justAdded?.length) {
 			// What was just added lands here, newest on top: no doubt it was written.
@@ -2300,6 +3088,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		const hint = main.createDiv({ cls: "sk-tasks-add-hint" });
 		hint.append(richText(this.t(tag ? "add.hint" : "add.hint-tag", { note: noteName(target.path), tomorrow: this.t("quick.tomorrow") })));
 		const scopeDue = this.st.scope === "today" ? this.today() : null;
+		showPreview();
 		input.addEventListener("keydown", (e) => {
 			e.stopPropagation();
 			if (e.key === "Escape") {
@@ -2313,9 +3102,10 @@ export class TasksTab implements WorkbenchTabInstance {
 			}
 			if (e.key === "Enter" && input.value.trim()) {
 				e.preventDefault();
-				const q = parseQuickAdd(input.value, this.today(), this.hub.dayWords());
+				const q = parseQuickAdd(input.value, this.today(), this.hub.dayWords(), flagNames);
 				input.value = "";
 				this.st.draft = "";
+				showPreview();
 				if (!q.text) return;
 				const text = q.text;
 				// Where the line was typed, for it to glide to its row once written (computer).
@@ -2323,7 +3113,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				const field = input.getBoundingClientRect();
 				const from = new DOMRect(box.left, field.top - 8, box.width, field.height + 16);
 				void this.hub.writer
-					.addTask(text, tag ?? "inbox", q.priority, q.due ?? scopeDue)
+					.addTask(text, q.tag ?? tag ?? "inbox", q.priority, q.due ?? scopeDue)
 					.then((added) => {
 						// The index's key, found by the line: a task of the same name elsewhere gets "#2".
 						const key = added ? (this.hub.index.open().find((t) => t.path === added.path && t.line === added.line)?.key ?? added.key) : null;
@@ -2431,10 +3221,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		const t = this.hub.index.get(this.st.sel);
 		detail.parentElement?.toggleClass("has-sel", !!t);
 		if (!t) {
-			const box = detail.createDiv({ cls: "sk-tasks-det-empty" });
-			icon(box.createDiv({ cls: "sk-tasks-empty-ic" }), "mouse-pointer-click");
-			box.createDiv({ cls: "sk-tasks-empty-t", text: this.t("detail.empty.title") });
-			box.createDiv({ cls: "sk-tasks-empty-s", text: this.t("detail.empty.sub") });
+			this.placeCard(detail);
 			return;
 		}
 		const head = detail.createDiv({ cls: "sk-tasks-det-head" });
@@ -2452,6 +3239,119 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.refresh();
 		});
 		this.detailBody(detail.createDiv({ cls: "sk-tasks-det-body" + this.entering(t.key) }), t);
+	}
+
+	/**
+	 * While no task is picked, the right column is the card of the place: the day's ring for this
+	 * list, the notes its tasks live in (a click opens one), and, in a tag, its sub-tags.
+	 */
+	private placeCard(detail: HTMLElement): void {
+		const scope = this.st.scope;
+		const tag = scope.startsWith("tag:") ? scope.slice(4) : null;
+		const today = this.today();
+		const parking = this.parking();
+		// The same tasks as the list (scope, search, filters), not the whole vault.
+		const pool = this.filtered();
+		const open =
+			tag !== null
+				? pool.filter((t) => inScope(t.primary, tag))
+				: scope === "today"
+					? pool.filter((t) => !!t.due && t.due <= today && !isParked(t, parking))
+					: scope === "upcoming"
+						? pool.filter((t) => !!t.due && t.due > today && !isParked(t, parking))
+						: scope.startsWith("flag:")
+							? pool.filter((t) => hasFlag(t, scope.slice(5)))
+							: scope === "untagged"
+								? this.untaggedShown()
+								: pool;
+		const card = detail.createDiv({ cls: "sk-tasks-card" });
+		card.createDiv({ cls: "sk-tasks-card-kicker", text: this.t(tag ? "card.this-tag" : "card.your-tasks") });
+		const title = card.createDiv({ cls: "sk-tasks-card-title" });
+		if (tag) capsule(title, tag, this.hub, "sk-tasks-cap-lg");
+		else title.createEl("h2", { text: scope.startsWith("flag:") ? this.flagLabel(scope.slice(5)) : this.t("title." + scope) });
+		card.createDiv({ cls: "sk-tasks-card-sub", text: this.hub.ctx.tn("head.open", open.length) });
+		// The day, for this list: what is done here today against what is still due today.
+		const done = this.doneTodayTasks().filter((t) => (tag !== null ? inScope(t.primary, tag) : true)).length;
+		const due = open.filter((t) => t.due === today && !isParked(t, parking)).length;
+		const day = card.createDiv({ cls: "sk-tasks-card-day" });
+		const svg = day.createSvg("svg", { cls: ["sk-tasks-ring", "sk-tasks-card-ring"], attr: { viewBox: "0 0 30 30", "aria-hidden": "true" } });
+		svg.createSvg("circle", { cls: "sk-tasks-ring-track", attr: { cx: "15", cy: "15", r: "12" } });
+		const fill = svg.createSvg("circle", { cls: "sk-tasks-ring-fill", attr: { cx: "15", cy: "15", r: "12" } });
+		const c = 2 * Math.PI * 12;
+		fill.style.strokeDasharray = String(c);
+		fill.style.strokeDashoffset = String(c * (1 - dayProgress(done, due)));
+		const words = day.createDiv();
+		words.createDiv({ cls: "sk-tasks-card-day-t", text: this.t("card.day", { done: String(done), all: String(done + due) }) });
+		words.createDiv({ cls: "sk-tasks-card-day-s", text: done ? this.hub.ctx.tn("done.today", done) : this.t("card.nothing-yet") });
+		// Today: the week ahead, an horizon one sees (today, tomorrow, the day after, the rest of the week).
+		if (scope === "today" && tag === null) {
+			const upcoming = pool.filter((t) => !!t.due && !isParked(t, parking));
+			const on = (from: number, to: number) => upcoming.filter((t) => t.due! >= addDays(today, from) && t.due! <= addDays(today, to)).length;
+			const sec = card.createDiv({ cls: "sk-tasks-card-sec" });
+			const h = sec.createDiv({ cls: "sk-tasks-card-h" });
+			icon(h, "calendar-days");
+			h.createSpan({ text: this.t("card.week") });
+			const week: Array<[string, string, number]> = [
+				["sun", this.t("look.today"), on(0, 0)],
+				["calendar", this.t("card.tomorrow"), on(1, 1)],
+				["calendar", this.hub.formatDate(addDays(today, 2), "format.day"), on(2, 2)],
+				["calendar-range", this.t("card.rest-week"), on(3, 7)],
+			];
+			week.forEach(([iconName, label, n], i) => {
+				const el = sec.createDiv({ cls: "sk-tasks-card-line is-link" + (i === 0 ? " is-today" : "") });
+				this.zoneItem(el);
+				icon(el, iconName);
+				el.createSpan({ cls: "sk-tasks-card-line-t", text: label });
+				el.createSpan({ cls: "sk-tasks-n", text: String(n) });
+				el.addEventListener("click", () => this.setScope(i === 0 ? "today" : "upcoming"));
+			});
+		}
+		// Written in: the notes this list's tasks live in, the most first; daily notes as one line.
+		const counts = new Map<string, number>();
+		let daily = 0;
+		for (const t of open) {
+			if (/^\d{4}-\d{2}-\d{2}$/.test(noteName(t.path))) daily++;
+			else counts.set(t.path, (counts.get(t.path) ?? 0) + 1);
+		}
+		const notes = [...counts].sort((a, b) => b[1] - a[1] || noteName(a[0]).localeCompare(noteName(b[0])));
+		if (notes.length || daily) {
+			const sec = card.createDiv({ cls: "sk-tasks-card-sec" });
+			const h = sec.createDiv({ cls: "sk-tasks-card-h" });
+			icon(h, "file-text");
+			h.createSpan({ text: this.t("card.written-in") });
+			const line = (iconName: string, label: string, n: number, click: ((e: MouseEvent) => void) | null) => {
+				const el = sec.createDiv({ cls: "sk-tasks-card-line" + (click ? " is-link" : "") });
+				icon(el, iconName);
+				el.createSpan({ cls: "sk-tasks-card-line-t", text: label });
+				el.createSpan({ cls: "sk-tasks-n", text: String(n) });
+				if (click) {
+					this.zoneItem(el);
+					el.addEventListener("click", click);
+				}
+			};
+			if (daily) line("calendar", this.t("card.daily"), daily, null);
+			const top = notes.slice(0, daily ? 5 : 6);
+			for (const [path, n] of top) line("file-text", noteName(path), n, (e) => this.host.open(path, null, e));
+			const rest = notes.slice(top.length);
+			if (rest.length) line("layers", this.hub.ctx.tn("card.other-notes", rest.length), rest.reduce((a, [, n]) => a + n, 0), null);
+		}
+		// Sub-tags: one click steps further in.
+		const node = tag ? findNode(this.tagTree(open), tag) : null;
+		if (node?.children.length) {
+			const sec = card.createDiv({ cls: "sk-tasks-card-sec" });
+			const h = sec.createDiv({ cls: "sk-tasks-card-h" });
+			icon(h, "hash");
+			h.createSpan({ text: this.t("card.sub-tags") });
+			for (const child of node.children) {
+				const el = sec.createDiv({ cls: "sk-tasks-card-line is-link" });
+				this.zoneItem(el);
+				tagDot(el, child.tag, this.hub).addClass("sk-tasks-nav-dot");
+				el.createSpan({ cls: "sk-tasks-card-line-t", text: child.name });
+				el.createSpan({ cls: "sk-tasks-n", text: String(child.count) });
+				el.addEventListener("click", () => this.setScope("tag:" + child.tag));
+			}
+		}
+		card.createDiv({ cls: "sk-tasks-card-foot", text: this.t("card.foot") });
 	}
 
 	private inlineDetail(parent: HTMLElement, t: Task): void {
@@ -2600,9 +3500,12 @@ export class TasksTab implements WorkbenchTabInstance {
 					value.createSpan({ cls: "sk-tasks-prop-none", text: this.t("prop.no-date") });
 					return;
 				}
+				// Late (without Show overdue first): the date and how long ago, in grey ("Fri, Oct 2 · 33 days ago").
+				const state = dueState(t.due, today);
+				const late = state === "overdue" && !this.settings.overdueFirst;
 				value.createSpan({
-					cls: "sk-tasks-prop-val sk-tasks-due-val is-" + dueState(t.due, today),
-					text: `${hub.formatDate(t.due, "format.detail")} · ${hub.dueText(t.due)}`,
+					cls: "sk-tasks-prop-val sk-tasks-due-val is-" + (late ? "late" : state),
+					text: `${hub.formatDate(t.due, "format.detail")} · ${late ? hub.sinceText(t.due) : hub.dueText(t.due)}`,
 				});
 			},
 			(editor) => {
@@ -2890,7 +3793,7 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (lower === "ArrowDown" || lower === "j") return () => this.moveSel(1);
 		if (lower === "ArrowUp" || lower === "k") return () => this.moveSel(-1);
 		if (lower === "/") return () => this.searchInput?.focus();
-		if (lower === "n") return () => this.startAdd(null);
+		if (lower === "n") return () => (this.tagMap?.el.isConnected ? this.tagMap.open(true) : this.startAdd(null));
 		if (lower === "z" && this.hub.canUndo()) return () => this.hub.undo();
 		if (lower === "Escape") {
 			return () => {
@@ -2924,12 +3827,21 @@ export class TasksTab implements WorkbenchTabInstance {
 			case "F2":
 				return () => this.inlineRename(t);
 			case "t":
+				if (this.inLook(t)) return () => this.decide(t, "t");
 				return () => this.hub.setDue(t, t.due === today ? null : today);
+			case "ArrowRight":
+				if (this.inLook(t)) return () => this.decide(t, "ArrowRight");
+				return null;
 			case "0":
 			case "1":
 			case "2":
 			case "3":
-				return () => this.hub.setPriority(t, ([null, "high", "medium", "low"] as const)[+lower]);
+				if (lower !== "0" && this.inLook(t)) return () => this.decide(t, lower);
+				return () => {
+					// The row rises or sinks to its new place when the list is drawn again (see playFlip).
+					this.captureFlip();
+					return this.hub.setPriority(t, ([null, "high", "medium", "low"] as const)[+lower]);
+				};
 			default:
 				return null;
 		}

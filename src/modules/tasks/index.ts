@@ -26,7 +26,7 @@ export const tasks = defineModule<TasksSettings>({
 		flagTags: "quick, deep, waiting, someday",
 		stampDone: true,
 		newTaskNote: "",
-		sortMode: "notes",
+		sortMode: "priority",
 		priorityFilter: [],
 		collapsed: [],
 		foldedSteps: [],
@@ -41,15 +41,26 @@ export const tasks = defineModule<TasksSettings>({
 		playful: true,
 		flagFilter: "",
 		flagsSuggested: false,
+		weightSorted: false,
+		firstSeen: [],
+		firstSeenSeeded: false,
+		later: [],
 	},
 	// The order of the tags is the user's arrangement: "Reset to defaults" keeps it.
-	keepOnReset: ["tagOrder", "taskOrder", "flagsSuggested"],
+	keepOnReset: ["tagOrder", "taskOrder", "flagsSuggested", "weightSorted", "firstSeen", "firstSeenSeeded", "later"],
 	activate(ctx) {
 		// The suggested flags (quick, deep, waiting, someday), once for settings saved before they
 		// existed; the user's own flags stay, and a flag removed later is not added back.
 		if (!ctx.settings.flagsSuggested) {
 			ctx.settings.flagTags = withSuggestedFlags(ctx.settings.flagTags);
 			ctx.settings.flagsSuggested = true;
+			void ctx.saveSettings();
+		}
+		// The list is sorted by weight (priority) now, once for settings saved with the old default
+		// (note order); a sort chosen after that stays.
+		if (!ctx.settings.weightSorted) {
+			if (ctx.settings.sortMode === "notes") ctx.settings.sortMode = "priority";
+			ctx.settings.weightSorted = true;
 			void ctx.saveSettings();
 		}
 		const hub = new TasksHub(ctx);

@@ -25,7 +25,14 @@ export interface WorkbenchSettings {
 	autoOpen: AutoOpenMode;
 	startTab: StartTab;
 	startTabPhone: StartTab;
+	/** Tabs whose count is hidden in the tab bar (right click on a tab). */
+	hiddenCounts: string[];
+	/** Text size of the Workbench in px; 0: the size of the text of notes (Obsidian's font size). */
+	fontSize: number;
 }
+
+/** The text sizes offered for the Workbench (0 is Automatic). */
+export const WORKBENCH_FONT_SIZES = [0, 13, 14, 15, 16, 17, 18, 19, 20, 22, 24];
 
 export const START_TABS: StartTab[] = ["auto", "home", "tasks", "sessions"];
 const isStartTab = (value: unknown): value is StartTab => START_TABS.includes(value as StartTab);
@@ -37,7 +44,7 @@ const isAutoOpen = (value: unknown): value is AutoOpenMode => AUTO_OPEN_MODES.in
 export const HINT_WORKBENCH_TABS = "workbench-tabs";
 
 export function defaultData(): SnailkitData {
-	return { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs", startTab: "auto", startTabPhone: "tasks" }, modules: {} };
+	return { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs", startTab: "auto", startTabPhone: "tasks", hiddenCounts: [], fontSize: 0 }, modules: {} };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -82,6 +89,8 @@ export function normalizeData(raw: unknown): SnailkitData {
 	else if (isAutoOpen(formerAutoOpen)) data.workbench.autoOpen = formerAutoOpen;
 	if (isStartTab(workbench.startTab)) data.workbench.startTab = workbench.startTab;
 	if (isStartTab(workbench.startTabPhone)) data.workbench.startTabPhone = workbench.startTabPhone;
+	if (typeof workbench.fontSize === "number" && WORKBENCH_FONT_SIZES.includes(workbench.fontSize)) data.workbench.fontSize = workbench.fontSize;
+	if (Array.isArray(workbench.hiddenCounts)) data.workbench.hiddenCounts = workbench.hiddenCounts.filter((x): x is string => typeof x === "string");
 	return data;
 }
 

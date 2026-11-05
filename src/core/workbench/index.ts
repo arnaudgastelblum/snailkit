@@ -41,6 +41,21 @@ export class WorkbenchCore {
 			if (leaf?.view.getViewType() === WORKBENCH_VIEW_TYPE) this.lastActive = leaf;
 		}));
 		this.opener = new AutoOpener(plugin, this, startup);
+		// The text size of notes changed (Appearance › Font size, Ctrl+wheel): an automatic size follows it.
+		plugin.registerEvent(workspace.on("css-change", () => this.applyTextSize()));
+		// Obsidian writes the font size on the body's style: an automatic size follows it there too.
+		const body = workspace.containerEl?.ownerDocument.body;
+		if (body) {
+			let last = body.style.getPropertyValue("--font-text-size");
+			const watch = new MutationObserver(() => {
+				const now = body.style.getPropertyValue("--font-text-size");
+				if (now === last) return;
+				last = now;
+				this.applyTextSize();
+			});
+			watch.observe(body, { attributes: true, attributeFilter: ["style"] });
+			plugin.register(() => watch.disconnect());
+		}
 		// Commands to reach each tab from anywhere (no default hotkey: users pick theirs).
 		for (const [id, tab] of [["workbench-home", "home"], ["workbench-tasks", "tasks"], ["workbench-brainstorms", "sessions"]] as const) {
 			plugin.addCommand({
@@ -224,6 +239,41 @@ export class WorkbenchCore {
 	/** Snailkit's settings, on the Workbench's page. */
 	openSettings(): void {
 		this.plugin?.openSettings("workbench");
+	}
+
+	/** Opens the Workbench on this tab from now on, on this device (computer or phone). */
+	chooseStartTab(tab: StartTab): void {
+		void this.plugin?.host.setWorkbenchStartTab(Platform.isPhone ? "startTabPhone" : "startTab", tab);
+	}
+
+	/**
+	 * How much the Workbench is scaled: its chosen text size, else the size of the text of notes,
+	 * over Obsidian's default (16 px). The Workbench was drawn for 16 px notes.
+	 */
+	textZoom(doc: Document): number {
+		const chosen = this.plugin?.data.workbench.fontSize ?? 0;
+		let notes = NaN;
+		try {
+			notes = parseFloat(doc.defaultView?.getComputedStyle(doc.body).getPropertyValue("--font-text-size") ?? "");
+		} catch {
+			// No styles to read (tests): Obsidian's default size.
+		}
+		const size = chosen || (Number.isFinite(notes) && notes > 0 ? notes : 16);
+		return Math.min(1.6, Math.max(0.75, size / 16));
+	}
+
+	/** The text size of every open Workbench follows the setting (or the notes). */
+	applyTextSize(): void {
+		for (const view of this.views) view.applyTextZoom();
+	}
+
+	/** Is the count of this tab shown in the tab bar? */
+	countShown(tab: string): boolean {
+		return !this.plugin?.data.workbench.hiddenCounts.includes(tab);
+	}
+
+	showCount(tab: string, shown: boolean): void {
+		void this.plugin?.host.setWorkbenchCount(tab, shown);
 	}
 
 	hintSeen(): boolean {

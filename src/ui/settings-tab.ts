@@ -8,7 +8,7 @@ import { Platform, PluginSettingTab, Setting, ToggleComponent, setIcon, setToolt
 import { LANGUAGES, LANGUAGE_NAMES, resolveLanguage, type LanguageSetting } from "../i18n";
 import type { ModuleHandle } from "../core/host";
 import { CATEGORY_ORDER, type ModuleCategory } from "../core/module";
-import { AUTO_OPEN_MODES, START_TABS } from "../core/settings";
+import { AUTO_OPEN_MODES, START_TABS, WORKBENCH_FONT_SIZES } from "../core/settings";
 import type { AutoOpenMode, StartTab } from "../core/workbench/types";
 import type SnailkitPlugin from "../main";
 import { MASCOT_URL } from "./mascot";
@@ -505,6 +505,18 @@ export class SnailkitSettingTab extends PluginSettingTab {
 				);
 		}
 		opening.createDiv({ cls: "sk-note" }).append(richText(this.t("workbench.open-warn")));
+		// The text size of the Workbench: by default the size of the text of notes.
+		const sizes: Record<string, string> = {};
+		for (const size of WORKBENCH_FONT_SIZES) sizes[String(size)] = size ? `${size} px` : this.t("workbench.font-auto");
+		new Setting(opening)
+			.setName(this.t("workbench.font"))
+			.setDesc(this.t("workbench.font-desc"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOptions(sizes)
+					.setValue(String(this.snail.data.workbench.fontSize))
+					.onChange((value) => void this.snail.setWorkbenchFontSize(Number(value))),
+			);
 
 		// The cards stand on their own, as on the home, not inside a box of rows.
 		const section = this.section(body, this.t("workbench.page.tools"), this.t("workbench.page.tools-desc"), false);

@@ -224,12 +224,38 @@ export interface SessionsReader {
 	/** Since 2026-10-08: opens the sorting mode on that queue. */
 	sortToDecide?(): void;
 	onChange?(callback: () => void): () => void;
+	/** Since 2026-11-04: the sentences of brainstorms in progress that look like tasks, with a tag to offer. */
+	taskIdeas?(): Promise<TaskIdea[]>;
+	/** Since 2026-11-04: writes the sentence as a task with this tag, in its brainstorm (as Sort does); false if the line changed. */
+	acceptIdea?(idea: TaskIdea, tag: string): Promise<boolean>;
+	/** Since 2026-11-04: not a task: the sentence loses its dot, never offered again. */
+	dismissIdea?(idea: TaskIdea): void;
+}
+
+/** A sentence of a brainstorm that looks like a task (see SessionsReader.taskIdeas). */
+export interface TaskIdea {
+	path: string;
+	/** The brainstorm's title. */
+	title: string;
+	/** When the brainstorm was created (ms). */
+	created: number;
+	line: number;
+	/** The whole line, as read (checked again before writing). */
+	raw: string;
+	/** The sentence, and where it sits in the line's text. */
+	text: string;
+	start: number;
+	end: number;
+	/** The tag offered: the brainstorm's context, else a learned one, else the tag used most around the note; null: none. */
+	tag: string | null;
 }
 
 /** "tag-colors": classes that set --sk-tag-r-bg/-fg and --sk-tag-l-bg/-fg for a tag. */
 export interface TagColorsReader {
 	version: 1;
 	classes(tag: string): string;
+	/** Since 2026-11-04: opens the color window of this tag; `done` once a color is chosen. */
+	chooseColor?(tag: string, done?: () => void): void;
 }
 
 // ----- "snailkit:tag-renamed": a tag was renamed in the whole vault -----

@@ -42,11 +42,16 @@ test("format and plurals", () => {
 });
 
 test("stored data is normalized", () => {
-	assert.deepEqual(normalizeData(null), { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs", startTab: "auto", startTabPhone: "tasks" }, modules: {} });
+	assert.deepEqual(normalizeData(null), { version: 1, language: "auto", welcomed: false, hints: [], workbench: { autoOpen: "startup-and-new-tabs", startTab: "auto", startTabPhone: "tasks", hiddenCounts: [], fontSize: 0 }, modules: {} });
 	const data = normalizeData({ language: "xx", welcomed: true, modules: { a: { enabled: true, settings: { x: 1 } }, b: "junk" } });
 	assert.equal(data.language, "auto");
 	assert.equal(data.welcomed, true);
 	assert.deepEqual(data.modules, { a: { enabled: true, settings: { x: 1 } } });
+});
+
+test("hidden tab counts keep only names", () => {
+	assert.deepEqual(normalizeData({ workbench: { hiddenCounts: ["tasks", 3, null, "sessions"] } }).workbench.hiddenCounts, ["tasks", "sessions"]);
+	assert.deepEqual(normalizeData({ workbench: { hiddenCounts: "tasks" } }).workbench.hiddenCounts, []);
 });
 
 test("one-time hints are normalized, and the Workbench hint comes over from the Tasks module", () => {

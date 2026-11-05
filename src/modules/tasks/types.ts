@@ -38,10 +38,18 @@ export interface TasksSettings {
 	earlierOpen: boolean;
 	/** The suggested flags were added once to the settings (a flag removed afterwards stays removed). */
 	flagsSuggested: boolean;
+	/** The sort was moved once from note order to weight (priority), the new default. */
+	weightSorted: boolean;
 	/** The flag chip on in the list ("" none): only tasks with that flag are shown. */
 	flagFilter: string;
 	/** Checking a task from the list plays with it: it flies into the count of the day, the sound climbs while you go on. */
 	playful: boolean;
+	/** When Snailkit first saw each open task, [key, YYYY-MM-DD] ("" = already there before it remembered): "New these days" on Today. */
+	firstSeen: [string, string][];
+	/** The open tasks of the vault were recorded once as already there (first run of firstSeen). */
+	firstSeenSeeded: boolean;
+	/** Tasks put aside from "Worth a look" ("Later"), [key, YYYY-MM-DD]: hidden until that day. */
+	later: [string, string][];
 	/** Untagged checkboxes are listed (under "No tag") in notes changed in the last N days; 0: never. */
 	untaggedDays: number;
 }

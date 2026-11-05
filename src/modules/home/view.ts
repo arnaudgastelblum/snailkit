@@ -3,7 +3,7 @@
 // the pages of a domain, a tag and the older daily notes, with a breadcrumb (Escape goes up).
 // A rounded cursor glides from line to line (mouse and arrows) in the hue of the domain.
 // The data comes from the runtime and its pure logic; this file draws and listens.
-import { getAllTags, Menu, Modal, Platform, setIcon, TFile, type App } from "obsidian";
+import { getAllTags, Menu, Modal, Platform, setIcon, setTooltip, TFile, type App } from "obsidian";
 import type { InlineSearch, TaskInfoLite } from "../../core/services";
 import type { TabState, WorkbenchTabHost, WorkbenchTabInstance } from "../../core/workbench/types";
 import { mountMap, type MapHandle, type MapState, type MapStrings } from "../../ui/map";
@@ -618,6 +618,7 @@ export class HomeView implements WorkbenchTabInstance {
 			const view = this.body.createDiv({ cls: "sk-home-lens is-main", attr: { "data-lens": this.lens, "data-sec": "lens", "data-sk-zone": "view" } });
 			this.drawLens(view);
 			if (this.lens !== "map") this.destroyMap();
+			else this.drawDomainsBelow();
 			return;
 		}
 		this.drawToday(f);
@@ -782,6 +783,15 @@ export class HomeView implements WorkbenchTabInstance {
 		}
 	}
 
+	/** The page's Map has the Domains under it: the whole vault at a glance, then each domain. */
+	private drawDomainsBelow(): void {
+		const layout = this.rt.layout();
+		if (!layout.order.length) return;
+		const sec = this.body.createEl("section", { cls: "sk-home-below", attr: { "data-sec": "domains", "data-sk-zone": "domains", "data-sk-zone-grid": "" } });
+		sec.createEl("h2", { cls: "sk-home-below-title", text: this.t("lens.domains") });
+		this.drawDomains(sec.createDiv({ cls: "sk-home-lens", attr: { "data-lens": "domains" } }), layout);
+	}
+
 	private availableLenses(): HomeLens[] {
 		return this.phone ? LENSES.filter((lens) => lens !== "map") : LENSES;
 	}
@@ -926,6 +936,11 @@ export class HomeView implements WorkbenchTabInstance {
 		dh.createSpan({ cls: "sk-home-pa", text: initialOf(name) });
 		dh.createSpan({ cls: "sk-home-nm", text: name });
 		dh.createSpan({ cls: "sk-home-ld" });
+		// "+": a new note in this domain (the New note window, with the domain as its parent).
+		const add = dh.createEl("button", { cls: "sk-home-dadd", attr: { type: "button", tabindex: "-1" } });
+		setTooltip(add, this.t("menu.new-note"));
+		add.dataset.newnote = block.id;
+		setIcon(add, "plus");
 		const more = dh.createEl("button", { cls: "sk-home-more", attr: { type: "button", "aria-label": this.t("domains.arrange", { name }), "aria-haspopup": "menu", tabindex: "-1" } });
 		more.dataset.menu = block.id;
 		setIcon(more, "more-horizontal");
@@ -2187,6 +2202,11 @@ export class HomeView implements WorkbenchTabInstance {
 		if (q) return this.toggleMapHelp(q);
 		const hb = target.closest<HTMLElement>("[data-hidden]");
 		if (hb) return this.hiddenMenu(hb);
+		const addBtn = target.closest<HTMLElement>("[data-newnote]");
+		if (addBtn) {
+			e.stopPropagation();
+			return this.newNote(addBtn.dataset.newnote);
+		}
 		const menuBtn = target.closest<HTMLElement>("[data-menu]");
 		if (menuBtn) {
 			e.stopPropagation();

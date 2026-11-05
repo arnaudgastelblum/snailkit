@@ -89,7 +89,7 @@ export class TagRuntime implements ColorHost {
 		});
 		ctx.onSettingsChange(() => this.refresh());
 		ctx.addCommand({ id: "reassign-automatic-colors", name: ctx.t("reassign"), callback: () => this.openModal(new ReassignModal(this)) });
-		ctx.provide<TagColorsAPI>("tag-colors", { version: 1, classes: tag => this.classes(tag) });
+		ctx.provide<TagColorsAPI>("tag-colors", { version: 1, classes: tag => this.classes(tag), chooseColor: (tag, done) => this.openModal(new ColorModal(this, tag, done)) });
 	}
 
 	private syncRegistry(): void {

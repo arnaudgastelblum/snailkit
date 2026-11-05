@@ -3,7 +3,9 @@
 // one tab at a time: it mounts it in its body, keeps the state of the others, and gives the tab a
 // host (layout, opening notes, saving its state, history). The tab bar sits in Obsidian's own view
 // header, next to the back and forward arrows, or in a slim row on top where that header is hidden.
-import { ItemView, Platform, setIcon, setTooltip, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { ItemView, Menu, Platform, setIcon, setTooltip, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { START_TABS } from "../settings";
+import type { StartTab } from "./types";
 import type { WorkbenchCore } from "./index";
 import { openNoteAt } from "./open";
 import { altDigit, chooseTab, nthTab, readViewState, reshow, type WorkbenchViewState } from "./state";
@@ -213,6 +215,13 @@ export class WorkbenchView extends ItemView {
 		this.navigation = transient;
 	}
 
+	/** The text size of the Workbench: its body is zoomed (the tab bar stays as Obsidian draws it). */
+	applyTextZoom(): void {
+		if (!this.bodyEl) return;
+		// Optional call: the test DOM has no setCssProps.
+		this.bodyEl.setCssProps?.({ "--sk-wb-zoom": String(this.core.textZoom(this.contentEl.ownerDocument)) });
+	}
+
 	// ----- life cycle -----
 
 	async onOpen(): Promise<void> {
@@ -221,6 +230,7 @@ export class WorkbenchView extends ItemView {
 		this.contentEl.addClass("sk-wb-view");
 		this.contentEl.tabIndex = -1;
 		this.bodyEl = this.contentEl.createDiv({ cls: "sk-wb-body" });
+		this.applyTextZoom();
 		this.observer = new ResizeObserver(() => this.checkLayout(false));
 		this.observer.observe(this.contentEl);
 		// Captured: a field of a tab that keeps its keys to itself (Tasks' quick add) still lets Alt+1 ... Alt+9 through.
@@ -488,6 +498,37 @@ export class WorkbenchView extends ItemView {
 					void this.select(tab.id);
 					button.focus();
 				});
+				// Right click: open the Workbench on this tab, show or hide its count.
+				button.addEventListener("contextmenu", (event) => {
+					event.preventDefault();
+					const menu = new Menu();
+					const id = tab.id as StartTab;
+					if (START_TABS.includes(id)) {
+						// Checked on the tab it opens on now (Automatic included); a click on another one chooses it.
+						const here = this.core.autoOpenTab === id;
+						menu.addItem((item) =>
+							item
+								.setTitle(this.core.t(Platform.isPhone ? "workbench.menu.start-phone" : "workbench.menu.start"))
+								.setIcon("home")
+								.setChecked(here)
+								.onClick(() => {
+									if (!here) this.core.chooseStartTab(id);
+								}),
+						);
+					}
+					const live = this.core.get(tab.id);
+					if (live?.count) {
+						const shown = this.core.countShown(tab.id);
+						menu.addItem((item) =>
+							item
+								.setTitle(this.core.t("workbench.menu.count"))
+								.setIcon("hash")
+								.setChecked(shown)
+								.onClick(() => this.core.showCount(tab.id, !shown)),
+						);
+					}
+					menu.showAtMouseEvent(event);
+				});
 				button.addEventListener("keydown", (event) => {
 					if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
 					event.preventDefault();
@@ -510,7 +551,7 @@ export class WorkbenchView extends ItemView {
 			button.querySelector<HTMLElement>(".sk-wb-tab-label")!.setText(tab.label);
 			const countEl = button.querySelector<HTMLElement>(".sk-wb-tab-count")!;
 			const count = tab.count ? safe(() => tab.count!(), null, "count") : null;
-			countEl.hidden = count == null;
+			countEl.hidden = count == null || !this.core.countShown(tab.id);
 			countEl.setText(count == null ? "" : String(count));
 			countEl.toggleClass("is-warn", (tab.countTone ? safe(() => tab.countTone!(), null, "countTone") : null) === "warn");
 		});

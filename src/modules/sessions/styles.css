@@ -238,8 +238,17 @@
 .sk-sessions-composing .cm-line.is-grab {
 	translate: 1.4em 0;
 	background: var(--sk-accent-soft);
-	border-radius: var(--sk-radius-s);
+	border-radius: 0;
 	cursor: ns-resize;
+}
+/* One block for all the grabbed lines (compose.ts marks its two ends). */
+.sk-sessions-composing .cm-line.is-grab-first {
+	border-top-left-radius: var(--sk-radius-s);
+	border-top-right-radius: var(--sk-radius-s);
+}
+.sk-sessions-composing .cm-line.is-grab-last {
+	border-bottom-left-radius: var(--sk-radius-s);
+	border-bottom-right-radius: var(--sk-radius-s);
 }
 .sk-sessions-task-line.is-composing {
 	background: var(--sk-accent-soft);

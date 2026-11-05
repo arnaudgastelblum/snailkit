@@ -15,6 +15,7 @@ import { insertToken, mapTaskText, retagText, setDoneLine, setFlagText, setPrior
 import { playDayClearSound, playDoneSound, playLandSound } from "../../ui/sound";
 import { nextRun, reducedMotion, type Run } from "../../ui/playful";
 import { moment } from "../../core/moment";
+import { laterUntil, pruneLater, updateFirstSeen } from "./today-plan";
 
 /** Ids of Snailkit's own tabs: a companion plugin cannot take them (see addViewTab in api.ts). */
 const RESERVED_TABS = ["tasks", "home", "sessions"];
@@ -42,7 +43,47 @@ export class TasksHub {
 	constructor(readonly ctx: Context) {
 		this.index = new TaskIndex(ctx);
 		this.writer = new TaskWriter(ctx, this.index);
-		this.index.onChange(() => this.refreshViews());
+		this.index.onChange(() => {
+			this.noteSeen();
+			this.refreshViews();
+		});
+	}
+
+	private seenTimer = 0;
+	/**
+	 * Remembers when each open task was first seen (a task line has no creation date): the first
+	 * time, every task already there counts as old. Tasks gone are forgotten, and so are expired
+	 * "Later". Done a moment after the index settles, not at each of its changes: renaming a note
+	 * removes its tasks then reads them again, they must not come back as new.
+	 */
+	private noteSeen(): void {
+		if (!this.index.ready || this.disposed) return;
+		window.clearTimeout(this.seenTimer);
+		this.seenTimer = window.setTimeout(() => this.reconcileSeen(), 2000);
+	}
+
+	private reconcileSeen(): void {
+		this.seenTimer = 0;
+		if (!this.index.ready) return;
+		const s = this.ctx.settings;
+		const today = this.today();
+		const keys = this.index.open().map((t) => t.key);
+		const seen = updateFirstSeen(s.firstSeen, keys, today, !s.firstSeenSeeded);
+		const later = pruneLater(s.later, keys, today);
+		if (!seen.changed && !later.changed && s.firstSeenSeeded) return;
+		s.firstSeen = seen.next;
+		s.later = later.next;
+		s.firstSeenSeeded = true;
+		void this.ctx.saveSettings();
+		if (!this.disposed) this.refreshViews();
+	}
+
+	/** Puts a task aside from "Worth a look" for a few days ("Later"). */
+	async later(t: Task): Promise<void> {
+		const s = this.ctx.settings;
+		s.later = [...s.later.filter(([k]) => k !== t.key), [t.key, laterUntil(this.today())]];
+		await this.ctx.saveSettings();
+		this.refreshViews();
 	}
 
 	get alive(): boolean {
@@ -166,7 +207,8 @@ export class TasksHub {
 			case "yesterday":
 				return this.ctx.t("due." + label.kind);
 			case "overdue":
-				return this.ctx.tn("due.overdue", label.days);
+				// Late is a fact, not an alarm: "since Oct 7" (the old "12 days overdue" with Show overdue first).
+				return this.ctx.settings.overdueFirst ? this.ctx.tn("due.overdue", label.days) : this.ctx.t("due.since-date", { date: this.formatDate(due, due.slice(0, 4) === this.today().slice(0, 4) ? "format.short" : "format.long") });
 			case "weekday":
 				return this.formatDate(due, "format.weekday");
 			default:
@@ -359,6 +401,11 @@ export class TasksHub {
 	}
 
 	dispose(): void {
+		// What was waiting to be remembered is written now (a restart, a language change).
+		if (this.seenTimer) {
+			window.clearTimeout(this.seenTimer);
+			this.reconcileSeen();
+		}
 		this.disposed = true;
 		this.lastUndo = null;
 		this.index.dispose();

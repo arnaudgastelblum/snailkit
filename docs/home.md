@@ -31,7 +31,7 @@ choose). The note gets its `up` property toward that parent and sits next to it.
 - The name is checked as you type: characters a file or a link cannot hold are shown at once, and
   when a note of that name already exists, **Create** becomes **Open it**.
 - The parent proposed: from a note, that note when it has notes under it, else its parent; from
-  Home, the last parent you chose. **New note here** on the map opens it on that note.
+  Home, the last parent you chose. **New note here** on the map, or the **+** of a domain, opens it on that note.
 - Text selected in a note becomes the name, then a link to the new note.
 - **Enter** creates, **Ctrl+Enter** creates and opens in a new tab.
 - **More options**, folded away and remembered: a link to the new note at the end of the parent,
@@ -44,4 +44,5 @@ choose). The note gets its `up` property toward that parent and sits next to it.
 ## Good to know
 
 - Home is the first tab of the [Workbench](workbench.md). It can open by itself when Obsidian starts and in every new tab.
-- The **Map**, **Domains** and **Tags** views show the same vault three ways.
+- The **Map**, **Domains** and **Tags** views show the same vault three ways. On a computer, the
+  Map view also lists your domains under the map.

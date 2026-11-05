@@ -244,6 +244,21 @@ export class ModuleHost {
 		return this.saveWorkbench();
 	}
 
+	/** The text size of the Workbench (0: the text size of notes): applied at once, saved at its turn. */
+	setWorkbenchFontSize(size: number): Promise<void> {
+		this.plugin.data.workbench.fontSize = size;
+		this.plugin.workbench.applyTextSize();
+		return this.saveWorkbench();
+	}
+
+	/** Shows or hides the count of a Workbench tab (right click on the tab). */
+	setWorkbenchCount(tab: string, shown: boolean): Promise<void> {
+		const settings = this.plugin.data.workbench;
+		settings.hiddenCounts = shown ? settings.hiddenCounts.filter((x) => x !== tab) : [...new Set([...settings.hiddenCounts, tab])];
+		this.plugin.workbench.refresh();
+		return this.saveWorkbench();
+	}
+
 	private saveWorkbench(): Promise<void> {
 		this.workbenchLocalAt = Date.now();
 		return this.run(async () => {
@@ -275,6 +290,8 @@ export class ModuleHost {
 			this.plugin.data = fresh;
 			this.plugin.workbench.setAutoOpen(fresh.workbench.autoOpen);
 			this.plugin.workbench.setStartTabs(fresh.workbench.startTab, fresh.workbench.startTabPhone);
+			this.plugin.workbench.applyTextSize();
+			this.plugin.workbench.refresh();
 			for (const handle of this.handles) {
 				if (this.closed) return;
 				const settings = handle.readSettings();

@@ -110,6 +110,10 @@ export default class SnailkitPlugin extends Plugin {
 		return this.host.setWorkbenchStartTab(key, tab);
 	}
 
+	setWorkbenchFontSize(size: number): Promise<void> {
+		return this.host.setWorkbenchFontSize(size);
+	}
+
 	/**
 	 * Obsidian calls this when data.json changed on disk (Obsidian Sync from another device).
 	 * Without it, this device would keep its older copy in memory and write it back on its next
