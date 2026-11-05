@@ -26,8 +26,9 @@ the two.
 
 - On a phone, Tasks opens on **Today**, laid out as on a computer (Your day, Worth a look with its
   buttons on every row, From your brainstorms, Waiting since earlier), and tags fold by weight in
-  the same way. One line of buttons filters the list (Tag, Priority, Type, search); a tap unfolds
-  its choices, a second tap folds them, and a tag picked there opens as a room with its color. A
+  the same way. One banner on top says where you are (Today, Upcoming, or a tag in its color): tap
+  its name to go elsewhere. The small button at its right brings out the filters (Priority, Type,
+  search), the sort and the sync; a dot on it says a filter is on. A
   tap on the round + button unfolds your most used tags (a tag with sub-tags opens them); tap one
   and type the task. In a tag's room, the + adds straight into that tag. What you add lands right
   under the field.

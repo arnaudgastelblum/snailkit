@@ -56,6 +56,8 @@ interface ViewState {
 	panel?: "tag" | "prio" | "type" | null;
 	/** Phone: the search field is shown. */
 	searching?: boolean;
+	/** Phone: the drawer under the banner (filters, sort, sync) is out. */
+	drawer?: boolean;
 	/** Phone: the tasks just added from the add row (newest first), to see them land. */
 	justAdded?: string[];
 	propsFor: string | null;
@@ -142,8 +144,9 @@ export class TasksTab implements WorkbenchTabInstance {
 	/** The count shown last (it rolls only when it changes). */
 	private doneShown: number | null = null;
 	/**
-	 * Phone: one line of soft buttons (Tag, Priority, Type, search); a tap unfolds its panel under
-	 * the bar, a second tap folds it. The button says what is on ("#home", "High +1", "Focus").
+	 * Phone: the banner (where you are, in the wash of its tag; a tap on the name chooses another
+	 * place), and in the drawer one line of soft buttons (Priority, Type, search); a tap unfolds its
+	 * panel, a second tap folds it. The button says what is on ("High +1", "Focus").
 	 */
 	private renderPhoneBar(open: readonly Task[]): void {
 		const bar = this.phoneBar;
@@ -153,6 +156,16 @@ export class TasksTab implements WorkbenchTabInstance {
 		const scope = this.st.scope;
 		const prio = this.settings.priorityFilter;
 		const flag = scope.startsWith("flag:") ? scope.slice(5) : this.flagOn();
+		const tag = scope.startsWith("tag:") ? scope.slice(4) : null;
+		// Away from a list of its own, back to Today (the phone has no All).
+		const home = () => this.setScope("today");
+		this.drawPhoneBanner(tag, flag);
+		const filtered = prio.length > 0 || !!this.flagOn() || !!this.st.query;
+		this.phoneMore?.toggleClass("is-on", filtered);
+		this.phoneMore?.toggleClass("is-open", !!this.st.drawer);
+		this.phoneMore?.setAttr("aria-expanded", String(!!this.st.drawer));
+		const drawerIn = bar.parentElement!;
+		drawerIn.parentElement!.toggleClass("is-open", !!this.st.drawer);
 		const button = (id: "tag" | "prio" | "type", iconName: string, label: string, on: boolean, clear: (() => void) | null) => {
 			const b = bar.createEl("button", { cls: "sk-tasks-pbtn" + (on ? " is-on" : "") + (this.st.panel === id ? " is-open" : ""), attr: { type: "button", "aria-expanded": String(this.st.panel === id) } });
 			icon(b, iconName);
@@ -171,8 +184,6 @@ export class TasksTab implements WorkbenchTabInstance {
 				this.renderPhoneBar(this.hub.index.open());
 			});
 		};
-		const tag = scope.startsWith("tag:") ? scope.slice(4) : null;
-		button("tag", "hash", tag ? tag.split("/").pop() ?? tag : this.t("scope.tag"), !!tag, () => this.setScope("all"));
 		const prioLabel = prio.length ? this.t("prio." + prio[0]) + (prio.length > 1 ? ` +${prio.length - 1}` : "") : this.t("filter.priority");
 		button("prio", "flag", prioLabel, prio.length > 0, () => {
 			this.settings.priorityFilter = [];
@@ -180,7 +191,7 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.refresh();
 		});
 		if (this.flags().length) button("type", flag ? this.flagIcon(flag) : "zap", flag ? this.flagLabel(flag) : this.t("filter.type"), !!flag, () => {
-			if (scope.startsWith("flag:")) this.setScope("all");
+			if (scope.startsWith("flag:")) home();
 			else this.toggleFlagFilter(flag!);
 		});
 		const search = bar.createEl("button", { cls: "sk-tasks-pbtn is-icon" + (this.st.searching || this.st.query ? " is-on" : ""), attr: { type: "button", "aria-label": this.t("search.placeholder") } });
@@ -196,6 +207,11 @@ export class TasksTab implements WorkbenchTabInstance {
 			if (this.st.searching) this.searchInput?.focus();
 		});
 		this.rootEl.toggleClass("is-searching", !!(this.st.searching || this.st.query));
+		// The drawer out: a zone of its own for the keyboard (Tab, arrows); folded, it is skipped.
+		if (this.st.drawer) {
+			drawerIn.setAttr("data-sk-zone", "filters");
+			drawerIn.querySelectorAll("button").forEach((b) => b.setAttr("data-sk-item", ""));
+		} else drawerIn.removeAttribute("data-sk-zone");
 
 		// The panel: unfolds under the bar (height animated by the grid row), content of the button open.
 		const box = panel.parentElement!;
@@ -203,13 +219,19 @@ export class TasksTab implements WorkbenchTabInstance {
 		panel.empty();
 		if (this.st.panel === "tag") {
 			const grid = panel.createDiv({ cls: "sk-tasks-pgrid" });
-			const all = grid.createEl("button", { cls: "sk-tasks-popt" + (!tag ? " is-on" : ""), attr: { type: "button" } });
-			icon(all, "layers");
-			all.createSpan({ text: this.t("scope.all") });
-			all.addEventListener("click", () => {
-				this.st.panel = null;
-				this.setScope("all");
-			});
+			// Today and Upcoming first, then the tags: every place is chosen here.
+			const c = this.dayCounts(open);
+			const days = grid.createDiv({ cls: "sk-tasks-pline is-days" });
+			for (const [id, iconName, n] of [["today", "sun", c.today], ["upcoming", "calendar-days", c.upcoming]] as const) {
+				const b = days.createEl("button", { cls: "sk-tasks-popt is-day" + (scope === id ? " is-on" : ""), attr: { type: "button" } });
+				icon(b, iconName);
+				b.createSpan({ text: this.t("scope." + id) });
+				if (n) b.createSpan({ cls: "sk-tasks-popt-n", text: String(n) });
+				b.addEventListener("click", () => {
+					this.st.panel = null;
+					this.setScope(id);
+				});
+			}
 			// One line per tag of the first level, its nested tags after it.
 			let line = grid;
 			const walk = (node: TagNode) => {
@@ -244,7 +266,7 @@ export class TasksTab implements WorkbenchTabInstance {
 				b.createSpan({ cls: "sk-tasks-popt-n", text: String(counts[f] ?? 0) });
 				b.addEventListener("click", () => {
 					this.st.panel = null;
-					if (scope.startsWith("flag:")) this.setScope("all");
+					if (scope.startsWith("flag:")) home();
 					this.toggleFlagFilter(f);
 				});
 			}
@@ -257,10 +279,40 @@ export class TasksTab implements WorkbenchTabInstance {
 				b.createSpan({ cls: "sk-tasks-popt-n", text: String(counts[f] ?? 0) });
 				b.addEventListener("click", () => {
 					this.st.panel = null;
-					this.setScope(on ? "all" : "flag:" + f);
+					if (on) home();
+					else this.setScope("flag:" + f);
 				});
 			}
 		}
+	}
+
+	/**
+	 * Phone: the banner says where you are. A tag: its capsule on the wash of the tag; Today,
+	 * Upcoming, Waiting...: their name on a quiet band. A tap on the name unfolds the places.
+	 */
+	private drawPhoneBanner(tag: string | null, flag: string | null): void {
+		const old = this.phoneBan;
+		if (!old) return;
+		const ban = createDiv({ cls: "sk-tasks-pban" + (tag ? " is-tag" : ""), attr: { "data-sk-zone": "toolbar" } });
+		if (tag) colorFor(ban, tag, this.hub);
+		const name = ban.createEl("button", { cls: "sk-tasks-pban-name" + (this.st.panel === "tag" ? " is-open" : ""), attr: { type: "button", "aria-expanded": String(this.st.panel === "tag"), "aria-label": this.t("scope.tag") } });
+		const scope = this.st.scope;
+		if (tag) capsule(name, tag, this.hub, "sk-tasks-cap-lg");
+		else {
+			const label = scope === "today" || scope === "upcoming" ? this.t("scope." + scope) : scope === "all" ? this.t("title.all") : scope.startsWith("flag:") && flag ? this.flagLabel(flag) : this.t("title.all");
+			name.createSpan({ cls: "sk-tasks-pban-label", text: label });
+		}
+		icon(name, "chevron-down", "sk-tasks-pban-chev");
+		name.addEventListener("click", () => {
+			this.st.panel = this.st.panel === "tag" ? null : "tag";
+			this.renderPhoneBar(this.hub.index.open());
+		});
+		if (tag) ban.addEventListener("contextmenu", (e) => this.tagMenu(e, tag));
+		ban.createDiv({ cls: "sk-tasks-pban-gap" });
+		if (this.doneEl) ban.appendChild(this.doneEl);
+		if (this.phoneMore) ban.appendChild(this.phoneMore);
+		old.replaceWith(ban);
+		this.phoneBan = ban;
 	}
 
 	/** The card of what was done today, open under the pill, and how it closes. */
@@ -357,6 +409,9 @@ export class TasksTab implements WorkbenchTabInstance {
 		/** Phone: the filter bar (Tag, Priority, Type, search) and the panel it opens. */
 	private phoneBar: HTMLElement | null = null;
 	private phonePanel: HTMLElement | null = null;
+	/** Phone: the banner on top (where you are, the pill of the day, the drawer button). */
+	private phoneBan: HTMLElement | null = null;
+	private phoneMore: HTMLElement | null = null;
 	/** The flags the chips were built for (they are rebuilt when the settings change them). */
 	private chipSig = "";
 	/** The tag picker open from this tab, closed with it. */
@@ -935,7 +990,9 @@ export class TasksTab implements WorkbenchTabInstance {
 		head.empty();
 		this.filterBtn = this.countEl = this.scopeEl = this.hubTitleEl = this.subEl = this.sortLabel = this.extEl = this.doneEl = null;
 		this.doneShown = null;
-		if (this.layout === "side") {
+		this.phoneBar = this.phonePanel = this.phoneBan = this.phoneMore = null;
+		if (this.layout === "side" && Platform.isPhone) this.phoneHead(head);
+		else if (this.layout === "side") {
 			const toolbar = head.createDiv({ attr: { "data-sk-zone": "toolbar" } });
 			const top = toolbar.createDiv({ cls: "sk-tasks-side-top" });
 			const title = top.createDiv({ cls: "sk-tasks-title" });
@@ -947,76 +1004,98 @@ export class TasksTab implements WorkbenchTabInstance {
 			this.filterBtn.addClass("sk-tasks-filter-btn");
 			this.extEl = top.createDiv({ cls: "sk-tasks-ext" });
 			this.iconButton(top, "maximize-2", this.t("action.page"), () => void this.hub.activate("page", { tasks: true })).addClass("sk-tasks-page-btn");
-			if (!Platform.isPhone) {
-				// New task: the one filled button of the head, with its words, easy to find.
-				const add = top.createEl("button", { cls: "sk-btn is-primary is-s sk-tasks-new-btn", attr: { type: "button", "aria-label": this.t("action.new-key") } });
-				icon(add, "plus");
-				add.createSpan({ cls: "sk-tasks-new-label", text: this.t("action.new") });
-				add.addEventListener("click", () => this.startAdd(null));
-			}
-			if (Platform.isPhone) {
-				// A round button floats above the list: New task, always at hand, never in the way.
-				// A tap unfolds the tags most used for tasks (as the button of the page does on hover).
-				const fab = this.rootEl.createEl("button", { cls: "sk-tasks-fab", attr: { type: "button", "aria-label": this.t("action.new"), "aria-haspopup": "true", "aria-expanded": "false" } });
-				icon(fab, "plus");
-				fab.addEventListener("click", () => {
-					this.st.panel = null;
-					if (this.tagFan) {
-						this.tagFan.close();
-						return;
-					}
-					// In the room of a tag, the new task goes there; without any tag, straight to the add row.
-					if (this.st.scope.startsWith("tag:")) {
-						this.startAdd(this.st.scope.slice(4));
-						return;
-					}
-					if (!this.tagTree(this.hub.index.open()).length) {
-						this.startAdd(null);
-						return;
-					}
-					this.tagFan = openTagFan(this.rootEl, fab, {
-						name: this.t("add.choose-tag"),
-						back: this.t("add.all-tags"),
-						roots: () => this.newTree(),
-						draw: (el, tag) => void capsule(el, tag, this.hub),
-						onPick: (tag, from) => {
-							this.tagFan = null;
-							this.addOnTop(tag, from);
-						},
-						onClose: () => (this.tagFan = null),
-						reduced: () => reducedMotion(this.rootEl.win) || !this.hub.playful(this.rootEl.win),
-					});
-				});
-				this.searchBox(toolbar.createDiv({ cls: "sk-tasks-phone-search" }));
-			} else this.searchBox(toolbar);
+			// New task: the one filled button of the head, with its words, easy to find.
+			const add = top.createEl("button", { cls: "sk-btn is-primary is-s sk-tasks-new-btn", attr: { type: "button", "aria-label": this.t("action.new-key") } });
+			icon(add, "plus");
+			add.createSpan({ cls: "sk-tasks-new-label", text: this.t("action.new") });
+			add.addEventListener("click", () => this.startAdd(null));
+			this.searchBox(toolbar);
 			this.scopeEl = head.createDiv({ cls: "sk-tasks-scopes", attr: { "data-sk-zone": "nav" } });
-			if (Platform.isPhone) {
-				this.phoneBar = head.createDiv({ cls: "sk-tasks-pbar" });
-				this.phonePanel = head.createDiv({ cls: "sk-tasks-ppanel" }).createDiv({ cls: "sk-tasks-ppanel-in" });
-			}
 		} else {
-			const titleRow = head.createDiv({ cls: "sk-tasks-ph-title" });
-			this.hubTitleEl = titleRow.createDiv({ cls: "sk-tasks-ph-name" });
-			this.subEl = titleRow.createDiv({ cls: "sk-tasks-ph-sub" });
-			this.doneEl = this.donePill(titleRow);
-			// Above the list, only two questions: the energy of the moment (Everything, 10 minutes,
-			// Focus...) and, folded away, search (/) and the view menu (sort, priorities shown).
-			const tools = head.createDiv({ cls: "sk-tasks-ph-tools" });
-			const chips = tools.createDiv({ cls: "sk-tasks-fchips sk-tasks-energy", attr: { role: "group" } });
-			const every = chips.createEl("button", { cls: "sk-btn is-s sk-tasks-fchip sk-tasks-every", attr: { type: "button" } });
-			every.setText(this.t("filter.everything"));
-			every.addEventListener("click", () => {
-				const on = this.flagOn();
-				if (on) this.toggleFlagFilter(on);
-			});
-			this.flagChips(chips);
-			tools.createDiv({ cls: "sk-tasks-ph-gap" });
-			this.extEl = tools.createDiv({ cls: "sk-tasks-ext" });
-			this.searchBox(tools);
-			tools.querySelector(".sk-tasks-search")?.addClass("is-compact");
-			this.filterBtn = this.iconButton(tools, "more-horizontal", this.t("view.menu"), (e) => this.viewMenu(e));
-			this.filterBtn.addClass("sk-tasks-view-btn", "sk-tasks-filter-btn");
+			this.renderPageHead(head);
 		}
+	}
+
+	/**
+	 * Phone: one banner on top, in the wash of the tag you are in: its name (a tap chooses where to
+	 * go: Today, Upcoming or a tag), the pill of the day, and a small button whose drawer brings out
+	 * the filters, the sort and the sync. A round "+" floats above the list.
+	 */
+	private phoneHead(head: HTMLElement): void {
+		this.phoneBan = head.createDiv({ cls: "sk-tasks-pban", attr: { "data-sk-zone": "toolbar" } });
+		this.doneEl = this.donePill(this.phoneBan);
+		const more = (this.phoneMore = this.phoneBan.createEl("button", { cls: "sk-tasks-pban-more", attr: { type: "button", "aria-label": this.t("filter.label") } }));
+		icon(more, "sliders-horizontal");
+		more.createSpan({ cls: "sk-tasks-pban-dot" });
+		more.addEventListener("click", () => {
+			this.st.drawer = !this.st.drawer;
+			if (!this.st.drawer && (this.st.panel === "prio" || this.st.panel === "type")) this.st.panel = null;
+			this.renderPhoneBar(this.hub.index.open());
+		});
+		const drawer = head.createDiv({ cls: "sk-tasks-pdrawer" }).createDiv({ cls: "sk-tasks-pdrawer-in" });
+		this.phoneBar = drawer.createDiv({ cls: "sk-tasks-pbar" });
+		const tools = drawer.createDiv({ cls: "sk-tasks-ptools" });
+		this.iconButton(tools, "arrow-up-down", this.t("sort.label"), (e) => this.sortMenu(e));
+		this.extEl = tools.createDiv({ cls: "sk-tasks-ext" });
+		this.phonePanel = head.createDiv({ cls: "sk-tasks-ppanel" }).createDiv({ cls: "sk-tasks-ppanel-in" });
+		this.searchBox(head.createDiv({ cls: "sk-tasks-phone-search" }));
+		// A round button floats above the list: New task, always at hand, never in the way.
+		// A tap unfolds the tags most used for tasks (as the button of the page does on hover).
+		const fab = this.rootEl.createEl("button", { cls: "sk-tasks-fab", attr: { type: "button", "aria-label": this.t("action.new"), "aria-haspopup": "true", "aria-expanded": "false" } });
+		icon(fab, "plus");
+		fab.addEventListener("click", () => {
+			this.st.panel = null;
+			if (this.tagFan) {
+				this.tagFan.close();
+				return;
+			}
+			// In the room of a tag, the new task goes there; without any tag, straight to the add row.
+			if (this.st.scope.startsWith("tag:")) {
+				this.startAdd(this.st.scope.slice(4));
+				return;
+			}
+			if (!this.tagTree(this.hub.index.open()).length) {
+				this.startAdd(null);
+				return;
+			}
+			this.tagFan = openTagFan(this.rootEl, fab, {
+				name: this.t("add.choose-tag"),
+				back: this.t("add.all-tags"),
+				roots: () => this.newTree(),
+				draw: (el, tag) => void capsule(el, tag, this.hub),
+				onPick: (tag, from) => {
+					this.tagFan = null;
+					this.addOnTop(tag, from);
+				},
+				onClose: () => (this.tagFan = null),
+				reduced: () => reducedMotion(this.rootEl.win) || !this.hub.playful(this.rootEl.win),
+			});
+		});
+	}
+
+	/** The head of the page layout: title, energy chips, search, view menu. */
+	private renderPageHead(head: HTMLElement): void {
+		const titleRow = head.createDiv({ cls: "sk-tasks-ph-title" });
+		this.hubTitleEl = titleRow.createDiv({ cls: "sk-tasks-ph-name" });
+		this.subEl = titleRow.createDiv({ cls: "sk-tasks-ph-sub" });
+		this.doneEl = this.donePill(titleRow);
+		// Above the list, only two questions: the energy of the moment (Everything, 10 minutes,
+		// Focus...) and, folded away, search (/) and the view menu (sort, priorities shown).
+		const tools = head.createDiv({ cls: "sk-tasks-ph-tools" });
+		const chips = tools.createDiv({ cls: "sk-tasks-fchips sk-tasks-energy", attr: { role: "group" } });
+		const every = chips.createEl("button", { cls: "sk-btn is-s sk-tasks-fchip sk-tasks-every", attr: { type: "button" } });
+		every.setText(this.t("filter.everything"));
+		every.addEventListener("click", () => {
+			const on = this.flagOn();
+			if (on) this.toggleFlagFilter(on);
+		});
+		this.flagChips(chips);
+		tools.createDiv({ cls: "sk-tasks-ph-gap" });
+		this.extEl = tools.createDiv({ cls: "sk-tasks-ext" });
+		this.searchBox(tools);
+		tools.querySelector(".sk-tasks-search")?.addClass("is-compact");
+		this.filterBtn = this.iconButton(tools, "more-horizontal", this.t("view.menu"), (e) => this.viewMenu(e));
+		this.filterBtn.addClass("sk-tasks-view-btn", "sk-tasks-filter-btn");
 	}
 
 	private searchBox(parent: HTMLElement): void {
@@ -1142,7 +1221,8 @@ export class TasksTab implements WorkbenchTabInstance {
 			const n = chip.querySelector(".sk-tasks-flagchip-n");
 			if (n) n.setText(String(flagCounts(open, [f])[f] ?? 0));
 		});
-		if (this.layout === "side") {
+		if (this.layout === "side" && Platform.isPhone) this.renderPhoneBar(open);
+		else if (this.layout === "side") {
 			this.countEl?.setText(String(c.all));
 			const scopes = this.scopeEl!;
 			scopes.empty();
@@ -1154,22 +1234,21 @@ export class TasksTab implements WorkbenchTabInstance {
 				button.addEventListener("click", () => this.setScope(id));
 				if (id === "today") this.dropTarget(button, { due: true });
 			}
-			if (Platform.isPhone) this.renderPhoneBar(open);
-			else if (!this.st.scope.startsWith("tag:") && !this.st.scope.startsWith("flag:")) {
+			if (!this.st.scope.startsWith("tag:") && !this.st.scope.startsWith("flag:")) {
 				// One tag only: the shared picker, then the list of that tag and its sub-tags.
 				const pick = scopes.createEl("button", { cls: "sk-tasks-scope sk-tasks-scope-tag" });
 				icon(pick, "hash");
 				pick.createSpan({ text: this.t("scope.tag") });
 				pick.addEventListener("click", () => this.chooseTag(pick, null, null, (tag) => this.setScope("tag:" + tag.toLowerCase())));
 			}
-			if (this.st.scope.startsWith("tag:") && !Platform.isPhone) {
+			if (this.st.scope.startsWith("tag:")) {
 				const tag = this.st.scope.slice(4);
 				const button = scopes.createEl("button", { cls: "sk-tasks-scope is-on is-tag", attr: { "aria-label": this.t("scope.all") } });
 				capsule(button, tag, this.hub);
 				icon(button, "x");
 				button.addEventListener("click", () => this.setScope("all"));
 			}
-			if (this.st.scope.startsWith("flag:") && !Platform.isPhone) {
+			if (this.st.scope.startsWith("flag:")) {
 				const f = this.st.scope.slice(5);
 				const button = scopes.createEl("button", { cls: "sk-tasks-scope is-on is-tag", attr: { "aria-label": this.t("scope.all") } });
 				icon(button, this.flagIcon(f));
@@ -1625,7 +1704,6 @@ export class TasksTab implements WorkbenchTabInstance {
 		if (scope.startsWith("tag:")) {
 			const root = scope.slice(4);
 			const node = findNode(tree, root);
-			if (Platform.isPhone) this.phoneRoom(list, root, pool.length);
 			if (node) this.tagGroup(list, node, 0, this.rich);
 			else if (this.st.adding !== null) this.addRow(list, this.st.adding || root);
 		} else tree.forEach((node) => this.tagGroup(list, node, 0));
@@ -2132,29 +2210,6 @@ export class TasksTab implements WorkbenchTabInstance {
 		const mark = elementOf(this.rootEl.doc, "span");
 		capsule(mark, tag, this.hub);
 		flyTag(this.rootEl.doc, mark, from, to, row ?? null);
-	}
-
-	/**
-	 * Phone: the page of a tag is a room, as on the page. Its wash on a banner on top of the list,
-	 * the way back above its name ("All tasks › client"), the count of what is open in it.
-	 */
-	private phoneRoom(list: HTMLElement, tag: string, open: number): void {
-		const room = list.createDiv({ cls: "sk-tasks-proom" });
-		colorFor(room, tag, this.hub);
-		const crumbs = room.createDiv({ cls: "sk-tasks-room-crumbs" });
-		const back = crumbs.createEl("button", { cls: "sk-tasks-room-crumb", text: this.t("title.all"), attr: { type: "button" } });
-		back.addEventListener("click", () => this.setScope("all"));
-		const parts = tag.split("/");
-		for (let i = 1; i < parts.length; i++) {
-			const up = parts.slice(0, i).join("/");
-			icon(crumbs, "chevron-right", "sk-tasks-room-sep");
-			const b = crumbs.createEl("button", { cls: "sk-tasks-room-crumb", text: parts[i - 1], attr: { type: "button" } });
-			b.addEventListener("click", () => this.setScope("tag:" + up));
-		}
-		const name = room.createDiv({ cls: "sk-tasks-proom-name" });
-		capsule(name, tag, this.hub, "sk-tasks-cap-lg");
-		name.createSpan({ cls: "sk-tasks-proom-sub", text: this.hub.ctx.tn("head.open", open) });
-		room.addEventListener("contextmenu", (e) => this.tagMenu(e, tag));
 	}
 
 	/**

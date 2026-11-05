@@ -2368,11 +2368,183 @@ textarea.sk-tasks-tnote-area {
 		display: none;
 	}
 }
-.sk-tasks-view.is-phone .sk-tasks-side-top {
-	justify-content: flex-end;
+/* Phone: one banner on top (where you are, in the wash of its tag; the pill; the drawer button). */
+.sk-tasks-view.is-phone .sk-tasks-side-head {
+	padding: 0 10px 2px;
 }
-.sk-tasks-view.is-phone .sk-tasks-side-top .sk-tasks-done {
-	margin-right: auto;
+.sk-tasks-pban {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 52px;
+	margin: 0 -10px;
+	padding: 6px 10px 6px 14px;
+	background: color-mix(in srgb, var(--text-normal) 4%, var(--sk-tasks-bg, var(--background-primary)));
+	transition: background var(--sk-mid) var(--sk-ease);
+}
+.sk-tasks-pban.is-tag {
+	background: color-mix(in srgb, var(--sk-tag-l-bg, var(--sk-tasks-l-bg)) 70%, var(--sk-tasks-bg, var(--background-primary)));
+}
+.sk-tasks-view button.sk-tasks-pban-name {
+	display: inline-flex;
+	flex: 0 1 auto;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	height: 40px;
+	padding: 0 6px 0 4px;
+	border: 0;
+	border-radius: var(--sk-radius-s);
+	background: none;
+	box-shadow: none;
+	color: var(--text-normal);
+}
+/* A long tag: its capsule shrinks with an ellipsis, the chevron and the tools stay in view. */
+.sk-tasks-pban-name .sk-tasks-cap {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+}
+.sk-tasks-pban-name .sk-tasks-cap > * {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+/* A sub-tag: the root keeps its name up to a point, the end of the path gives way first. */
+.sk-tasks-pban-name .sk-tasks-cap.is-joined > .sk-tasks-cap-root {
+	flex: 0 0 auto;
+	max-width: 9em;
+}
+.sk-tasks-pban-name .sk-tasks-cap > .sk-tasks-cap-root:only-child {
+	flex: 0 1 auto;
+	max-width: none;
+}
+.sk-tasks-view button.sk-tasks-pban-name:active {
+	transform: scale(0.97);
+}
+.sk-tasks-pban-label {
+	overflow: hidden;
+	font-size: 19px;
+	font-weight: 650;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sk-tasks-pban-chev {
+	display: inline-flex;
+	flex: none;
+	opacity: 0.55;
+	transition: transform var(--sk-mid) var(--sk-ease);
+}
+.sk-tasks-pban-chev svg {
+	width: 17px;
+	height: 17px;
+}
+.sk-tasks-pban-name.is-open .sk-tasks-pban-chev {
+	transform: rotate(180deg);
+}
+.sk-tasks-pban-gap {
+	flex: 1;
+}
+.sk-tasks-pban .sk-tasks-done {
+	margin: 0 2px 0 0;
+	padding: 2px 9px 2px 3px;
+	background: color-mix(in srgb, var(--sk-tasks-bg, var(--background-primary)) 55%, transparent);
+	font-size: 12.5px;
+}
+.sk-tasks-pban .sk-tasks-done-l {
+	display: none;
+}
+.sk-tasks-pban .sk-tasks-ring {
+	width: 20px;
+	height: 20px;
+}
+.sk-tasks-view button.sk-tasks-pban-more {
+	position: relative;
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	transition: background var(--sk-fast), transform var(--sk-mid) var(--sk-spring);
+}
+.sk-tasks-view button.sk-tasks-pban-more.is-open {
+	background: color-mix(in srgb, var(--sk-tasks-bg, var(--background-primary)) 70%, transparent);
+	color: var(--text-normal);
+	transform: rotate(90deg);
+}
+.sk-tasks-pban-more svg {
+	width: 19px;
+	height: 19px;
+}
+.sk-tasks-pban-dot {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--sk-accent);
+	box-shadow: 0 0 0 2px var(--sk-tasks-bg, var(--background-primary));
+	opacity: 0;
+	transform: scale(0.4);
+	transition: opacity var(--sk-fast), transform var(--sk-mid) var(--sk-spring);
+}
+.sk-tasks-pban-more.is-on .sk-tasks-pban-dot {
+	opacity: 1;
+	transform: none;
+}
+/* The drawer: springs out under the banner (height by the grid row), the filters and the tools. */
+.sk-tasks-pdrawer {
+	display: grid;
+	grid-template-rows: 0fr;
+	opacity: 0;
+	transition: grid-template-rows var(--sk-mid) var(--sk-ease), opacity var(--sk-mid) var(--sk-ease);
+}
+.sk-tasks-pdrawer.is-open {
+	grid-template-rows: 1fr;
+	opacity: 1;
+}
+.sk-tasks-pdrawer-in {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 0;
+	overflow: hidden;
+}
+.sk-tasks-pdrawer .sk-tasks-pbar {
+	flex: 1;
+	min-width: 0;
+	padding: 8px 0 6px;
+	transform: translateY(-8px);
+	transition: transform var(--sk-mid) var(--sk-spring);
+}
+.sk-tasks-pdrawer.is-open .sk-tasks-pbar {
+	transform: none;
+}
+.sk-tasks-ptools {
+	display: flex;
+	flex: none;
+	align-items: center;
+	padding-top: 2px;
+}
+.sk-tasks-view.is-phone .sk-tasks-ptools .sk-btn.is-icon {
+	min-width: 38px;
+	min-height: 40px;
+}
+.sk-tasks-pline.is-days .sk-tasks-popt {
+	flex: 1;
+	justify-content: center;
+}
+.sk-tasks-pban + .sk-tasks-pdrawer:not(.is-open) + .sk-tasks-ppanel.is-open {
+	padding-top: 8px;
 }
 .sk-tasks-view.is-phone button.sk-btn.sk-tasks-phone-new {
 	justify-content: center;
@@ -2383,7 +2555,7 @@ textarea.sk-tasks-tnote-area {
 	font-size: 15px;
 }
 .sk-tasks-view.is-phone .sk-tasks-side-top .sk-btn.is-icon {
-	min-width: 40px;
+	min-width: 36px;
 	min-height: 40px;
 }
 .sk-tasks-view.is-phone .sk-tasks-list {
@@ -2460,8 +2632,8 @@ textarea.sk-tasks-tnote-area {
 /* The filter bar: one line of soft buttons. */
 .sk-tasks-pbar {
 	display: flex;
-	gap: 8px;
-	padding: 2px 0 8px;
+	gap: 6px;
+	padding: 0 0 6px;
 	overflow-x: auto;
 	scrollbar-width: none;
 }
@@ -2470,14 +2642,14 @@ textarea.sk-tasks-tnote-area {
 	flex: none;
 	align-items: center;
 	gap: 6px;
-	height: 38px;
-	padding: 0 12px 0 11px;
+	height: 34px;
+	padding: 0 11px 0 10px;
 	border: 1px solid var(--sk-line);
-	border-radius: 19px;
+	border-radius: 17px;
 	background: var(--sk-surface);
 	box-shadow: none;
 	color: var(--text-muted);
-	font-size: 15px;
+	font-size: 14.5px;
 	font-weight: 500;
 	transition: background var(--sk-fast), color var(--sk-fast), border-color var(--sk-fast), transform var(--sk-fast);
 }
@@ -2485,7 +2657,7 @@ textarea.sk-tasks-tnote-area {
 	transform: scale(0.96);
 }
 .sk-tasks-view button.sk-tasks-pbtn.is-icon {
-	width: 38px;
+	width: 34px;
 	padding: 0;
 	justify-content: center;
 }
@@ -2680,7 +2852,7 @@ textarea.sk-tasks-tnote-area {
 	line-height: 20px;
 }
 .sk-tasks-view.is-phone .sk-tasks-scope {
-	font-size: 16px;
+	font-size: 15.5px;
 }
 .sk-tasks-view.is-phone .sk-tasks-grp-h {
 	font-size: 14px;
@@ -3247,6 +3419,10 @@ textarea.sk-tasks-tnote-area {
 .sk-tasks-view.is-phone .sk-tasks-look-h {
 	margin-top: 26px;
 }
+/* The first head of the page sits right under the filter bar. */
+.sk-tasks-view.is-phone .sk-tasks-list > :first-child > .sk-tasks-look-h:first-child {
+	margin-top: 8px;
+}
 .sk-tasks-view.is-phone .sk-tasks-look-lbl {
 	font-size: 13px;
 }
@@ -3277,32 +3453,6 @@ textarea.sk-tasks-tnote-area {
 	min-height: 36px;
 	font-size: 15px;
 }
-/* The room of a tag: its wash on a banner on top of the list. */
-.sk-tasks-proom {
-	margin: 0 -12px 12px;
-	padding: 14px 18px 14px;
-	background: color-mix(in srgb, var(--sk-tag-l-bg, var(--sk-tasks-l-bg)) 70%, var(--sk-tasks-bg, var(--background-primary)));
-	animation: sk-rise var(--sk-mid) var(--sk-ease);
-}
-.sk-tasks-proom .sk-tasks-room-crumbs {
-	margin: 0 0 8px -6px;
-	font-size: 14px;
-}
-.sk-tasks-view .sk-tasks-proom button.sk-tasks-room-crumb {
-	height: 30px;
-	font-size: 14px;
-}
-.sk-tasks-proom-name {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 12px;
-}
-.sk-tasks-proom-sub {
-	color: var(--text-muted);
-	font-size: 14px;
-}
-
 /* New task: the tags rise from the round "+", joined to it by curves, over a light veil. */
 .sk-tasks-fan {
 	position: absolute;
@@ -3397,9 +3547,12 @@ textarea.sk-tasks-tnote-area {
 	transform: rotate(45deg);
 }
 @media (prefers-reduced-motion: reduce) {
-	.sk-tasks-proom {
-		animation: none;
-	}
+	.sk-tasks-pban,
+	.sk-tasks-pban-chev,
+	.sk-tasks-pban-dot,
+	.sk-tasks-pdrawer,
+	.sk-tasks-pdrawer .sk-tasks-pbar,
+	.sk-tasks-view button.sk-tasks-pban-more,
 	.sk-tasks-view button.sk-tasks-fab svg {
 		transition: none;
 	}
