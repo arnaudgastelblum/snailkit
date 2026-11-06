@@ -33,6 +33,17 @@ export const moveText = defineModule<MoveTextSettings>({
 		for (const command of commands) {
 			ctx.addCommand({ id: command.id, name: ctx.t("command." + command.id), editorCallback: command.run });
 		}
+		// In the Note menu's Actions panel: while editing, on a selection (extract and archive also
+		// take the paragraph at the cursor, but a selection says what the action is for).
+		for (const command of commands) {
+			ctx.addNoteAction({
+				id: command.id,
+				icon: command.icon,
+				label: ctx.t("command." + command.id),
+				available: (view) => !!view.file && view.getMode() === "source" && view.editor.somethingSelected(),
+				run: (view) => command.run(view.editor, view),
+			});
+		}
 		ctx.registerEvent(ctx.app.workspace.on("editor-menu", (menu, editor, view) => {
 			if (!view.file) return;
 			for (const command of commands) {

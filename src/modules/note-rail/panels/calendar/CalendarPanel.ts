@@ -742,6 +742,7 @@ class CalendarPanel implements PanelInstance {
 export const calendarPanel: PanelDefinition = {
 	id: "calendar",
 	icon: "calendar-days",
-	isAvailable: () => true,
+	parent: "menu",
+	isAvailable: (env) => env.settings.showCalendar !== false,
 	create: (ctx, body) => new CalendarPanel(ctx, body),
 };

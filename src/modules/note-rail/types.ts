@@ -1,12 +1,20 @@
 // Settings of the module and the contract between the rail and its panels.
 import type { App, MarkdownView, TFile } from "obsidian";
+import type { RegisteredNoteAction } from "../../core/note-actions";
+import type { PlacesService } from "../../core/places/types";
 import type { Lang, Vars } from "../../i18n";
 
-/** Every panel the rail can host, in their default order. */
+/** The panels a user can show or hide: the three rail buttons, and the Calendar row of the Snailkit menu. */
 export type PanelId = "toc" | "bookmarks" | "tasks" | "calendar";
 export const PANEL_IDS: PanelId[] = ["toc", "bookmarks", "tasks", "calendar"];
-/** Every panel the rail can open: the four above, plus the idea sessions panel (its own button, above them). */
-export type RailPanelId = PanelId | "session";
+/** The panels with a rail button the user can order (Calendar lives in the Snailkit menu). */
+export type ButtonId = "toc" | "tasks" | "bookmarks";
+export const BUTTON_IDS: ButtonId[] = ["toc", "tasks", "bookmarks"];
+/**
+ * Every panel the rail can open: the four above, the Snailkit menu (top of the rail) and its
+ * Brainstorms sub-panel, the area panel (the colored pill) and the Actions panel (bottom).
+ */
+export type RailPanelId = PanelId | "session" | "menu" | "place" | "actions" | "callout";
 
 export interface NoteRailSettings {
 	/** Which rail buttons are shown. */
@@ -22,8 +30,6 @@ export interface NoteRailSettings {
 	mobilePosition: string;
 	/** Rail opacity while the pointer is outside the note pane, 0.2 to 1. */
 	restOpacity: number;
-	/** Slide the text column aside when an open panel would cover it. */
-	makeRoom: boolean;
 	/** On a computer, resting the pointer on a rail button opens its panel (a click keeps it open). */
 	openOnHover: boolean;
 
@@ -39,12 +45,8 @@ export interface NoteRailSettings {
 	/** Bookmarks: vault-wide pins, vault paths in display order. Kept in sync on rename and delete. */
 	vaultPins: string[];
 	vaultPinFolders: import("../../core/services").VaultPinFolder[];
-	/** Rail: the area of the note as a colored initial, above the panel buttons. */
+	/** Rail: the area of the note as a colored initial, opening the panel of its parents and children. */
 	showPlace: boolean;
-	/** Rail: a button opening today's daily note. */
-	showToday: boolean;
-	/** Rail: the idea sessions button and its panel. Needs the Idea sessions module. */
-	showSession: boolean;
 	/** Bookmarks: how many times the tip card was shown (3 = never again). */
 	bookmarksTips: number;
 
@@ -88,6 +90,14 @@ export interface RailEnv {
 	vaultTasks(): VaultTaskCounts | null;
 	/** Opens the Workbench of the Tasks module (a tab, a scope). False when the Tasks module is off. */
 	openWorkbench(options?: WorkbenchOptions): boolean;
+	/** True when the Workbench has that tab right now (its module is on). */
+	hasWorkbenchTab(tab: string): boolean;
+	/** Where notes belong (the core's rule): parents, children, the home page. */
+	readonly places: PlacesService;
+	/** What the running modules can do with the open note (ModuleContext.addNoteAction). */
+	noteActions(): RegisteredNoteAction[];
+	/** Obsidian's settings, on Snailkit's page. */
+	openSettings(): void;
 }
 
 export interface VaultTaskCounts {
@@ -152,6 +162,10 @@ export interface PanelContext extends RailEnv {
 	setProgress(progress: number | null): void;
 	/** True while the user pinned the panel open. */
 	isPinned(): boolean;
+	/** Replace this panel by another one in the same card (the Snailkit menu going to Calendar). */
+	openPanel(id: RailPanelId, fromKeyboard?: boolean): void;
+	/** The rail button this panel grew from (an anchor for what opens next to it), or null. */
+	railButton(): HTMLElement | null;
 }
 
 export interface PanelInstance {
@@ -170,6 +184,8 @@ export interface PanelDefinition {
 	id: RailPanelId;
 	/** Lucide icon of the rail button. The title is the string `panel.<id>`. */
 	icon: string;
+	/** A sub-panel: reached from this panel, whose rail button stays lit, with a back arrow in the header. */
+	parent?: RailPanelId;
 	/** False hides the rail button for this note. */
 	isAvailable(env: RailEnv, view: MarkdownView): boolean;
 	/** Optional small number shown as a badge on the rail button. */

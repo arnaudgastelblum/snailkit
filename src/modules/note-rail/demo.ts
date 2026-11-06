@@ -2,11 +2,13 @@
 // note wakes up, Contents slides out and previews a heading (the note scrolls to it, then back),
 // then the panel turns into the calendar of daily notes.
 import { setIcon } from "obsidian";
+import { SNAIL_ICON } from "../../ui/icons";
 
 const SVG = "http://www.w3.org/2000/svg";
 const POINTER = "M0 0v15.2l4-3.7 2.8 6.3 2.6-1.1-2.7-6.2h5.6z";
 
-const RAIL = ["search", "area", "sun", "zap", "list-tree", "bookmark", "list-checks", "calendar"];
+/** Top to bottom: the Snailkit menu (the calendar opens from it), a rule, the area, the panels, Actions. */
+const RAIL = ["snail", "area", "list-tree", "list-checks", "bookmark", "sparkles"];
 /** Headings of the sample note: level, text. */
 const HEADINGS: [number, string][] = [
 	[2, "Goals"],
@@ -24,7 +26,7 @@ export function buildDemo(el: HTMLElement, t: (key: string) => string): void {
 	const root = el.createDiv({ cls: "sk-demo-note-rail" });
 	root.createDiv({ cls: "sk-demo-note-rail-pane" });
 
-	// The note, which makes room while a panel is open.
+	// The note, which the panel opens over.
 	const view = root.createDiv({ cls: "sk-demo-note-rail-view" });
 	const note = view.createDiv({ cls: "sk-demo-note-rail-note" });
 	const scroll = note.createDiv({ cls: "sk-demo-note-rail-scroll" });
@@ -41,9 +43,12 @@ export function buildDemo(el: HTMLElement, t: (key: string) => string): void {
 	RAIL.forEach((icon) => {
 		const cell = rail.createDiv({ cls: "sk-demo-note-rail-cell" });
 		if (icon === "area") cell.createSpan({ cls: "sk-demo-note-rail-area", text: "P" });
-		else setIcon(cell, icon);
+		else setIcon(cell, icon === "snail" ? SNAIL_ICON : icon);
 		if (icon === "list-tree") cell.addClass("is-toc");
-		if (icon === "calendar") cell.addClass("is-cal");
+		if (icon === "snail") {
+			cell.addClass("is-cal");
+			rail.createDiv({ cls: "sk-demo-note-rail-sep" });
+		}
 	});
 
 	// Contents.

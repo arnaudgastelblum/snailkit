@@ -1,6 +1,4 @@
-// Pure rules of the two entry points at the top of the rail: the Search magnifier (its tooltip
-// shows the command's hotkey) and the area pill (what a click does). Tested in
-// test/note-rail.test.ts.
+// Hotkeys as text, for the Search row of the Snailkit menu. Tested in test/note-rail.test.ts.
 
 /** A hotkey as Obsidian stores it ("Mod" is Ctrl on Windows and Linux, Cmd on macOS). */
 export interface HotkeyLike {
@@ -28,20 +26,3 @@ export function hotkeyText(hotkeys: readonly HotkeyLike[] | null | undefined, ma
 export function commandHotkeys(custom: readonly HotkeyLike[] | undefined, defaults: readonly HotkeyLike[] | undefined): readonly HotkeyLike[] {
 	return Array.isArray(custom) ? custom as readonly HotkeyLike[] : Array.isArray(defaults) ? defaults as readonly HotkeyLike[] : [];
 }
-
-/**
- * What a click on the area pill does.
- * - "place": the page of the area in the Workbench (Home module on, plain click or tap).
- * - "note": the area note itself (Ctrl or Cmd click opens it in a new tab).
- * - "menu": the path as a menu (without Home: on a phone, or on the area note itself).
- * With Home, Ctrl or Cmd click keeps the old way, so the area note stays one click away.
- */
-export function pillAction(options: { home: boolean; mobile: boolean; isArea: boolean; mod: boolean }): "place" | "note" | "menu" {
-	if (options.home && !options.mod) return "place";
-	return options.mobile || options.isArea ? "menu" : "note";
-}
-
-/** A press held this long on the pill (touch or pen) shows the path menu instead of the click. */
-export const LONG_PRESS_MS = 500;
-/** Moving the finger further than this (pixels) cancels a long press (the user is scrolling). */
-export const LONG_PRESS_SLOP = 10;

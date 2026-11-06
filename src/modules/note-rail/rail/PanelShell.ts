@@ -24,6 +24,7 @@ export class PanelShell {
 	private countEl: HTMLElement;
 	private subEl: HTMLElement;
 	private pinEl: HTMLElement;
+	private backEl: HTMLElement;
 	private progressEl: HTMLElement;
 	private barEl: HTMLElement;
 	private footEl: HTMLElement;
@@ -38,6 +39,7 @@ export class PanelShell {
 		private env: RailEnv,
 		pinned: boolean,
 		onPinToggle: () => void,
+		onBack: () => void,
 	) {
 		// Labelled by its title (an aria-label would make Obsidian show a tooltip over the card).
 		const titleId = `sk-note-rail-title-${++shellCount}`;
@@ -45,6 +47,14 @@ export class PanelShell {
 		this.innerEl = this.el.createDiv("sk-note-rail-panel-inner");
 
 		const head = this.innerEl.createEl("header", { cls: "sk-note-rail-head" });
+		// Sub-panels (the Calendar from the Snailkit menu): a way back to the panel they came from.
+		this.backEl = head.createEl("button", { cls: "sk-btn is-ghost is-icon is-s sk-note-rail-back", attr: { type: "button", "aria-label": env.t("panel.back") } });
+		setIcon(this.backEl, "arrow-left");
+		this.backEl.addEventListener("click", (e) => {
+			e.stopPropagation();
+			onBack();
+		});
+		this.backEl.toggle(!!def.parent);
 		const text = head.createDiv("sk-note-rail-head-text");
 		this.headTextEl = text;
 		const title = text.createDiv({ cls: "sk-note-rail-title", attr: { id: titleId } });
@@ -102,6 +112,7 @@ export class PanelShell {
 		this.def = def;
 		this.el.setAttribute("data-panel", def.id);
 		this.titleTextEl.setText(this.env.t(`panel.${def.id}`));
+		this.backEl.toggle(!!def.parent);
 		this.setCount(null);
 		this.setSubtitle("");
 		this.setProgress(null);

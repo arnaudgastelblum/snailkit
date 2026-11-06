@@ -55,6 +55,16 @@ export const pdfExport = defineModule<PdfExportSettings>({
 				return true;
 			},
 		});
+		// In the Note menu's Actions panel.
+		ctx.addNoteAction({
+			id: "export",
+			icon: "file-down",
+			label: ctx.t("action.export"),
+			available: (view) => view.file?.extension === "md",
+			run: (view) => {
+				if (view.file) run(view.file);
+			},
+		});
 		const addItem = (menu: Menu, file: TFile) =>
 			menu.addItem((item) => item.setTitle(ctx.t("menu.export")).setIcon("file-down").onClick(() => run(file)));
 		ctx.registerEvent(ctx.app.workspace.on("editor-menu", (menu, _editor, view) => {

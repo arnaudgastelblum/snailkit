@@ -1,16 +1,15 @@
 // Defaults and pure helpers that read the settings safely (stored values may be hand-edited).
-import { PANEL_IDS, type NoteRailSettings, type PanelId } from "./types";
+import { BUTTON_IDS, type ButtonId, type NoteRailSettings } from "./types";
 
 export const DEFAULT_SETTINGS: NoteRailSettings = {
 	showToc: true,
 	showBookmarks: true,
 	showTasks: true,
 	showCalendar: true,
-	buttonOrder: [...PANEL_IDS],
+	buttonOrder: [...BUTTON_IDS],
 	position: "left",
 	mobilePosition: "right",
 	restOpacity: 0.5,
-	makeRoom: true,
 	openOnHover: true,
 	tocHoverPreview: true,
 	tocHoverDelay: 100,
@@ -20,8 +19,6 @@ export const DEFAULT_SETTINGS: NoteRailSettings = {
 	vaultPinFolders: [],
 	bookmarksTips: 0,
 	showPlace: true,
-	showToday: true,
-	showSession: true,
 	tasksIncludePinned: true,
 	tasksIncludeVaultPins: false,
 	tasksBadge: true,
@@ -35,26 +32,29 @@ export const DEFAULT_SETTINGS: NoteRailSettings = {
 	calendarTemplate: "",
 };
 
-/** The setting that shows or hides the button of each panel. */
-export const SHOW_KEY: Record<PanelId, "showToc" | "showBookmarks" | "showTasks" | "showCalendar"> = {
+/** The setting that shows or hides each panel the user can turn off. */
+export const SHOW_KEY: Record<ButtonId | "calendar", "showToc" | "showBookmarks" | "showTasks" | "showCalendar"> = {
 	toc: "showToc",
 	bookmarks: "showBookmarks",
 	tasks: "showTasks",
 	calendar: "showCalendar",
 };
 
-/** Valid panel ids in the stored order, each once, missing ones appended in default order. */
-export function railOrder(stored: unknown): PanelId[] {
-	const out: PanelId[] = [];
+/**
+ * Valid button ids in the stored order, each once, missing ones appended in default order.
+ * "calendar" (a rail button until 0.2.8, a row of the Snailkit menu since) is dropped.
+ */
+export function railOrder(stored: unknown): ButtonId[] {
+	const out: ButtonId[] = [];
 	if (Array.isArray(stored)) {
-		for (const id of stored) if (PANEL_IDS.includes(id as PanelId) && !out.includes(id as PanelId)) out.push(id as PanelId);
+		for (const id of stored) if (BUTTON_IDS.includes(id as ButtonId) && !out.includes(id as ButtonId)) out.push(id as ButtonId);
 	}
-	for (const id of PANEL_IDS) if (!out.includes(id)) out.push(id);
+	for (const id of BUTTON_IDS) if (!out.includes(id)) out.push(id);
 	return out;
 }
 
 /** `order` with `id` moved one step up (-1) or down (+1). Unchanged at the ends. */
-export function moveInOrder(order: PanelId[], id: PanelId, step: -1 | 1): PanelId[] {
+export function moveInOrder(order: ButtonId[], id: ButtonId, step: -1 | 1): ButtonId[] {
 	const next = order.slice();
 	const from = next.indexOf(id);
 	const to = from + step;

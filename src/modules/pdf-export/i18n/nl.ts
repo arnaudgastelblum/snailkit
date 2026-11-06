@@ -9,6 +9,7 @@ export const nl: StringsOf<typeof en> = {
 	"module.description": "Exporteer een notitie naar PDF precies zoals ze er in Obsidian uitziet: je thema, afbeeldingen en tekeningen, selecteerbare tekst en klikbare links.",
 	"command.export": "Huidige notitie exporteren naar PDF",
 	"menu.export": "Snailkit: Exporteren naar PDF",
+	"action.export": "Exporteren naar PDF",
 	"dialog.title": "Exporteren naar PDF",
 	"notice.busy": "Er loopt al een export.",
 	"notice.exporting": "{name} wordt geëxporteerd...",

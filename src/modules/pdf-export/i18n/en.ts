@@ -6,6 +6,7 @@ export const en = {
 	"module.description": "Export a note to PDF exactly as it looks in Obsidian: your theme, images and drawings, selectable text and clickable links.",
 	"command.export": "Export current note to PDF",
 	"menu.export": "Snailkit: Export to PDF",
+	"action.export": "Export to PDF",
 	"dialog.title": "Export to PDF",
 	"notice.busy": "An export is already running.",
 	"notice.exporting": "Exporting {name}...",

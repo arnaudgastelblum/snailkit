@@ -143,6 +143,22 @@ pins.destroy();
 
 Pins are small tokens with an x on hover or focus; folders open a popover. The same context actions and keyboard moves work in both surfaces. Passing `toast` enables Undo after removal, restoring the previous position and folder if it still exists. Undo never overwrites a pin added meanwhile, and a deleted or renamed path is not re-created. The owner supplies translations through `t`; missing keys fall back to English. Home can copy these keys from the four Note menu language tables: `pins.new-folder`, `pins.rename-folder`, `pins.delete-folder`, `pins.folder-name`, `pins.remove`, `pins.removed`, `pins.undo`, `pins.loose`, `pins.move-to` (`{name}`), `pins.move-up`, `pins.move-down`, `pins.save`, `pins.cancel`, `pins.error`, `pins.empty`. Shared styles live in `src/styles/65-pins.css`.
 
+## Note actions
+
+A module can put a row in the **Actions** panel of the Note menu (`ctx.addNoteAction`, removed when the module stops):
+
+```ts
+ctx.addNoteAction({
+	id: "export",
+	icon: "file-down",
+	label: ctx.t("action.export"),
+	available: (view) => view.file?.extension === "md",
+	run: (view) => exportFile(view.file),
+});
+```
+
+`available(view)` is asked each time the panel opens (editing mode, a selection, a file type); `run(view)` gets the `MarkdownView` of the note. The panel closes before running.
+
 ## Search
 
 The `search` service (version 1) publishes `open(options)`, `attach(host)` and asynchronous

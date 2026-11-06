@@ -42,8 +42,8 @@ letters. Home, Tasks and Brainstorm live side by side in the **Workbench**. [Tou
 
 ![Note menu](assets/scenes/note-rail.webp)
 
-On every note, the **Note menu** keeps the contents, the open tasks and the calendar one click
-away. [Note menu →](docs/note-rail.md)
+On every note, the **Note menu** keeps the contents, the open tasks, where the note belongs and
+your tools one click away. [Note menu →](docs/note-rail.md)
 
 ## And a few handy tools
 

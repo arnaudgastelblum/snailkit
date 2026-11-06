@@ -14,6 +14,7 @@ import type { Lang, Translator, Vars } from "../i18n";
 import type SnailkitPlugin from "../main";
 import { showToast, type ToastOptions } from "../ui/toast";
 import type { ModuleHandle } from "./host";
+import type { NoteAction, RegisteredNoteAction } from "./note-actions";
 import type { PlacesOptions, PlacesService } from "./places/types";
 import { moduleWorkbench } from "./workbench";
 import type { ModuleWorkbench } from "./workbench/types";
@@ -204,7 +205,28 @@ export class ModuleContext<S extends object = object> extends Component {
 		return this.plugin.services.get(name) as T | undefined;
 	}
 
-	/** Runs `callback` whenever a module starts or stops sharing a service. */
+	/**
+	 * Declares something this module can do with the note on screen (see core/note-actions.ts).
+	 * The Note menu lists it in its Actions panel while the module runs. Listeners of
+	 * onServicesChange hear about it, as for a service.
+	 */
+	addNoteAction(action: NoteAction): void {
+		const key = `${this.id}:${action.id}`;
+		const entry: RegisteredNoteAction = { ...action, moduleId: this.id, key };
+		this.plugin.noteActions.set(key, entry);
+		this.plugin.app.workspace.trigger("snailkit:services-changed");
+		this.register(() => {
+			if (this.plugin.noteActions.get(key) === entry) this.plugin.noteActions.delete(key);
+			this.plugin.app.workspace.trigger("snailkit:services-changed");
+		});
+	}
+
+	/** Every note action the running modules declared, in declaration order. */
+	noteActions(): RegisteredNoteAction[] {
+		return Array.from(this.plugin.noteActions.values());
+	}
+
+	/** Runs `callback` whenever a module starts or stops sharing a service (or a note action). */
 	onServicesChange(callback: () => void): void {
 		const workspace = this.app.workspace as unknown as { on(name: string, cb: () => void): import("obsidian").EventRef };
 		this.registerEvent(workspace.on("snailkit:services-changed", callback));

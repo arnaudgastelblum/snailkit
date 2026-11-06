@@ -1,20 +1,19 @@
 // One rail per Markdown view, mounted in the view's content element (below the view header, so it
 // stays put while the note scrolls and survives switches between Live Preview, Source and Reading).
-// The rail owns the panel card; panels only fill the body and the footer.
-import { Keymap, MarkdownView, Menu, Notice, Platform, setIcon, type TFile } from "obsidian";
-import type { HomeService, SearchService } from "../../../core/services";
-import { hueOf, placeFinder } from "../parents";
-import { getDailyConfig, getOrCreateDailyNote } from "../panels/calendar/daily";
-import { PANELS } from "../panels/registry";
-import { sessionPanel, sessionsOf } from "../panels/session/SessionPanel";
+// Top to bottom: the Snailkit menu, a rule, the area pill, the panel buttons the user ordered
+// (Contents, Open tasks, Bookmarks), Actions. The rail owns the panel card; panels only fill the
+// body and the footer.
+import { Keymap, MarkdownView, Platform, setIcon, type TFile } from "obsidian";
+import { SNAIL_ICON } from "../../../ui/icons";
+import { hueOf } from "../parents";
+import { pillOf } from "../panels/place/PlacePanel";
+import { ALL_PANELS, PANELS } from "../panels/registry";
 import { clamp, railOrder, SHOW_KEY } from "../settings";
 import type { HideReason, PanelContext, PanelDefinition, PanelInstance, RailEnv, RailPanelId } from "../types";
 import { CLOSE_GRACE_MS, CORRIDOR_WAIT_MS, headingToPanel, OPEN_INTENT_MS, type Point } from "./hover";
-import { commandHotkeys, hotkeyText, LONG_PRESS_MS, LONG_PRESS_SLOP, pillAction, type HotkeyLike } from "./entry";
 import { asElement, asNode, dur, popIn } from "./motion";
 import { PanelShell } from "./PanelShell";
-import { RoomController } from "./room";
-import { moment } from "../../../core/moment";
+import { textEdges } from "./column";
 
 /** Without "Open on hover": hover intent before a rail button replaces the open panel. */
 const HOVER_SWITCH_MS = 160;
@@ -25,8 +24,10 @@ const COMMIT_CLOSE_MS = 140;
 /** What counts as "still here" for a panel opened by hovering: Obsidian's page preview, menus, dialogs. */
 const KEEP_OPEN = ".hover-popover, .popover, .menu, .modal-container, .suggestion-container, .sk-note-rail-tooltip";
 
-/** The Search module's command (its hotkey shows in the magnifier's tooltip). */
-const SEARCH_COMMAND = "snailkit:search-open";
+/** Gap between the rail and the text column it stands next to. */
+const TEXT_GAP = 28;
+/** Distance kept from the pane's edge (matches --sk-note-rail-inset in styles.css). */
+const INSET = 10;
 
 /** "peek": opened by hovering, closes when the pointer leaves. "sticky": opened by a click, the keyboard or a command. */
 type OpenMode = "peek" | "sticky";
@@ -43,13 +44,12 @@ export class Rail {
 	private puckEl: HTMLElement;
 	private tooltipEl: HTMLElement;
 	private buttons = new Map<RailPanelId, RailButton>();
-	/** Above the panel buttons: Search (with that module), the area of the note (a colored initial) and today's daily note. */
-	private homeEl: HTMLElement;
-	private searchEl: HTMLElement;
+	/** The fixed buttons: the Snailkit menu (top), the area of the note (a colored initial), Actions (bottom). */
+	private menuEl: HTMLElement;
 	private placeEl: HTMLElement;
-	private todayEl: HTMLElement;
-	private sessionEl: HTMLElement;
-	private placeTip = "";
+	private actionBtnEl: HTMLElement;
+	/** The area shown by the pill (its path), to redraw only when it changes. */
+	private pillPath = "";
 	private openId: RailPanelId | null = null;
 	private mode: OpenMode = "sticky";
 	private shell: PanelShell | null = null;
@@ -58,7 +58,8 @@ export class Rail {
 	private panelGen = 0;
 	private pinned = new Set<RailPanelId>();
 	private file: TFile | null;
-	private room: RoomController;
+	/** Distance of the rail from its side of the pane, as a CSS length (beside the text column). */
+	private railX = "";
 	private cleanups: (() => void)[] = [];
 	private hoverSwitchTimer = 0;
 	/** Open on hover: the intent before opening, the grace before closing, the wait while heading to the panel. */
@@ -78,10 +79,6 @@ export class Rail {
 	private returnFocus: HTMLElement | null = null;
 	/** Height of what floats over the top of the note (phones), as a CSS length, or "". */
 	private railTop = "";
-	/** Long press on the area pill (touch, pen): the timer, where it started, and whether it showed the menu. */
-	private pressTimer = 0;
-	private pressStart: Point | null = null;
-	private pressFired = false;
 
 	constructor(
 		private env: RailEnv,
@@ -93,44 +90,23 @@ export class Rail {
 		this.railEl = this.hostEl.createDiv({ cls: "sk-note-rail", attr: { role: "toolbar" } });
 		this.puckEl = this.railEl.createSpan("sk-note-rail-puck");
 		// No aria-label (Obsidian would add its own tooltip): the name is hidden text.
-		// First: back to the Workbench's Home (with the Home module).
-		this.homeEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-home", attr: { "data-btn": "home" } });
-		setIcon(this.homeEl.createSpan("sk-note-rail-btn-icon"), "house");
-		this.homeEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("rail.home") });
-		this.homeEl.addEventListener("mousedown", (e) => e.preventDefault());
-		this.searchEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-search", attr: { "data-btn": "search" } });
-		setIcon(this.searchEl.createSpan("sk-note-rail-btn-icon"), "search");
-		this.searchEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("rail.search") });
-		// A mouse press leaves the focus in the note: closing the search gives it back there.
-		this.searchEl.addEventListener("mousedown", (e) => e.preventDefault());
-		this.placeEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-place", attr: { "data-btn": "place" } });
+		this.menuEl = this.fixedButton("menu", "sk-note-rail-menu-btn");
+		setIcon(this.menuEl.createSpan("sk-note-rail-btn-icon"), SNAIL_ICON);
+		this.menuEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("panel.menu") });
+		this.menuEl.createSpan("sk-note-rail-pin-dot");
+		this.railEl.createSpan("sk-note-rail-sep");
+		this.placeEl = this.fixedButton("place", "sk-note-rail-place");
 		this.placeEl.createSpan("sk-note-rail-place-initial");
 		this.placeEl.createSpan("sk-note-rail-sr-only");
-		this.todayEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-today", attr: { "data-btn": "today" } });
-		setIcon(this.todayEl.createSpan("sk-note-rail-btn-icon"), "sun");
-		this.todayEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("rail.today") });
-		this.wireAction(this.homeEl, () => env.t("rail.home"), () => void this.homeService()?.open());
-		this.wireAction(this.searchEl, () => this.searchTip(), () => this.openSearch());
-		this.wireAction(this.placeEl, () => this.placeTip, (e) => this.onPlace(e));
-		this.wireAction(this.todayEl, () => env.t("rail.today"), (e) => void this.openToday(e));
-		this.sessionEl = this.railEl.createEl("button", { cls: "sk-note-rail-btn sk-note-rail-session", attr: { "data-btn": "session" } });
-		setIcon(this.sessionEl.createSpan("sk-note-rail-btn-icon"), "zap");
-		this.sessionEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("panel.session") });
-		this.sessionEl.createSpan("sk-note-rail-session-dot");
-		this.sessionEl.createSpan("sk-note-rail-pin-dot");
-		this.wirePanelButton(this.sessionEl, "session");
-		this.placeEl.addEventListener("contextmenu", (e) => {
-			e.preventDefault();
-			// A long press on a phone may also fire contextmenu: one menu only, and no click after it.
-			const touch = this.pressStart !== null;
-			this.cancelPress();
-			if (this.pressFired) return;
-			this.pressFired = touch;
-			this.placeMenu(e);
-		});
-		this.wireLongPress();
+		this.placeEl.createSpan("sk-note-rail-pin-dot");
+		this.actionBtnEl = this.fixedButton("actions", "sk-note-rail-actions-btn");
+		setIcon(this.actionBtnEl.createSpan("sk-note-rail-btn-icon"), ALL_PANELS.actions.icon);
+		this.actionBtnEl.createSpan({ cls: "sk-note-rail-sr-only", text: env.t("panel.actions") });
+		this.actionBtnEl.createSpan("sk-note-rail-pin-dot");
+		this.wirePanelButton(this.menuEl, "menu");
+		this.wirePanelButton(this.placeEl, "place", () => this.pillTip);
+		this.wirePanelButton(this.actionBtnEl, "actions");
 		this.tooltipEl = this.hostEl.createDiv({ cls: "sk-note-rail-tooltip", attr: { role: "tooltip" } });
-		this.room = new RoomController(view);
 
 		const doc = this.hostEl.ownerDocument;
 		this.listen(doc, "pointerdown", (e) => this.onDocPointerDown(e as PointerEvent), true);
@@ -147,13 +123,46 @@ export class Rail {
 		if (RO) {
 			this.resizeObserver = new RO(() => {
 				this.placeBelowHeader();
-				this.updateRoom();
+				this.placeNearText();
+				this.updatePanelPlace();
 			});
 			this.resizeObserver.observe(this.hostEl);
 		}
 
+		// Readable line length, fonts or the theme changed: the text column may have moved.
+		const ref = env.app.workspace.on("css-change", () => {
+			this.placeNearText();
+			this.updatePanelPlace();
+		});
+		this.cleanups.push(() => env.app.workspace.offref(ref));
+
 		this.applySettings();
 		this.placeBelowHeader();
+		this.placeNearText();
+	}
+
+	/**
+	 * On a computer the rail stands next to the text column rather than at the far edge of a wide
+	 * pane; it never goes closer to the edge than the inset, and the panel opens over the text.
+	 * Set on the rail and its panel only (like --sk-note-rail-top).
+	 */
+	private placeNearText(): void {
+		let x = INSET;
+		if (!Platform.isPhone) {
+			const edges = textEdges(this.view);
+			const host = this.hostEl.getBoundingClientRect();
+			const width = this.railEl.offsetWidth;
+			if (edges && width > 0 && host.width > 0) {
+				x = this.position === "right"
+					? host.right - edges.right - TEXT_GAP - width
+					: edges.left - host.left - TEXT_GAP - width;
+				x = Math.max(INSET, Math.round(x));
+			}
+		}
+		this.railX = x === INSET ? "" : `${x}px`;
+		for (const el of [this.railEl, this.shell?.el]) {
+			if (el && el.style.getPropertyValue("--sk-note-rail-x") !== this.railX) el.setCssProps({ "--sk-note-rail-x": this.railX });
+		}
 	}
 
 	/**
@@ -193,6 +202,7 @@ export class Rail {
 		this.file = this.view.file;
 		this.applySettings();
 		this.placeBelowHeader();
+		this.placeNearText();
 
 		if (!this.openId) return;
 		const def = this.defOf(this.openId);
@@ -206,12 +216,12 @@ export class Rail {
 			return;
 		}
 		if (contentChanged) this.safe(() => this.instance?.refresh());
-		this.updateRoom();
+		this.updatePanelPlace();
 	}
 
 	/** A click or a command: closes the panel when it is open and kept open, keeps it open when it was only hovered. */
 	toggle(id: RailPanelId, fromKeyboard = false): boolean {
-		if (this.openId === id) {
+		if (this.openId === id || (this.openId && this.defOf(this.openId).parent === id)) {
 			if (this.mode === "peek" && !fromKeyboard) {
 				this.setMode("sticky");
 				return true;
@@ -257,6 +267,9 @@ export class Rail {
 			this.openId = id;
 			shell = new PanelShell(this.hostEl, def, this.env, this.pinned.has(id), () => {
 				if (this.openId) this.togglePin(this.openId);
+			}, () => {
+				const parent = this.openId ? this.defOf(this.openId).parent : undefined;
+				if (parent) this.open(parent, !!this.shell && this.shell.el.contains(this.hostEl.ownerDocument.activeElement));
 			});
 			this.shell = shell;
 			shell.el.addEventListener("pointerleave", (e) => {
@@ -277,13 +290,12 @@ export class Rail {
 
 		this.hideTooltip();
 		this.railEl.addClass("is-engaged");
-		for (const b of this.buttons.values()) b.el.toggleClass("is-active", b.id === id);
-		this.sessionEl.toggleClass("is-active", id === "session");
+		this.markActive(id);
 		this.movePuck();
 		this.placeShell(shell);
 		if (oldShell) shell.staggerBody();
 		else shell.show(false);
-		this.updateRoom();
+		this.updatePanelPlace();
 		if (fromKeyboard || focusInPanel) {
 			const target = shell.bodyEl.querySelector<HTMLElement>(".is-current[tabindex], [tabindex='0'], button")
 				?? shell.el.querySelector<HTMLElement>(".sk-note-rail-pin");
@@ -316,12 +328,10 @@ export class Rail {
 		this.closing.clear();
 		this.destroyed = true;
 		this.clearHoverTimers();
-		this.cancelPress();
 		window.clearTimeout(this.commitTimer);
 		this.resizeObserver?.disconnect();
 		for (const c of this.cleanups) c();
 		this.cleanups = [];
-		this.room.destroy();
 		this.railEl.remove();
 		this.tooltipEl.remove();
 		this.hostEl.removeClass("sk-note-rail-host", "sk-note-rail-right");
@@ -329,13 +339,30 @@ export class Rail {
 
 	// ---- buttons -------------------------------------------------------------
 
-	/** The definition behind a panel id (the four panels, or the idea sessions panel). */
 	private defOf(id: RailPanelId): PanelDefinition {
-		return id === "session" ? sessionPanel : PANELS[id];
+		return ALL_PANELS[id];
 	}
 
+	/** The rail button of a panel: a sub-panel's is its parent's (lit while the sub-panel is open). */
 	private buttonEl(id: RailPanelId): HTMLElement | null {
-		return id === "session" ? this.sessionEl : this.buttons.get(id)?.el ?? null;
+		const parent = this.defOf(id).parent;
+		if (parent) return this.buttonEl(parent);
+		if (id === "menu") return this.menuEl;
+		if (id === "place") return this.placeEl;
+		if (id === "actions") return this.actionBtnEl;
+		return this.buttons.get(id)?.el ?? null;
+	}
+
+	/** Only the button of the open panel (or of its parent) is lit. */
+	private markActive(id: RailPanelId | null): void {
+		const active = id ? this.buttonEl(id) : null;
+		for (const el of [this.menuEl, this.placeEl, this.actionBtnEl, ...Array.from(this.buttons.values(), (b) => b.el)]) {
+			el.toggleClass("is-active", el === active);
+		}
+	}
+
+	private fixedButton(id: RailPanelId, cls: string): HTMLElement {
+		return this.railEl.createEl("button", { cls: `sk-note-rail-btn ${cls}`, attr: { "data-btn": id } });
 	}
 
 	private hoverEnabled(): boolean {
@@ -345,204 +372,42 @@ export class Rail {
 	private applySettings(): void {
 		this.hostEl.toggleClass("sk-note-rail-right", this.position === "right");
 		this.railEl.setCssProps({ "--sk-note-rail-rest": String(clamp(this.env.settings.restOpacity, 0.2, 1, 0.5)) });
-		this.renderActions();
+		this.renderFixed();
 		this.renderButtons();
 	}
 
-	// ---- area and today ------------------------------------------------------
+	// ---- the fixed buttons ----------------------------------------------------
 
-	/** The Home button (with that module), the Search magnifier (with that module), the area pill (hidden when the note has none) and the Today button (lit on today's note). */
-	private renderActions(): void {
+	/** The tooltip of the pill: the way from the top of the tree down to the note's parent. */
+	private pillTip = "";
+
+	/**
+	 * The area pill (hidden when the note has no parent and no children: its initial and color come
+	 * from the area, or from the note itself when it tops a tree) and the Actions button.
+	 */
+	private renderFixed(): void {
 		const file = this.view.file;
-		this.homeEl.hidden = !this.homeService();
-		this.searchEl.hidden = !this.searchService();
-		const place = file && this.env.settings.showPlace !== false ? placeFinder(this.env.app).placeOf(file) : null;
-		const area = place?.area ?? null;
+		const area = pillOf(this.env, this.view);
 		this.placeEl.hidden = !area;
-		if (area && file && place) {
-			const initial = (/[\p{L}\p{N}]/u.exec(area.basename)?.[0] ?? "?").toUpperCase();
-			this.placeEl.querySelector(".sk-note-rail-place-initial")?.setText(initial);
-			this.placeEl.setCssProps({ "--sk-place-hue": String(hueOf(area.path)) });
-			this.placeTip = this.placeSteps(file).map((f) => f.basename).join(" › ");
-			this.placeEl.querySelector(".sk-note-rail-sr-only")?.setText(this.placeTip);
+		if (area && file) {
+			const chain = this.safe(() => this.env.places.placeOf(file).chain, [] as TFile[]) ?? [];
+			this.pillTip = [...chain.slice().reverse(), file].map((f) => f.basename).join(" › ");
+			if (area.path !== this.pillPath) {
+				this.pillPath = area.path;
+				const initial = (/[\p{L}\p{N}]/u.exec(area.basename)?.[0] ?? "?").toUpperCase();
+				this.placeEl.querySelector(".sk-note-rail-place-initial")?.setText(initial);
+				this.placeEl.setCssProps({ "--sk-place-hue": String(hueOf(area.path)) });
+			}
+			this.placeEl.querySelector(".sk-note-rail-sr-only")?.setText(this.pillTip);
 		}
-		this.todayEl.hidden = this.env.settings.showToday === false;
-		this.renderSession(file);
-		this.todayEl.toggleClass("is-active", !!file && file.path === this.todayPath());
-	}
-
-	/**
-	 * The idea sessions button, when the Idea sessions module is on: it opens the sessions panel. Lit
-	 * on an open session; a dot when sessions wait to be sorted.
-	 */
-	private renderSession(file: TFile | null): void {
-		const sessions = sessionsOf(this.env);
-		this.sessionEl.hidden = !sessions || this.env.settings.showSession === false;
-		if (!sessions) return;
-		const session = !!file && sessions.isSession(file);
-		const closed = session && !!file && sessions.isClosed(file);
-		this.sessionEl.toggleClass("is-lit", session && !closed);
-		this.sessionEl.toggleClass("has-pending", (this.safe(() => sessions.pending(), 0) ?? 0) > 0);
-		this.sessionEl.toggleClass("is-pinned", this.pinned.has("session"));
-	}
-
-	/** From the area down to the direct parent of the note (the area alone when the note is the area). */
-	private placeSteps(file: TFile): TFile[] {
-		const place = placeFinder(this.env.app).placeOf(file);
-		if (!place.area) return [];
-		if (place.area === file) return [file];
-		const from = place.chain.indexOf(place.area);
-		const steps: TFile[] = [];
-		for (let i = from; i >= 0; i--) steps.push(place.chain[i]);
-		return steps;
-	}
-
-	/** Tooltip on hover, the action on click (closing an open panel first). */
-	private wireAction(el: HTMLElement, label: () => string, run: (e: MouseEvent) => void): void {
-		el.addEventListener("click", (e) => {
-			e.stopPropagation();
-			this.clearHoverTimers();
-			if (this.openId) this.hide("commit");
-			run(e);
-		});
-		el.addEventListener("pointerenter", (e) => {
-			if (e.pointerType !== "touch") this.showTooltipSoon(el, label());
-		});
-		el.addEventListener("pointerleave", () => this.hideTooltip());
-	}
-
-	/**
-	 * Click: with the Home module, the page of the area in the Workbench (the nearest sub-MOC, the
-	 * note marked "you are here"). Without it, or with Ctrl or Cmd: the area note, and on a phone
-	 * (no hover to read the path) or on the area itself, the path as a menu.
-	 */
-	private onPlace(e: MouseEvent): void {
-		// The end of a long press that already showed the menu.
-		if (this.pressFired) {
-			this.pressFired = false;
-			return;
-		}
-		const file = this.view.file;
-		if (!file) return;
-		const steps = this.placeSteps(file);
-		const area = steps[0];
-		if (!area) return;
-		const home = this.homeService();
-		const mod = !!Keymap.isModEvent(e);
-		const legacy = () => this.placeAction(pillAction({ home: false, mobile: Platform.isMobile, isArea: area === file, mod }), area, e);
-		if (!home || pillAction({ home: true, mobile: Platform.isMobile, isArea: area === file, mod }) !== "place") {
-			legacy();
-			return;
-		}
-		home.openPlace(file).then((shown) => {
-			if (!shown && !this.destroyed) legacy();
-		}, (err) => {
-			console.error("[Snailkit] note-rail: could not open the page of the area", err);
-			if (!this.destroyed) legacy();
-		});
-	}
-
-	private placeAction(action: "place" | "note" | "menu", area: TFile, e: MouseEvent): void {
-		if (action === "menu") this.placeMenu(e);
-		else if (action === "note") void this.openFile(area, e);
-	}
-
-	/** Touch or pen held on the pill: the path menu (the click that follows is ignored). */
-	private wireLongPress(): void {
-		const el = this.placeEl;
-		el.addEventListener("pointerdown", (e) => {
-			this.pressFired = false;
-			if (e.pointerType === "mouse" || e.button !== 0) return;
-			this.cancelPress();
-			this.pressStart = { x: e.clientX, y: e.clientY };
-			this.pressTimer = window.setTimeout(() => {
-				this.pressTimer = 0;
-				this.pressStart = null;
-				if (this.destroyed || !el.isConnected || el.hidden) return;
-				this.pressFired = true;
-				this.placeMenu(e);
-			}, LONG_PRESS_MS);
-		});
-		el.addEventListener("pointermove", (e) => {
-			const start = this.pressStart;
-			if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > LONG_PRESS_SLOP) this.cancelPress();
-		});
-		for (const type of ["pointerup", "pointercancel", "pointerleave"]) el.addEventListener(type, () => this.cancelPress());
-	}
-
-	private cancelPress(): void {
-		window.clearTimeout(this.pressTimer);
-		this.pressTimer = 0;
-		this.pressStart = null;
-	}
-
-	// ---- search and home -----------------------------------------------------
-
-	private searchService(): SearchService | null {
-		const search = this.safe(() => this.env.service<SearchService>("search"), undefined);
-		return search && search.version === 1 && typeof search.open === "function" ? search : null;
-	}
-
-	private homeService(): HomeService | null {
-		const home = this.safe(() => this.env.service<HomeService>("home"), undefined);
-		return home && home.version === 1 && typeof home.openPlace === "function" ? home : null;
-	}
-
-	/** "Search", plus the hotkey of the Search command when it has one. */
-	private searchTip(): string {
-		const label = this.env.t("rail.search");
-		const manager = (this.env.app as unknown as {
-			hotkeyManager?: { getHotkeys?(id: string): HotkeyLike[] | undefined; getDefaultHotkeys?(id: string): HotkeyLike[] | undefined };
-		}).hotkeyManager;
-		const keys = this.safe(() => hotkeyText(commandHotkeys(manager?.getHotkeys?.(SEARCH_COMMAND), manager?.getDefaultHotkeys?.(SEARCH_COMMAND)), Platform.isMacOS), "");
-		return keys ? `${label} · ${keys}` : label;
-	}
-
-	/** The floating search, growing from the magnifier; Shift+Enter links into this note. */
-	private openSearch(): void {
-		const search = this.searchService();
-		if (!search) return;
-		const file = this.view.file;
-		const editor = this.view.getMode() === "source" ? this.view.editor : null;
-		this.safe(() => search.open({ anchor: this.searchEl, from: file ? { file, editor } : null }));
-	}
-
-	private placeMenu(e: MouseEvent): void {
-		const file = this.view.file;
-		if (!file) return;
-		const menu = new Menu();
-		for (const step of this.placeSteps(file)) {
-			menu.addItem((item) => item.setTitle(step.basename).setIcon(step === file ? "dot" : "corner-left-up").setDisabled(step === file).onClick(() => void this.openFile(step, e)));
-		}
-		menu.showAtMouseEvent(e);
-	}
-
-	private todayPath(): string {
-		const cfg = getDailyConfig(this.env.app, this.env.settings);
-		const name = moment().format(cfg.format);
-		return (cfg.folder ? cfg.folder + "/" : "") + name + ".md";
-	}
-
-	private async openToday(e: MouseEvent): Promise<void> {
-		try {
-			const cfg = getDailyConfig(this.env.app, this.env.settings);
-			const file = await getOrCreateDailyNote(this.env.app, moment().format("YYYY-MM-DD"), cfg);
-			await this.openFile(file, e);
-		} catch (err) {
-			console.error("[Snailkit] note-rail: today's note", err);
-			new Notice(this.env.t("rail.today-error"));
-		}
-	}
-
-	/** In this pane (a new tab with Ctrl or Cmd). */
-	private async openFile(file: TFile, e: MouseEvent): Promise<void> {
-		if (!Keymap.isModEvent(e) && this.view.file?.path === file.path) return;
-		const leaf = Keymap.isModEvent(e) ? this.env.app.workspace.getLeaf("tab") : this.view.leaf;
-		await leaf.openFile(file);
+		this.actionBtnEl.hidden = !this.isOpenable(this.defOf("actions"));
+		for (const id of ["menu", "place", "actions"] as const) this.buttonEl(id)?.toggleClass("is-pinned", this.pinned.has(id));
+		this.markActive(this.openId);
 	}
 
 	private isShown(id: RailPanelId): boolean {
-		if (id === "session") return this.env.settings.showSession !== false;
+		if (id === "menu" || id === "session" || id === "actions" || id === "callout") return true;
+		if (id === "place") return this.env.settings.showPlace !== false;
 		return this.env.settings[SHOW_KEY[id]] !== false;
 	}
 
@@ -568,7 +433,7 @@ export class Rail {
 		const order = wanted.map((d) => this.buttons.get(d.id)!.el);
 		const current = Array.from(this.railEl.querySelectorAll<HTMLElement>(":scope > .sk-note-rail-btn[data-panel-btn]"));
 		if (order.length !== current.length || order.some((el, i) => current[i] !== el)) {
-			for (const el of order) this.railEl.appendChild(el);
+			for (const el of order) this.railEl.insertBefore(el, this.actionBtnEl);
 			changed = true;
 		}
 		for (const def of wanted) {
@@ -586,8 +451,6 @@ export class Rail {
 			b.el.toggleClass("is-active", this.openId === def.id);
 			b.el.toggleClass("is-pinned", this.pinned.has(def.id));
 		}
-		const visible = wanted.some((d) => !this.buttons.get(d.id)!.el.hidden);
-		this.railEl.toggleClass("is-empty", !visible);
 		if (changed || this.openId) this.movePuck();
 	}
 
@@ -603,23 +466,16 @@ export class Rail {
 	}
 
 	/** Click toggles (or keeps open a hovered panel); hovering opens after a short intent, or swaps an open panel. */
-	private wirePanelButton(el: HTMLElement, id: RailPanelId): void {
+	private wirePanelButton(el: HTMLElement, id: RailPanelId, label?: () => string): void {
 		el.addEventListener("click", (e) => {
 			e.stopPropagation();
 			this.clearHoverTimers();
-			// With open on hover (computer, mouse): hovering shows the Tasks and Brainstorm panels, a
-			// click goes straight to the Workbench on the matching tab. The keyboard still opens the panel.
-			const workbench = id === "tasks" ? "tasks" : id === "session" ? "sessions" : null;
-			if (workbench && e.detail !== 0 && this.hoverEnabled() && this.env.openWorkbench({ tab: workbench })) {
-				if (this.openId) this.hide("commit");
-				return;
-			}
 			// detail 0 = activated with Enter or Space.
 			this.toggle(id, e.detail === 0);
 		});
 		el.addEventListener("pointerenter", (e) => {
 			if (e.pointerType === "touch") return;
-			this.showTooltipSoon(el, this.env.t(`panel.${id}`));
+			this.showTooltipSoon(el, label?.() || this.env.t(`panel.${id}`));
 			window.clearTimeout(this.hoverSwitchTimer);
 			// Only a mouse hovers: a pen or a finger opens panels by tapping.
 			if (e.pointerType !== "mouse") return;
@@ -648,7 +504,8 @@ export class Rail {
 	 */
 	private hoverButton(id: RailPanelId, e: PointerEvent): void {
 		window.clearTimeout(this.intentTimer);
-		if (this.openId === id) {
+		// The button of the open panel, or of its parent (the menu while the Calendar is open): stay.
+		if (this.openId === id || (this.openId && this.defOf(this.openId).parent === id)) {
 			this.cancelClose();
 			return;
 		}
@@ -760,9 +617,10 @@ export class Rail {
 	/** The card's size limits (from the pane, in pixels) and where it grows from (the active button). */
 	private placeShell(shell: PanelShell): void {
 		const host = this.hostEl;
-		const inset = 10;
+		const inset = INSET;
 		const top = parseFloat(this.railTop) || 0;
-		shell.setBounds(host.clientWidth - this.railEl.offsetWidth - 2 * inset - 16, host.clientHeight - top - 2 * inset);
+		const x = parseFloat(this.railX) || inset;
+		shell.setBounds(host.clientWidth - x - this.railEl.offsetWidth - inset - 16, host.clientHeight - top - 2 * inset);
 		const b = this.openId ? this.buttonEl(this.openId) : null;
 		if (b) shell.setOrigin(this.railEl.offsetTop + b.offsetTop + b.offsetHeight / 2 - (top + inset));
 	}
@@ -829,6 +687,10 @@ export class Rail {
 			service: (name) => env.service(name),
 			vaultTasks: () => env.vaultTasks(),
 			openWorkbench: (options) => env.openWorkbench(options),
+			hasWorkbenchTab: (tab) => env.hasWorkbenchTab(tab),
+			places: env.places,
+			noteActions: () => env.noteActions(),
+			openSettings: () => env.openSettings(),
 			close: (reason?: HideReason) => {
 				if (live()) this.close(reason ?? "escape");
 			},
@@ -845,6 +707,10 @@ export class Rail {
 				if (live()) shell.setProgress(p);
 			},
 			isPinned: () => this.pinned.has(def.id),
+			openPanel: (id, fromKeyboard) => {
+				if (live()) this.open(id, !!fromKeyboard, "sticky");
+			},
+			railButton: () => this.buttonEl(def.id),
 		};
 		try {
 			return def.create(ctx, shell.bodyEl);
@@ -871,7 +737,7 @@ export class Rail {
 		shell.setSubtitle("");
 		this.instance = this.createInstance(this.defOf(id), shell);
 		shell.staggerBody();
-		this.updateRoom();
+		this.updatePanelPlace();
 	}
 
 	private hide(reason: HideReason, swapping = false): void {
@@ -904,16 +770,17 @@ export class Rail {
 		if (!swapping) {
 			this.railEl.removeClass("is-engaged");
 			this.movePuck();
-			this.updateRoom();
+			this.updatePanelPlace();
 		}
 	}
 
-	private updateRoom(): void {
-		if (this.destroyed) return;
-		// On a phone there is no room to make: the text would slide off the screen.
-		if (this.shell && this.railTop) this.shell.el.setCssProps({ "--sk-note-rail-top": this.railTop });
-		if (this.shell) this.placeShell(this.shell);
-		this.room.update(this.shell?.el ?? null, this.position, this.env.settings.makeRoom !== false && !Platform.isPhone);
+	/** The open panel follows the rail (it opens over the text, which never moves). */
+	private updatePanelPlace(): void {
+		if (this.destroyed || !this.shell) return;
+		if (this.railTop) this.shell.el.setCssProps({ "--sk-note-rail-top": this.railTop });
+		if (this.railX) this.shell.el.setCssProps({ "--sk-note-rail-x": this.railX });
+		else this.shell.el.style.removeProperty("--sk-note-rail-x");
+		this.placeShell(this.shell);
 	}
 
 	// ---- document-level interactions -----------------------------------------

@@ -15,6 +15,7 @@ export function sessionsOf(env: Pick<RailEnv, "service">): SessionsService | nul
 export const sessionPanel: PanelDefinition = {
 	id: "session",
 	icon: "zap",
+	parent: "menu",
 	isAvailable: (env) => !!sessionsOf(env),
 	create: (ctx, body) => new SessionPanel(ctx, body),
 };

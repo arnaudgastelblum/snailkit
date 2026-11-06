@@ -6,7 +6,9 @@ import { applyDailyTemplate, dailyPath, getDailyConfig, monthGrid, parseDailyPat
 import { checkTaskLine, locateTask, parseOpenTasks } from "../src/modules/note-rail/panels/tasks/parse";
 import { buildToc, currentIndex, plainHeading } from "../src/modules/note-rail/panels/toc/headings";
 import { hueOf, linkpathOf, parentLinkpath } from "../src/modules/note-rail/parents";
-import { commandHotkeys, hotkeyText, pillAction } from "../src/modules/note-rail/rail/entry";
+import { commandHotkeys, hotkeyText } from "../src/modules/note-rail/rail/entry";
+import { placeRows } from "../src/modules/note-rail/panels/place/tree";
+import { calloutText, CALLOUTS, INSERTS, insertsAvailable } from "../src/modules/note-rail/panels/actions/inserts";
 import { addNotePin, getNotePins, pinLinkpath, pinLinkpaths, pinsAdd, pinsRemove, pinsReorder, removeNotePin, reorderNotePins, type PinResolver } from "../src/modules/note-rail/pins";
 import { cleanVaultPins, DEFAULT_SETTINGS, moveInOrder, pinsKey, railOrder, remapVaultPins } from "../src/modules/note-rail/settings";
 import type { NoteRailSettings } from "../src/modules/note-rail/types";
@@ -352,11 +354,12 @@ test("daily notes: template tokens use the day of the note and the given clock",
 // ---- Settings helpers ---------------------------------------------------------------------------
 
 test("settings: rail order is sanitized and moved one step at a time", () => {
-	assert.deepEqual(railOrder(["calendar", "trail", "toc", "calendar", 4]), ["calendar", "toc", "bookmarks", "tasks"]);
-	assert.deepEqual(railOrder(undefined), ["toc", "bookmarks", "tasks", "calendar"]);
-	assert.deepEqual(moveInOrder(["toc", "bookmarks", "tasks", "calendar"], "tasks", -1), ["toc", "tasks", "bookmarks", "calendar"]);
-	assert.deepEqual(moveInOrder(["toc", "bookmarks", "tasks", "calendar"], "toc", -1), ["toc", "bookmarks", "tasks", "calendar"]);
-	assert.deepEqual(moveInOrder(["toc", "bookmarks", "tasks", "calendar"], "calendar", 1), ["toc", "bookmarks", "tasks", "calendar"]);
+	// "calendar" was a rail button until 0.2.8: it is dropped from stored orders.
+	assert.deepEqual(railOrder(["calendar", "trail", "bookmarks", "calendar", 4]), ["bookmarks", "toc", "tasks"]);
+	assert.deepEqual(railOrder(undefined), ["toc", "tasks", "bookmarks"]);
+	assert.deepEqual(moveInOrder(["toc", "bookmarks", "tasks"], "tasks", -1), ["toc", "tasks", "bookmarks"]);
+	assert.deepEqual(moveInOrder(["toc", "bookmarks", "tasks"], "toc", -1), ["toc", "bookmarks", "tasks"]);
+	assert.deepEqual(moveInOrder(["toc", "bookmarks", "tasks"], "tasks", 1), ["toc", "bookmarks", "tasks"]);
 });
 
 test("settings: vault pins follow renames and deletes of notes and folders", () => {
@@ -481,14 +484,42 @@ test("rail search: the tooltip shows the command's hotkey the platform's way", (
 	assert.deepEqual(commandHotkeys(undefined, undefined), []);
 });
 
-test("rail pill: the page of the area with Home, the old way without it or with Ctrl or Cmd", () => {
-	const base = { home: true, mobile: false, isArea: false, mod: false };
-	assert.equal(pillAction(base), "place");
-	assert.equal(pillAction({ ...base, mobile: true }), "place");
-	assert.equal(pillAction({ ...base, isArea: true }), "place");
-	assert.equal(pillAction({ ...base, mod: true }), "note");
-	assert.equal(pillAction({ ...base, mod: true, isArea: true }), "menu");
-	assert.equal(pillAction({ ...base, home: false }), "note");
-	assert.equal(pillAction({ ...base, home: false, mobile: true }), "menu");
-	assert.equal(pillAction({ ...base, home: false, isArea: true }), "menu");
+test("area panel rows: the chain from the top, the note, its children by name", () => {
+	const f = (path: string) => ({ path, basename: path.replace(/\.md$/, "").split("/").pop()! });
+	const note = f("Projects/Project X.md");
+	const chain = [f("Projects.md"), f("Home.md")];
+	const kids = [f("Projects/Project X - Redesign.md"), f("Projects/Project X - Brief.md"), note];
+	const rows = placeRows(note, chain, "Home.md", kids);
+	assert.deepEqual(rows.map((r) => [r.file.basename, r.kind, r.depth]), [
+		["Home", "home", 0],
+		["Projects", "parent", 1],
+		["Project X", "self", 2],
+		["Project X - Brief", "child", 3],
+		["Project X - Redesign", "child", 3],
+	]);
+	// No home page, no children: the top note is a parent like the others.
+	assert.deepEqual(placeRows(note, chain, null, []).map((r) => r.kind), ["parent", "parent", "self"]);
+	// A chosen home page elsewhere than the top is not drawn as the home.
+	assert.deepEqual(placeRows(note, chain, "Projects.md", []).map((r) => r.kind), ["parent", "parent", "self"]);
+	assert.deepEqual(placeRows(note, [], null, []).map((r) => [r.kind, r.depth]), [["self", 0]]);
 });
+
+test("actions panel: only the inserts whose command exists, in order", () => {
+	const commands = { "editor:insert-table": {}, "editor:attach-file": {} };
+	// The callout is written by the panel itself: always there.
+	assert.deepEqual(insertsAvailable(INSERTS, commands).map((i) => i.id), ["table", "callout"]);
+	assert.deepEqual(insertsAvailable(INSERTS, {}).map((i) => i.id), ["callout"]);
+	assert.deepEqual(insertsAvailable(INSERTS, { "obsidian-excalidraw-plugin:excalidraw-autocreate-and-embed-new-tab": {} }).map((i) => i.id), ["callout", "drawing"]);
+	// Every insert has its own label key.
+	assert.equal(new Set(INSERTS.map((i) => i.id)).size, INSERTS.length);
+});
+
+test("callout text: an empty body to type in, or the selection quoted", () => {
+	assert.deepEqual(calloutText("tip", ""), { text: "> [!tip]\n> ", cursor: 11 });
+	assert.deepEqual(calloutText("warning", "  "), { text: "> [!warning]\n> ", cursor: 15 });
+	const sel = calloutText("note", "First line\n\nThird line\n");
+	assert.equal(sel.text, "> [!note]\n> First line\n>\n> Third line");
+	assert.equal(sel.cursor, sel.text.length);
+	assert.equal(new Set(CALLOUTS.map((c) => c.type)).size, CALLOUTS.length);
+});
+

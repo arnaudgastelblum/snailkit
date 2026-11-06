@@ -24,7 +24,8 @@ body.theme-dark {
 	position: absolute;
 	/* --sk-note-rail-top: what floats over the top of the note on phones (set by the rail). */
 	top: calc(var(--sk-note-rail-top, 0px) + var(--sk-note-rail-inset));
-	left: var(--sk-note-rail-inset);
+	/* --sk-note-rail-x: beside the text column on a computer (set by the rail). */
+	left: var(--sk-note-rail-x, var(--sk-note-rail-inset));
 	z-index: 22;
 	display: flex;
 	flex-direction: column;
@@ -36,7 +37,7 @@ body.theme-dark {
 }
 .sk-note-rail-right > .sk-note-rail {
 	left: auto;
-	right: var(--sk-note-rail-inset);
+	right: var(--sk-note-rail-x, var(--sk-note-rail-inset));
 }
 .sk-note-rail.is-empty {
 	display: none;
@@ -244,12 +245,12 @@ body.theme-dark {
 	--sk-note-rail-card-w: min(var(--sk-note-rail-panel-w), var(--sk-note-rail-max-w, 100vw));
 	position: absolute;
 	top: calc(var(--sk-note-rail-top, 0px) + var(--sk-note-rail-inset));
-	left: calc(var(--sk-note-rail-inset) + var(--sk-note-rail-w) + 8px);
+	left: calc(var(--sk-note-rail-x, var(--sk-note-rail-inset)) + var(--sk-note-rail-w) + 8px);
 	z-index: 21;
 	box-sizing: border-box;
 	width: var(--sk-note-rail-card-w);
 	height: var(--sk-note-rail-panel-h, auto);
-	max-width: calc(100% - var(--sk-note-rail-w) - 2 * var(--sk-note-rail-inset) - 16px);
+	max-width: calc(100% - var(--sk-note-rail-x, var(--sk-note-rail-inset)) - var(--sk-note-rail-w) - var(--sk-note-rail-inset) - 16px);
 	max-height: calc(100% - var(--sk-note-rail-top, 0px) - 2 * var(--sk-note-rail-inset));
 	display: flex;
 	align-items: flex-start;
@@ -272,7 +273,7 @@ body.theme-dark {
 }
 .sk-note-rail-right > .sk-note-rail-panel {
 	left: auto;
-	right: calc(var(--sk-note-rail-inset) + var(--sk-note-rail-w) + 8px);
+	right: calc(var(--sk-note-rail-x, var(--sk-note-rail-inset)) + var(--sk-note-rail-w) + 8px);
 	justify-content: flex-end;
 	transform-origin: 100% var(--sk-note-rail-origin-y, 14px);
 	transform: translateX(12px) scale(0.94);
@@ -314,6 +315,11 @@ body.theme-dark {
 .sk-note-rail-head-text {
 	flex: 1;
 	min-width: 0;
+}
+/* Sub-panels (Calendar, Brainstorms from the Snailkit menu): the way back. */
+.sk-note-rail-head .sk-note-rail-back {
+	flex: none;
+	margin-left: -6px;
 }
 .sk-note-rail-title {
 	font-size: 13px;
@@ -490,15 +496,6 @@ body.theme-dark {
 	padding: 8px 10px;
 	color: var(--text-faint);
 	font-size: 12px;
-}
-
-/* Make room: the readable column glides aside while a panel is open. */
-.sk-note-rail-room {
-	transition: transform 520ms var(--sk-spring);
-}
-.markdown-source-view .cm-scroller.sk-note-rail-room-clip,
-.markdown-reading-view .markdown-preview-view.sk-note-rail-room-clip {
-	overflow-x: hidden;
 }
 
 .sk-note-rail-row:focus-visible {
@@ -733,7 +730,13 @@ body.theme-dark {
 	color: var(--sk-accent-text);
 }
 
-/* Rail: the area of the note as a colored initial, and today's note. */
+/* Rail: the rule under the Snailkit menu, then the area of the note as a colored initial. */
+.sk-note-rail-sep {
+	display: block;
+	height: 1px;
+	margin: 3px 7px;
+	background: var(--sk-line);
+}
 .sk-note-rail .sk-note-rail-btn.sk-note-rail-place {
 	--sk-place: hsl(var(--sk-place-hue, 220) 60% 40%);
 }
@@ -752,19 +755,6 @@ body.theme-dark .sk-note-rail .sk-note-rail-btn.sk-note-rail-place {
 	font-size: 12px;
 	font-weight: 700;
 	line-height: 1;
-}
-.sk-note-rail .sk-note-rail-btn.sk-note-rail-today.is-active {
-	color: var(--sk-accent-text);
-}
-.sk-note-rail-today + .sk-note-rail-btn:not(.sk-note-rail-today),
-.sk-note-rail-place:not([hidden]) + .sk-note-rail-today[hidden] + .sk-note-rail-btn,
-.sk-note-rail-search:not([hidden]) + .sk-note-rail-place[hidden] + .sk-note-rail-today[hidden] + .sk-note-rail-btn {
-	margin-top: 5px;
-}
-/* A long press on the pill shows the path menu: no text selection or system callout on touch screens. */
-.sk-note-rail .sk-note-rail-btn.sk-note-rail-place {
-	-webkit-touch-callout: none;
-	user-select: none;
 }
 
 /* The tip card of the first openings. */
@@ -1341,27 +1331,6 @@ body.theme-dark .sk-note-rail .sk-note-rail-btn.sk-note-rail-place {
 	--sk-note-rail-panel-w: 320px;
 }
 
-/* Rail: the idea sessions button (Idea sessions module), lit on an open session. */
-.sk-note-rail .sk-note-rail-btn.sk-note-rail-session.is-lit:not(.is-active) {
-	color: var(--sk-accent-text);
-	background: var(--sk-accent-wash);
-}
-.sk-note-rail-session-dot {
-	position: absolute;
-	top: 4px;
-	right: 4px;
-	width: 7px;
-	height: 7px;
-	border-radius: 50%;
-	background: var(--color-orange, #e0782b);
-	box-shadow: 0 0 0 2px var(--sk-note-rail-bg);
-	transform: scale(0);
-	transition: transform var(--sk-slow) var(--sk-spring);
-}
-.sk-note-rail-session.has-pending .sk-note-rail-session-dot {
-	transform: scale(1);
-}
-
 /* A quiet link to somewhere else (the Workbench), with an arrow that nudges on hover. */
 .sk-note-rail-link-arrow {
 	display: inline-flex;
@@ -1433,3 +1402,82 @@ button.sk-btn.sk-note-rail-session-action {
 	display: inline-flex;
 }
 .sk-note-rail-bm-row.sk-note-rail-no-transition { transition: none; }
+
+/* The Snailkit menu, the area panel and Actions: rows with an icon, a quiet meta or a chevron. */
+.sk-note-rail-panel[data-panel="menu"],
+.sk-note-rail-panel[data-panel="actions"] {
+	--sk-note-rail-panel-w: 248px;
+}
+.sk-note-rail-mrow {
+	min-height: 32px;
+	gap: 9px;
+	padding-left: calc(8px + var(--depth, 0) * 14px);
+}
+.sk-note-rail-mrow-icon {
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	color: var(--text-muted);
+	--icon-size: 15px;
+	--icon-stroke: 1.8px;
+}
+.sk-note-rail-mrow:hover .sk-note-rail-mrow-icon {
+	color: var(--text-normal);
+}
+.sk-note-rail-mrow-chevron {
+	display: grid;
+	place-items: center;
+	color: var(--text-faint);
+	--icon-size: 14px;
+	transition: transform 280ms var(--sk-spring);
+}
+.sk-note-rail-mrow:hover .sk-note-rail-mrow-chevron {
+	transform: translateX(2px);
+}
+.sk-note-rail-mrow.is-lit,
+.sk-note-rail-mrow.is-lit .sk-note-rail-mrow-icon {
+	color: var(--sk-accent-text);
+}
+.sk-note-rail-menu-sep {
+	height: 1px;
+	margin: 5px 6px;
+	background: var(--sk-line);
+}
+
+/* Area panel: the way down to the note (a guide stands in for the icon), the note, then its children. */
+.sk-note-rail-mrow.is-current {
+	color: var(--text-normal);
+	font-weight: 600;
+	cursor: default;
+}
+.sk-note-rail-mrow.is-current::before {
+	display: none;
+}
+.sk-note-rail-mrow.is-self .sk-note-rail-mrow-icon {
+	color: var(--sk-accent-text);
+}
+.sk-note-rail-mrow-icon.is-guide::before {
+	content: "";
+	display: block;
+	width: 2px;
+	height: 14px;
+	border-radius: 2px;
+	background: var(--sk-line);
+}
+.sk-note-rail-mrow.is-child {
+	min-height: 28px;
+	font-size: 12.5px;
+}
+.sk-note-rail-mrow.is-child .sk-note-rail-mrow-icon {
+	color: var(--text-faint);
+}
+
+/* Callout types: each icon in the color Obsidian gives that callout. */
+.sk-note-rail-mrow-icon.is-callout,
+.sk-note-rail-mrow:hover .sk-note-rail-mrow-icon.is-callout {
+	color: var(--sk-callout-color, var(--text-muted));
+}
+.sk-note-rail-panel[data-panel="callout"] {
+	--sk-note-rail-panel-w: 220px;
+}

@@ -14,7 +14,7 @@ import { countDue } from "./panels/tasks/summary";
 import { Rail } from "./rail/Rail";
 import { cleanVaultPins } from "./settings";
 import { editPinGroups, flattenPinGroups, readPinGroups, remapPinGroups, type PinEdit } from "./vault-pins";
-import type { NoteRailSettings, PanelId, RailEnv, TasksService, VaultTaskCounts, WorkbenchOptions } from "./types";
+import type { NoteRailSettings, RailEnv, RailPanelId, TasksService, VaultTaskCounts, WorkbenchOptions } from "./types";
 import { moment } from "../../core/moment";
 
 type Context = ModuleContext<NoteRailSettings>;
@@ -30,10 +30,13 @@ interface HoverLinkSources {
 /** Vault task changes come in bursts (typing in a note): counted again after a short pause. */
 const VAULT_TASKS_DELAY = 250;
 
-const PANEL_COMMANDS: { id: string; panel: PanelId; icon: string }[] = [
+const PANEL_COMMANDS: { id: string; panel: RailPanelId; icon: string }[] = [
+	{ id: "open-menu", panel: "menu", icon: "snailkit-snail" },
+	{ id: "open-place", panel: "place", icon: "signpost" },
 	{ id: "open-contents", panel: "toc", icon: "list-tree" },
-	{ id: "open-bookmarks", panel: "bookmarks", icon: "bookmark" },
 	{ id: "open-tasks", panel: "tasks", icon: "list-checks" },
+	{ id: "open-bookmarks", panel: "bookmarks", icon: "bookmark" },
+	{ id: "open-actions", panel: "actions", icon: "sparkles" },
 	{ id: "open-calendar", panel: "calendar", icon: "calendar-days" },
 ];
 
@@ -65,6 +68,10 @@ export class NoteRailController {
 			service: <T>(name: string) => ctx.service<T>(name),
 			vaultTasks: () => this.vaultTasks(),
 			openWorkbench: (options?: WorkbenchOptions) => this.openWorkbench(options),
+			hasWorkbenchTab: (tab: string) => ctx.workbench.hasTab(tab),
+			places: ctx.places,
+			noteActions: () => ctx.noteActions(),
+			openSettings: () => ctx.plugin.openSettings(),
 			t: (key: string, vars?: Vars) => ctx.t(key, vars),
 			tn: (key: string, count: number, vars?: Vars) => ctx.tn(key, count, vars),
 			updateSettings: async (mutate) => {
@@ -345,7 +352,7 @@ export class NoteRailController {
 	}
 
 	/** Toggle a panel on the active note's rail. */
-	private panelCommand(id: PanelId, checking: boolean): boolean {
+	private panelCommand(id: RailPanelId, checking: boolean): boolean {
 		const view = this.ctx.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!view || !view.file) return false;
 		if (checking) return true;

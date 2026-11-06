@@ -4,6 +4,7 @@ import type { Extension } from "@codemirror/state";
 import { Notice, Plugin, getLanguage } from "obsidian";
 import { ModuleHost } from "./core/host";
 import { createPlaces, type PlacesCore } from "./core/places";
+import type { RegisteredNoteAction } from "./core/note-actions";
 import { normalizeData, starterData, type SnailkitData } from "./core/settings";
 import { WorkbenchCore } from "./core/workbench";
 import type { AutoOpenMode, StartTab } from "./core/workbench/types";
@@ -22,6 +23,8 @@ export default class SnailkitPlugin extends Plugin {
 	readonly editorExtensions: Extension[] = [];
 	/** Objects that running modules share with each other and with companion plugins (see ModuleContext.provide). */
 	readonly services = new Map<string, unknown>();
+	/** What running modules can do with the open note (see ModuleContext.addNoteAction). */
+	readonly noteActions = new Map<string, RegisteredNoteAction>();
 	/** The Workbench's tabs and entry points (core/workbench); modules reach it as ctx.workbench. */
 	readonly workbench = new WorkbenchCore();
 	/** Where notes belong (core/places); modules reach it as ctx.places. */
